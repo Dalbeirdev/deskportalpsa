@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Desk.Application</RootNamespace>
+    <AssemblyName>Desk.Application</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\domain\Desk.Domain.csproj" />
+    <ProjectReference Include="..\psa-core\Desk.PsaCore.csproj" />
+  </ItemGroup>
+</Project>

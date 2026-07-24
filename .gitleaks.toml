@@ -1,0 +1,18 @@
+# Baseline gitleaks config. The default ruleset already covers cloud keys, tokens, and
+# private keys. Development-only fixtures are allow-listed so the scan stays high-signal.
+title = "Desk Portal gitleaks"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Local dev fixtures and example files (never used in production)."
+paths = [
+  '''infrastructure/docker/\.env\.example''',
+  '''apps/api/appsettings\.Development\.json''',
+  '''apps/worker/appsettings\.json''',
+]
+regexes = [
+  '''desk-root-token''',
+  '''Password=desk''',
+]

@@ -1,0 +1,50 @@
+using System.Text.Json;
+using Desk.Application.Common;
+
+namespace Desk.Api.Middleware;
+
+/// <summary>
+/// Converts unhandled exceptions into RFC-7807 problem+json responses. Known
+/// <see cref="DeskException"/>s map to their declared status/code; everything else becomes a
+/// 500 with no internal detail leaked to the client (details go to the logs only).
+/// </summary>
+public sealed class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
+{
+    public async Task InvokeAsync(HttpContext context)
+    {
+        try
+        {
+            await next(context);
+        }
+        catch (DeskException ex)
+        {
+            await WriteProblem(context, ex.StatusCode, ex.ErrorCode, ex.Message);
+        }
+        catch (Exception ex)
+        {
+            var correlationId = context.Items[CorrelationIdMiddleware.HeaderName]?.ToString();
+            logger.LogError(ex, "Unhandled exception. CorrelationId={CorrelationId}", correlationId);
+            await WriteProblem(context, 500, "internal_error",
+                "An unexpected error occurred. Reference the correlation id when contacting support.");
+        }
+    }
+
+    private static async Task WriteProblem(HttpContext context, int status, string code, string detail)
+    {
+        if (context.Response.HasStarted) return;
+
+        context.Response.Clear();
+        context.Response.StatusCode = status;
+        context.Response.ContentType = "application/problem+json";
+
+        var problem = new
+        {
+            type = $"https://desk.portal/errors/{code}",
+            title = code,
+            status,
+            detail,
+            correlationId = context.Items[CorrelationIdMiddleware.HeaderName]?.ToString(),
+        };
+        await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
+    }
+}

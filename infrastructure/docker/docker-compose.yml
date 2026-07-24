@@ -1,0 +1,83 @@
+# Desk Portal — self-hosted backing services.
+#   docker compose -f infrastructure/docker/docker-compose.yml up -d
+# App services (api/worker/web) run via `dotnet run` / `npm run dev` in development,
+# or enable the "apps" profile once their images are built.
+name: desk-portal
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: desk
+      POSTGRES_PASSWORD: desk
+      POSTGRES_DB: desk_portal
+    ports: ["5432:5432"]
+    volumes: ["desk_pg:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U desk -d desk_portal"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["6379:6379"]
+    volumes: ["desk_redis:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: desk
+      RABBITMQ_DEFAULT_PASS: desk
+    ports: ["5672:5672", "15672:15672"]
+    volumes: ["desk_rabbit:/var/lib/rabbitmq"]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: desk
+      MINIO_ROOT_PASSWORD: desk-secret-key
+    ports: ["9000:9000", "9001:9001"]
+    volumes: ["desk_minio:/data"]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: 8081
+    ports: ["8081:8081"]
+    volumes:
+      - ../keycloak:/opt/keycloak/data/import:ro
+
+  vault:
+    image: hashicorp/vault:1.18
+    cap_add: ["IPC_LOCK"]
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: desk-root-token
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+    ports: ["8200:8200"]
+
+volumes:
+  desk_pg:
+  desk_redis:
+  desk_rabbit:
+  desk_minio:

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Desk.PsaCore</RootNamespace>
+    <AssemblyName>Desk.PsaCore</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\domain\Desk.Domain.csproj" />
+  </ItemGroup>
+</Project>

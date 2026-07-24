@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Desk.Tests.Unit</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\packages\domain\Desk.Domain.csproj" />
+    <ProjectReference Include="..\..\packages\application\Desk.Application.csproj" />
+    <ProjectReference Include="..\..\packages\infrastructure\Desk.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\packages\psa-core\Desk.PsaCore.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
+    <PackageReference Include="NSubstitute" />
+  </ItemGroup>
+</Project>

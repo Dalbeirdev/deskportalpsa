@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --fg: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+}
+
+.dark {
+  --bg: #0b1120;
+  --surface: #111827;
+  --fg: #e2e8f0;
+  --muted: #94a3b8;
+  --border: #1e293b;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
