@@ -1,6 +1,12 @@
 using Desk.Application.Abstractions;
+using Desk.Application.Connectors;
+using Desk.Application.Mapping;
+using Desk.Application.Resilience;
+using Desk.Application.Sync;
+using Desk.Infrastructure.Connectors;
 using Desk.Infrastructure.Persistence;
 using Desk.Infrastructure.Secrets;
+using Desk.Infrastructure.Sync;
 using Desk.Infrastructure.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -27,6 +33,13 @@ public static class DependencyInjection
         services.AddScoped<ISettableTenantContext>(sp => sp.GetRequiredService<TenantContext>());
 
         AddSecretStore(services, config);
+
+        // Integration framework (Phase 3)
+        services.AddSingleton<IMappingEngine, MappingEngine>();
+        services.AddSingleton<IResilientExecutor>(_ => new ResilientExecutor());
+        services.AddScoped<ISyncEventStore, SyncEventStore>();
+        services.AddScoped<IConnectorResolver, ConnectorResolver>();
+
         return services;
     }
 

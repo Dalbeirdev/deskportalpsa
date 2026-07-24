@@ -6,8 +6,8 @@
 |---|---|---|
 | 1 | Discovery / architecture | ✅ Complete (approved) |
 | 2 | Foundation | ✅ Complete |
-| 3 | PSA integration framework | ⏭️ Next |
-| 4 | Autotask integration | ⬜ Planned |
+| 3 | PSA integration framework | ✅ Complete |
+| 4 | Autotask integration | ⏭️ Next |
 | 5 | ConnectWise integration | ⬜ Planned |
 | 6 | Client portal | ⬜ Planned |
 | 7 | Technician & manager dashboards | ⬜ Planned |
@@ -32,6 +32,23 @@
 **Verified locally:** `dotnet build` clean (warnings-as-errors), 15/15 unit tests green, migration generated.
 **Requires Docker Desktop (not on this machine):** `docker compose up`, `dotnet ef database update`,
 live Keycloak/Vault, and `npm run build` for the web app.
+
+## Phase 3 — Integration framework acceptance
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Connector interface + capability model | ✅ | `IServiceManagementConnector`, `ProviderCapabilities` |
+| Connector factory + resolver | ✅ | `IConnectorFactory`, `ConnectorResolver` |
+| Mock PSA connector works | ✅ | `MockConnector` — full contract + fault injection |
+| Contract / certification suite passes | ✅ | `ConnectorCertificationTests` (18 tests) |
+| Field-mapping engine (8-scope resolution) | ✅ | `MappingEngine`, `MappingEngineTests` (10 tests) |
+| Retry / backoff / circuit breaker | ✅ | `ResilientExecutor`, `CircuitBreaker`, `ResilienceTests` (9) |
+| Failed-job handling (retry + dead-letter) | ✅ | `JobProcessor`, `JobProcessorTests` (3) |
+| Webhook validation framework (sig + timestamp) | ✅ | `WebhooksController`, webhook tests |
+| Sync loop-prevention (idempotency + hash + echo) | ✅ | `SyncEventStore`, `UpdateHasher`, `SyncTests` (4) |
+| Polling / reconciliation framework | ✅ | `PollingSyncService` (skeleton) |
+
+**Verified locally:** Release build clean, **55/55 unit tests green** (15 Phase 2 + 40 Phase 3).
 
 ## Provider readiness matrix
 
