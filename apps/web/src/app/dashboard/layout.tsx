@@ -1,14 +1,15 @@
 import Link from 'next/link';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { LayoutDashboard, Ticket, Plug, SlidersHorizontal, ShieldCheck, Activity } from 'lucide-react';
+import { QueryProvider } from '@/components/QueryProvider';
+import { LayoutDashboard, Ticket, Plug, SlidersHorizontal, Bell, User } from 'lucide-react';
 
 const nav = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
   { href: '/dashboard/tickets', label: 'Tickets', icon: Ticket },
+  { href: '/dashboard/notifications', label: 'Notifications', icon: Bell },
+  { href: '/dashboard/profile', label: 'Profile', icon: User },
   { href: '/dashboard/connections', label: 'PSA Connections', icon: Plug },
   { href: '/dashboard/mappings', label: 'Field Mapping', icon: SlidersHorizontal },
-  { href: '/dashboard/health', label: 'Integration Health', icon: Activity },
-  { href: '/dashboard/audit', label: 'Audit Log', icon: ShieldCheck },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -38,7 +39,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <span className="text-sm text-[var(--muted)]">Multi-tenant PSA ticket portal</span>
           <ThemeToggle />
         </header>
-        <main className="flex-1 p-6">{children}</main>
+        <main className="flex-1 p-6"><QueryProvider>{children}</QueryProvider></main>
       </div>
     </div>
   );

@@ -9,8 +9,8 @@
 | 3 | PSA integration framework | ✅ Complete |
 | 4 | Autotask integration | ✅ Complete |
 | 5 | ConnectWise integration | ✅ Complete |
-| 6 | Client portal | ⏭️ Next |
-| 7 | Technician & manager dashboards | ⬜ Planned |
+| 6 | Client portal | ✅ Complete |
+| 7 | Technician & manager dashboards | ⏭️ Next |
 | 8 | Administration | ⬜ Planned |
 | 9 | Security & performance | ⬜ Planned |
 | 10 | Final QA & production readiness | ⬜ Planned |
@@ -49,6 +49,21 @@ live Keycloak/Vault, and `npm run build` for the web app.
 | Polling / reconciliation framework | ✅ | `PollingSyncService` (skeleton) |
 
 **Verified locally:** Release build clean, **55/55 unit tests green** (15 Phase 2 + 40 Phase 3).
+
+## Phase 6 — Client portal acceptance
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Ticket list / detail / create / comment | ✅ | `TicketsController`, `TicketReadService`, `TicketCommandService` |
+| Notifications + profile | ✅ | `PortalController` |
+| **No internal notes exposed** | ✅ | read service filters `IsPublic`; internal notes never persisted; test |
+| **Client-company scoping / tenant isolation** | ✅ | `Visible()` filter; cross-company test returns nothing |
+| PSA-first writes with echo suppression | ✅ | create/comment record portal-origin sync events |
+| Frontend (list/detail/create/notifications/profile) | ✅ | Next.js pages, React Query, Zod validation |
+| Responsive + dark mode + no console errors | ✅ | verified mobile 375px + dark in browser |
+
+**Verified locally:** .NET Release clean, **98/98 unit tests green**; web typecheck + build clean;
+client portal pages render with graceful empty states, form validation works, 0 console errors.
 
 ## Provider readiness matrix
 

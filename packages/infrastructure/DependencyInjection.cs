@@ -3,8 +3,10 @@ using Desk.Application.Connectors;
 using Desk.Application.Mapping;
 using Desk.Application.Resilience;
 using Desk.Application.Sync;
+using Desk.Application.Tickets;
 using Desk.Infrastructure.Connectors;
 using Desk.Infrastructure.Persistence;
+using Desk.Infrastructure.Tickets;
 using Desk.PsaCore.Contracts;
 using Desk.Infrastructure.Secrets;
 using Desk.Infrastructure.Sync;
@@ -46,6 +48,11 @@ public static class DependencyInjection
         services.AddHttpClient();
         services.AddScoped<IConnectorFactory, AutotaskConnectorFactory>();
         services.AddScoped<IConnectorFactory, ConnectWiseConnectorFactory>();
+
+        // Client portal (Phase 6)
+        services.AddScoped<IClientAccessResolver, ClientAccessResolver>();
+        services.AddScoped<ITicketReadService, TicketReadService>();
+        services.AddScoped<ITicketCommandService, TicketCommandService>();
 
         return services;
     }

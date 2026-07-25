@@ -7,6 +7,7 @@
   --surface: #ffffff;
   --fg: #0f172a;
   --muted: #64748b;
+  --faint: #94a3b8;
   --border: #e2e8f0;
 }
 
@@ -15,6 +16,7 @@
   --surface: #111827;
   --fg: #e2e8f0;
   --muted: #94a3b8;
+  --faint: #64748b;
   --border: #1e293b;
 }
 
