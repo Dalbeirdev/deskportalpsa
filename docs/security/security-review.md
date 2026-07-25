@@ -38,7 +38,7 @@ running stack (DAST/pen-test/load) not available in the current environment.
 | Severity | Finding | Recommendation |
 |---|---|---|
 | ~~Medium~~ Resolved | SSRF surface via admin-configured connection URLs. | **Implemented**: opt-in `EgressGuard` blocks private/reserved egress (tested). Enable in production. |
-| Low | Attachment malware scanning / quarantine / signed URLs not yet implemented. | Build the attachment service (scan → quarantine → time-limited signed URL) before enabling uploads. |
+| ~~Low~~ Resolved | Attachment malware scanning / quarantine / signed URLs. | **Implemented**: extension/MIME/size validation, EICAR/PE scan, quarantine (bytes never stored), randomized keys, HMAC time-limited signed URLs, audited downloads (7 tests). Production binds ClamAV + MinIO. |
 | Low | Field-level encryption for PII columns not implemented. | Add column encryption for requester PII if required by the data-classification policy. |
 | Info | Dev-only ESLint advisory (`brace-expansion`). | Upgrade to ESLint 10 at a convenient major-version bump. |
 

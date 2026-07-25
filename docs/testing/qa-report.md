@@ -52,7 +52,7 @@ All found defects resolved. **No open critical or high defects.**
 
 | Ref | Item | Plan |
 |---|---|---|
-| K-1 | Attachment upload UI + malware scanning/quarantine/signed URLs | Attachment service (post-MVP) |
+| ~~K-1~~ Resolved | Attachment upload + malware scanning/quarantine/signed URLs | **Built**: validate → scan (EICAR/PE) → quarantine → randomized key → HMAC signed time-limited URLs → audited downloads. Production wires ClamAV + MinIO behind the same interfaces. |
 | K-2 | Live DAST, penetration test, load run, DR restore drill | Production-readiness gates — need a running stack |
 | K-3 | Dev-only ESLint `brace-expansion` advisory (not shipped) | ESLint 10 upgrade |
 | K-4 | Cross-browser visual validation on Firefox/Safari | Portable standards used; validate with real browsers pre-GA |

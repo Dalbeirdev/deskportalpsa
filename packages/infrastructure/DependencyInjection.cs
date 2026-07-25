@@ -4,6 +4,8 @@ using Desk.Application.Mapping;
 using Desk.Application.Resilience;
 using Desk.Application.Admin;
 using Desk.Application.Analytics;
+using Desk.Application.Attachments;
+using Desk.Infrastructure.Attachments;
 using Desk.Application.Sync;
 using Desk.Application.Tickets;
 using Desk.Infrastructure.Admin;
@@ -73,6 +75,17 @@ public static class DependencyInjection
         // Analytics (Phase 7)
         services.AddSingleton<IProductivityScorer, ProductivityScorer>();
         services.AddScoped<ITechnicianMetricsService, TechnicianMetricsService>();
+
+        // Attachments (validate -> scan -> quarantine/store -> signed URL)
+        services.AddSingleton(new AttachmentStorageOptions
+        {
+            SigningKey = config["Attachments:SigningKey"] ?? "dev-attachment-signing-key",
+            PublicBaseUrl = config["Attachments:PublicBaseUrl"] ?? "http://localhost:5080",
+        });
+        services.AddSingleton(new AttachmentPolicy());
+        services.AddSingleton<IObjectStorage, InMemoryObjectStorage>();
+        services.AddSingleton<IMalwareScanner, HeuristicMalwareScanner>();
+        services.AddScoped<IAttachmentService, AttachmentService>();
 
         // Administration (Phase 8)
         services.AddScoped<IAuditWriter, AuditWriter>();

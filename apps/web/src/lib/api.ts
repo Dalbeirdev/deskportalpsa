@@ -2,7 +2,7 @@ import { z } from 'zod';
 import {
   TicketListItemSchema, TicketDetailSchema, NotificationSchema, ProfileSchema,
   TechnicianResponseSchema, TeamResponseSchema, TrendPointSchema,
-  ConnectionSummarySchema, HealthSchema, JobSchema, AuditEntrySchema,
+  ConnectionSummarySchema, HealthSchema, JobSchema, AuditEntrySchema, AttachmentSchema,
   type TicketDetail, type TicketListItem, type Notification, type Profile,
   type TechnicianResponse, type TeamResponse, type TrendPoint,
   type ConnectionSummary, type Health, type Job, type AuditEntry,
@@ -58,6 +58,20 @@ export const api = {
     }),
   addComment: (id: string, body: string) =>
     request(`/api/tickets/${id}/comments`, TicketNoteResponse, { method: 'POST', body: JSON.stringify({ body }) }),
+  uploadAttachment: async (ticketId: string, file: File) => {
+    const t = token();
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`${API_BASE}/api/tickets/${ticketId}/attachments`, {
+      method: 'POST',
+      headers: { ...(t ? { Authorization: `Bearer ${t}` } : {}), 'X-Correlation-ID': crypto.randomUUID() },
+      body: fd, // no Content-Type — the browser sets the multipart boundary
+    });
+    if (!res.ok) throw new ApiError(res.status, `upload → ${res.status}`);
+    return AttachmentSchema.parse(await res.json());
+  },
+  attachmentDownloadUrl: (ticketId: string, attachmentId: string) =>
+    request(`/api/tickets/${ticketId}/attachments/${attachmentId}/download`, z.object({ url: z.string() })),
   notifications: () => request('/api/notifications', z.array(NotificationSchema)) as Promise<Notification[]>,
   profile: () => request('/api/profile', ProfileSchema) as Promise<Profile>,
 

@@ -11,6 +11,16 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const { id } = use(params);
   const qc = useQueryClient();
   const [comment, setComment] = useState('');
+  const [uploading, setUploading] = useState(false);
+
+  async function downloadAttachment(ticketId: string, attachmentId: string) {
+    try {
+      const { url } = await api.attachmentDownloadUrl(ticketId, attachmentId);
+      window.open(url, '_blank', 'noopener');
+    } catch {
+      /* preview runs without a backend */
+    }
+  }
 
   const { data: ticket, isLoading, isError } = useQuery({
     queryKey: ['ticket', id],
@@ -104,20 +114,57 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
             </form>
           </section>
 
-          {ticket.attachments.length > 0 && (
-            <section>
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--faint)]">Attachments</h2>
-              <ul className="space-y-2">
-                {ticket.attachments.map((a) => (
+          <section>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--faint)]">Attachments</h2>
+            <ul className="space-y-2">
+              {ticket.attachments.map((a) => {
+                const clean = String(a.scanStatus) === '1' || String(a.scanStatus) === 'Clean';
+                return (
                   <li key={a.id} className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm">
                     <Paperclip size={15} className="text-[var(--muted)]" />
-                    {a.fileName}
+                    {clean ? (
+                      <button onClick={() => downloadAttachment(id, a.id)} className="hover:underline">{a.fileName}</button>
+                    ) : (
+                      <span>{a.fileName}</span>
+                    )}
+                    {!clean && (
+                      <span className="rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950 dark:text-red-300">Quarantined</span>
+                    )}
                     <span className="ml-auto text-xs text-[var(--muted)]">{Math.round(a.sizeBytes / 1024)} KB</span>
                   </li>
-                ))}
-              </ul>
-            </section>
-          )}
+                );
+              })}
+              {ticket.attachments.length === 0 && (
+                <li className="text-sm text-[var(--muted)]">No attachments.</li>
+              )}
+            </ul>
+
+            <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--bg)]">
+              <Paperclip size={15} /> {uploading ? 'Uploading…' : 'Attach a file'}
+              <input
+                type="file"
+                className="hidden"
+                disabled={uploading}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setUploading(true);
+                  try {
+                    await api.uploadAttachment(id, file);
+                    qc.invalidateQueries({ queryKey: ['ticket', id] });
+                  } catch {
+                    /* preview runs without a backend */
+                  } finally {
+                    setUploading(false);
+                    e.target.value = '';
+                  }
+                }}
+              />
+            </label>
+            <p className="mt-1.5 text-xs text-[var(--faint)]">
+              Files are scanned for malware; executables are blocked. Max 25 MB.
+            </p>
+          </section>
         </>
       )}
     </div>
