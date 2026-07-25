@@ -5,6 +5,7 @@ using Desk.Application.Resilience;
 using Desk.Application.Sync;
 using Desk.Infrastructure.Connectors;
 using Desk.Infrastructure.Persistence;
+using Desk.PsaCore.Contracts;
 using Desk.Infrastructure.Secrets;
 using Desk.Infrastructure.Sync;
 using Desk.Infrastructure.Tenancy;
@@ -39,6 +40,11 @@ public static class DependencyInjection
         services.AddSingleton<IResilientExecutor>(_ => new ResilientExecutor());
         services.AddScoped<ISyncEventStore, SyncEventStore>();
         services.AddScoped<IConnectorResolver, ConnectorResolver>();
+
+        // Sync engine + real connectors (Phase 4)
+        services.AddScoped<ITicketSyncService, TicketSyncService>();
+        services.AddHttpClient();
+        services.AddScoped<IConnectorFactory, AutotaskConnectorFactory>();
 
         return services;
     }
