@@ -25,16 +25,8 @@ var config = builder.Configuration;
 builder.Services.AddDeskInfrastructure(config);
 
 // ---- Connectors ----
-// The real Autotask factory is registered by AddDeskInfrastructure. ConnectWise has no real
-// connector yet (Phase 5), so a mock stands in for it in Development to keep the resolver/webhook/
-// sync paths working end-to-end.
-if (builder.Environment.IsDevelopment())
-{
-    builder.Services.AddSingleton<Desk.PsaCore.Contracts.IConnectorFactory>(sp =>
-        new Desk.Connectors.Mock.MockConnectorFactory(
-            new Desk.Connectors.Mock.MockConnectorOptions { Provider = Desk.Domain.Enums.ProviderType.ConnectWisePsa },
-            sp.GetRequiredService<TimeProvider>()));
-}
+// Real Autotask and ConnectWise factories are registered by AddDeskInfrastructure. Both Wave-1
+// providers now have production connectors; the mock is retained only for tests.
 
 // ---- Identity plumbing ----
 builder.Services.AddHttpContextAccessor();

@@ -41,10 +41,11 @@ public static class DependencyInjection
         services.AddScoped<ISyncEventStore, SyncEventStore>();
         services.AddScoped<IConnectorResolver, ConnectorResolver>();
 
-        // Sync engine + real connectors (Phase 4)
+        // Sync engine + real connectors (Phases 4-5)
         services.AddScoped<ITicketSyncService, TicketSyncService>();
         services.AddHttpClient();
         services.AddScoped<IConnectorFactory, AutotaskConnectorFactory>();
+        services.AddScoped<IConnectorFactory, ConnectWiseConnectorFactory>();
 
         return services;
     }

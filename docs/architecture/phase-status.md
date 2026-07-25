@@ -8,8 +8,8 @@
 | 2 | Foundation | ✅ Complete |
 | 3 | PSA integration framework | ✅ Complete |
 | 4 | Autotask integration | ✅ Complete |
-| 5 | ConnectWise integration | ⏭️ Next |
-| 6 | Client portal | ⬜ Planned |
+| 5 | ConnectWise integration | ✅ Complete |
+| 6 | Client portal | ⏭️ Next |
 | 7 | Technician & manager dashboards | ⬜ Planned |
 | 8 | Administration | ⬜ Planned |
 | 9 | Security & performance | ⬜ Planned |
@@ -56,7 +56,7 @@ Statuses: Planned · API Research · Foundation · In Progress · Integration Te
 
 | Wave | Provider | Status |
 |---|---|---|
-| 1 | ConnectWise PSA | Planned |
+| 1 | ConnectWise PSA | **Ready for Integration Testing** (connector complete; certified vs fake server; needs a live instance) |
 | 1 | Datto Autotask PSA | **Ready for Integration Testing** (connector + sync engine complete; certified vs fake server; needs a live sandbox) |
 | 2 | HaloPSA | Planned |
 | 2 | Syncro | Planned |
