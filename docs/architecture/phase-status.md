@@ -12,8 +12,8 @@
 | 6 | Client portal | ✅ Complete |
 | 7 | Technician & manager dashboards | ✅ Complete |
 | 8 | Administration | ✅ Complete |
-| 9 | Security & performance | ⏭️ Next |
-| 10 | Final QA & production readiness | ⬜ Planned |
+| 9 | Security & performance | ✅ Complete (code + artifacts; live gates pending a stack) |
+| 10 | Final QA & production readiness | ⏭️ Next |
 
 ## Phase 2 — Foundation acceptance
 
@@ -96,6 +96,22 @@ page renders with the disclaimer, score card, tiles, trend sparkline, team table
 
 **Verified locally:** .NET Release clean, **117/117 unit tests green**; web build clean; admin pages
 render (connection form shows Vault-secrets note + masked Secret field), 0 console errors.
+
+## Phase 9 — Security & performance acceptance
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Dependency scanning | ✅ Verified | `.NET` 0 vulnerable; web prod bundle 0 vulns (dev-only ESLint advisory documented) |
+| Secret scanning | ✅ Verified | gitleaks in CI; repo pattern scan clean |
+| Tenant isolation testing | ✅ Verified | 10 isolation tests incl. adversarial cross-tenant over shared store (AuditLog/AppUser) |
+| Vulnerability scanning / hardening | ✅ | SSRF `EgressGuard` (opt-in, tested); security headers, rate limit, request cap in place |
+| Performance (indexes) | ✅ | `PerformanceIndexes` migration for portal/dashboard query patterns |
+| Load testing | ⏳ Authored | `tests/load/k6-smoke.js` with §13 thresholds — needs a running stack |
+| Backup / DR | ⏳ Authored | runbook + `infrastructure/scripts/backup.sh` — live restore drill needs a stack |
+| Penetration / DAST | ⏳ Pending | needs a running stack (documented in security-review.md) |
+
+**Verified locally:** .NET Release clean, **136/136 unit tests green** (+15 egress classifier, +4 cross-tenant);
+security review = no critical/high in code; live load/DR/pen-test gates documented as pending a stack.
 
 ## Provider readiness matrix
 

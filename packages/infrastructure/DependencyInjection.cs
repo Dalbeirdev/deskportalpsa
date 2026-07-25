@@ -13,6 +13,7 @@ using Desk.Infrastructure.Persistence;
 using Desk.Infrastructure.Tickets;
 using Desk.PsaCore.Contracts;
 using Desk.Infrastructure.Secrets;
+using Desk.Infrastructure.Security;
 using Desk.Infrastructure.Sync;
 using Desk.Infrastructure.Tenancy;
 using Microsoft.EntityFrameworkCore;
@@ -52,6 +53,17 @@ public static class DependencyInjection
         services.AddHttpClient();
         services.AddScoped<IConnectorFactory, AutotaskConnectorFactory>();
         services.AddScoped<IConnectorFactory, ConnectWiseConnectorFactory>();
+
+        // Optional SSRF egress guard on connector HttpClients (blocks private/reserved hosts).
+        if (config.GetValue("Connectors:BlockPrivateEgress", false))
+        {
+            var allowed = new HashSet<string>(
+                config.GetSection("Connectors:AllowedHosts").Get<string[]>() ?? [],
+                StringComparer.OrdinalIgnoreCase);
+            services.AddTransient(_ => new EgressGuard(allowed));
+            services.AddHttpClient("autotask").AddHttpMessageHandler(sp => sp.GetRequiredService<EgressGuard>());
+            services.AddHttpClient("connectwise").AddHttpMessageHandler(sp => sp.GetRequiredService<EgressGuard>());
+        }
 
         // Client portal (Phase 6)
         services.AddScoped<IClientAccessResolver, ClientAccessResolver>();

@@ -30,13 +30,13 @@ public sealed class AdminHarness
     public required InMemorySecretStore Secrets { get; init; }
     public required TestClock Clock { get; init; }
 
-    public static AdminHarness Create(Guid org)
+    public static AdminHarness Create(Guid org, string? dbName = null)
     {
         var tenant = new TenantContext();
         tenant.SetTenant(org);
         var clock = new TestClock();
         var options = new DbContextOptionsBuilder<DeskDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .UseInMemoryDatabase(dbName ?? Guid.NewGuid().ToString())
             .Options;
         var db = new DeskDbContext(options, tenant, clock);
         return new AdminHarness
