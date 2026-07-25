@@ -9,6 +9,7 @@
   --muted: #64748b;
   --faint: #94a3b8;
   --border: #e2e8f0;
+  --brand-line: #2563eb;
 }
 
 .dark {
@@ -18,6 +19,7 @@
   --muted: #94a3b8;
   --faint: #64748b;
   --border: #1e293b;
+  --brand-line: #5b8cff;
 }
 
 body {

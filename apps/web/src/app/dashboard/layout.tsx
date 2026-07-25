@@ -1,11 +1,12 @@
 import Link from 'next/link';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { QueryProvider } from '@/components/QueryProvider';
-import { LayoutDashboard, Ticket, Plug, SlidersHorizontal, Bell, User } from 'lucide-react';
+import { LayoutDashboard, Ticket, Plug, SlidersHorizontal, Bell, User, BarChart3 } from 'lucide-react';
 
 const nav = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
   { href: '/dashboard/tickets', label: 'Tickets', icon: Ticket },
+  { href: '/dashboard/analytics', label: 'Productivity', icon: BarChart3 },
   { href: '/dashboard/notifications', label: 'Notifications', icon: Bell },
   { href: '/dashboard/profile', label: 'Profile', icon: User },
   { href: '/dashboard/connections', label: 'PSA Connections', icon: Plug },

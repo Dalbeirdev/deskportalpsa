@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import {
   TicketListItemSchema, TicketDetailSchema, NotificationSchema, ProfileSchema,
+  TechnicianResponseSchema, TeamResponseSchema, TrendPointSchema,
   type TicketDetail, type TicketListItem, type Notification, type Profile,
+  type TechnicianResponse, type TeamResponse, type TrendPoint,
 } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:5080';
@@ -55,6 +57,11 @@ export const api = {
     request(`/api/tickets/${id}/comments`, TicketNoteResponse, { method: 'POST', body: JSON.stringify({ body }) }),
   notifications: () => request('/api/notifications', z.array(NotificationSchema)) as Promise<Notification[]>,
   profile: () => request('/api/profile', ProfileSchema) as Promise<Profile>,
+
+  technicianMetrics: () => request('/api/dashboard/technician', TechnicianResponseSchema) as Promise<TechnicianResponse>,
+  teamMetrics: () => request('/api/dashboard/team', TeamResponseSchema) as Promise<TeamResponse>,
+  trend: () => request('/api/dashboard/trend', z.array(TrendPointSchema)) as Promise<TrendPoint[]>,
+  teamExportUrl: `${API_BASE}/api/dashboard/team/export`,
 };
 
 const TicketNoteResponse = z.object({

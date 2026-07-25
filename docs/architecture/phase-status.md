@@ -10,8 +10,8 @@
 | 4 | Autotask integration | ✅ Complete |
 | 5 | ConnectWise integration | ✅ Complete |
 | 6 | Client portal | ✅ Complete |
-| 7 | Technician & manager dashboards | ⏭️ Next |
-| 8 | Administration | ⬜ Planned |
+| 7 | Technician & manager dashboards | ✅ Complete |
+| 8 | Administration | ⏭️ Next |
 | 9 | Security & performance | ⬜ Planned |
 | 10 | Final QA & production readiness | ⬜ Planned |
 
@@ -64,6 +64,21 @@ live Keycloak/Vault, and `npm run build` for the web app.
 
 **Verified locally:** .NET Release clean, **98/98 unit tests green**; web typecheck + build clean;
 client portal pages render with graceful empty states, form validation works, 0 console errors.
+
+## Phase 7 — Dashboards acceptance
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Configurable weighted productivity score | ✅ | `ProductivityScorer` (renormalizes over measured components), 6 tests |
+| Score calculations pass | ✅ | known-value + clamp + configurable-weights tests |
+| Metrics + time calculations correct | ✅ | `TechnicianMetricsService`, counts/SLA/avg-resolution tests |
+| Filters work | ✅ | date/technician/company/priority filter tests |
+| Team comparison + trend | ✅ | grouped, ranked; per-day trend |
+| CSV export accurate | ✅ | `DashboardController` export with escaping + disclaimer header |
+| "Operational indicator" guardrail surfaced | ✅ | disclaimer on every API response + shown in UI |
+
+**Verified locally:** .NET Release clean, **110/110 unit tests green**; web build clean; productivity
+page renders with the disclaimer, score card, tiles, trend sparkline, team table — 0 console errors.
 
 ## Provider readiness matrix
 

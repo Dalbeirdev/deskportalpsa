@@ -2,8 +2,10 @@ using Desk.Application.Abstractions;
 using Desk.Application.Connectors;
 using Desk.Application.Mapping;
 using Desk.Application.Resilience;
+using Desk.Application.Analytics;
 using Desk.Application.Sync;
 using Desk.Application.Tickets;
+using Desk.Infrastructure.Analytics;
 using Desk.Infrastructure.Connectors;
 using Desk.Infrastructure.Persistence;
 using Desk.Infrastructure.Tickets;
@@ -53,6 +55,10 @@ public static class DependencyInjection
         services.AddScoped<IClientAccessResolver, ClientAccessResolver>();
         services.AddScoped<ITicketReadService, TicketReadService>();
         services.AddScoped<ITicketCommandService, TicketCommandService>();
+
+        // Analytics (Phase 7)
+        services.AddSingleton<IProductivityScorer, ProductivityScorer>();
+        services.AddScoped<ITechnicianMetricsService, TechnicianMetricsService>();
 
         return services;
     }
