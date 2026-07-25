@@ -3,11 +3,12 @@
 @tailwind utilities;
 
 :root {
+  /* Neutral scale tuned so muted and faint text both meet WCAG AA (>= 4.5:1) on --bg. */
   --bg: #f8fafc;
   --surface: #ffffff;
   --fg: #0f172a;
-  --muted: #64748b;
-  --faint: #94a3b8;
+  --muted: #475569; /* ~7:1 on white */
+  --faint: #64748b; /* ~4.7:1 on white */
   --border: #e2e8f0;
   --brand-line: #2563eb;
 }
@@ -16,8 +17,8 @@
   --bg: #0b1120;
   --surface: #111827;
   --fg: #e2e8f0;
-  --muted: #94a3b8;
-  --faint: #64748b;
+  --muted: #a2adc0; /* AA on dark */
+  --faint: #8592a8; /* ~5.6:1 on dark */
   --border: #1e293b;
   --brand-line: #5b8cff;
 }
@@ -25,4 +26,18 @@
 body {
   background: var(--bg);
   color: var(--fg);
+}
+
+/* Visible keyboard focus for all interactive elements (WCAG 2.4.7). */
+:focus-visible {
+  outline: 2px solid var(--brand-line);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

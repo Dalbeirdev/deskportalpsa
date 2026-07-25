@@ -13,7 +13,7 @@
 | 7 | Technician & manager dashboards | ✅ Complete |
 | 8 | Administration | ✅ Complete |
 | 9 | Security & performance | ✅ Complete (code + artifacts; live gates pending a stack) |
-| 10 | Final QA & production readiness | ⏭️ Next |
+| 10 | Final QA & production readiness | ✅ Complete (feature-complete; GA gated on live validations) |
 
 ## Phase 2 — Foundation acceptance
 
