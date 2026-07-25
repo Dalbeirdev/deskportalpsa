@@ -2,8 +2,10 @@ import { z } from 'zod';
 import {
   TicketListItemSchema, TicketDetailSchema, NotificationSchema, ProfileSchema,
   TechnicianResponseSchema, TeamResponseSchema, TrendPointSchema,
+  ConnectionSummarySchema, HealthSchema, JobSchema, AuditEntrySchema,
   type TicketDetail, type TicketListItem, type Notification, type Profile,
   type TechnicianResponse, type TeamResponse, type TrendPoint,
+  type ConnectionSummary, type Health, type Job, type AuditEntry,
 } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:5080';
@@ -27,6 +29,7 @@ async function request<T>(path: string, schema: z.ZodType<T>, init?: RequestInit
     cache: 'no-store',
   });
   if (!res.ok) throw new ApiError(res.status, `${init?.method ?? 'GET'} ${path} → ${res.status}`);
+  if (res.status === 204 || res.headers.get('content-length') === '0') return undefined as T;
   return schema.parse(await res.json());
 }
 
@@ -62,6 +65,19 @@ export const api = {
   teamMetrics: () => request('/api/dashboard/team', TeamResponseSchema) as Promise<TeamResponse>,
   trend: () => request('/api/dashboard/trend', z.array(TrendPointSchema)) as Promise<TrendPoint[]>,
   teamExportUrl: `${API_BASE}/api/dashboard/team/export`,
+
+  // Admin
+  connections: () => request('/api/admin/connections', z.array(ConnectionSummarySchema)) as Promise<ConnectionSummary[]>,
+  createConnection: (body: {
+    name: string; provider: number; apiEndpoint: string; tenantIdentifier?: string;
+    credentials: Record<string, string>; timeZone?: string;
+  }) => request('/api/admin/connections', ConnectionSummarySchema, { method: 'POST', body: JSON.stringify(body) }),
+  health: () => request('/api/admin/health', z.array(HealthSchema)) as Promise<Health[]>,
+  jobs: (status?: number) =>
+    request(`/api/admin/jobs${status != null ? `?status=${status}` : ''}`, z.array(JobSchema)) as Promise<Job[]>,
+  reprocessJob: (id: string) =>
+    request(`/api/admin/jobs/${id}/reprocess`, z.unknown(), { method: 'POST' }),
+  audit: () => request('/api/admin/audit', z.array(AuditEntrySchema)) as Promise<AuditEntry[]>,
 };
 
 const TicketNoteResponse = z.object({

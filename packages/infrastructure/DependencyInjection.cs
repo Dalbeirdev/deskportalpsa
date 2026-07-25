@@ -2,9 +2,11 @@ using Desk.Application.Abstractions;
 using Desk.Application.Connectors;
 using Desk.Application.Mapping;
 using Desk.Application.Resilience;
+using Desk.Application.Admin;
 using Desk.Application.Analytics;
 using Desk.Application.Sync;
 using Desk.Application.Tickets;
+using Desk.Infrastructure.Admin;
 using Desk.Infrastructure.Analytics;
 using Desk.Infrastructure.Connectors;
 using Desk.Infrastructure.Persistence;
@@ -59,6 +61,15 @@ public static class DependencyInjection
         // Analytics (Phase 7)
         services.AddSingleton<IProductivityScorer, ProductivityScorer>();
         services.AddScoped<ITechnicianMetricsService, TechnicianMetricsService>();
+
+        // Administration (Phase 8)
+        services.AddScoped<IAuditWriter, AuditWriter>();
+        services.AddScoped<IConnectionAdminService, ConnectionAdminService>();
+        services.AddScoped<IMappingAdminService, MappingAdminService>();
+        services.AddScoped<IJobMonitorService, JobMonitorService>();
+        services.AddScoped<IIntegrationHealthService, IntegrationHealthService>();
+        services.AddScoped<IAuditQueryService, AuditQueryService>();
+        services.AddScoped<IUserAdminService, UserAdminService>();
 
         return services;
     }

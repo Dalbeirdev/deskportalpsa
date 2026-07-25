@@ -11,8 +11,8 @@
 | 5 | ConnectWise integration | ✅ Complete |
 | 6 | Client portal | ✅ Complete |
 | 7 | Technician & manager dashboards | ✅ Complete |
-| 8 | Administration | ⏭️ Next |
-| 9 | Security & performance | ⬜ Planned |
+| 8 | Administration | ✅ Complete |
+| 9 | Security & performance | ⏭️ Next |
 | 10 | Final QA & production readiness | ⬜ Planned |
 
 ## Phase 2 — Foundation acceptance
@@ -79,6 +79,23 @@ client portal pages render with graceful empty states, form validation works, 0 
 
 **Verified locally:** .NET Release clean, **110/110 unit tests green**; web build clean; productivity
 page renders with the disclaimer, score card, tiles, trend sparkline, team table — 0 console errors.
+
+## Phase 8 — Administration acceptance
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| PSA connection management | ✅ | `ConnectionAdminService` (create/list/enable) |
+| **Secrets remain hidden** | ✅ | creds → Vault, only ref on row; DTO has no secret field; audit excludes creds; tests |
+| Mapping management | ✅ | `MappingAdminService` list/upsert |
+| **Mapping changes are audited** | ✅ | every upsert writes a version snapshot + audit entry; test |
+| Mapping versioning + rollback | ✅ | `FieldMappingVersion` snapshots; rollback restores prior state; test |
+| User / role management | ✅ | `UserAdminService` (org-scoped, audited role changes) |
+| Audit log viewer | ✅ | `AuditQueryService` (tenant-scoped) + UI |
+| Integration health | ✅ | `IntegrationHealthService` (pending/DLQ/failed per connection) |
+| **Failed jobs can be reprocessed** | ✅ | `JobMonitorService.ReprocessAsync` (DLQ→Queued, audited); test |
+
+**Verified locally:** .NET Release clean, **117/117 unit tests green**; web build clean; admin pages
+render (connection form shows Vault-secrets note + masked Secret field), 0 console errors.
 
 ## Provider readiness matrix
 

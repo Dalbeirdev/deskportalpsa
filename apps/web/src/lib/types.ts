@@ -108,6 +108,57 @@ export type TrendPoint = z.infer<typeof TrendPointSchema>;
 export type TechnicianResponse = z.infer<typeof TechnicianResponseSchema>;
 export type TeamResponse = z.infer<typeof TeamResponseSchema>;
 
+export const ConnectionSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  provider: z.union([z.string(), z.number()]),
+  apiEndpoint: z.string(),
+  tenantIdentifier: z.string().nullable(),
+  status: z.union([z.string(), z.number()]),
+  isEnabled: z.boolean(),
+  lastSuccessfulSyncAt: z.string().nullable(),
+  lastError: z.string().nullable(),
+});
+export type ConnectionSummary = z.infer<typeof ConnectionSummarySchema>;
+
+export const HealthSchema = z.object({
+  connectionId: z.string(),
+  name: z.string(),
+  provider: z.union([z.string(), z.number()]),
+  status: z.union([z.string(), z.number()]),
+  lastSuccessfulSyncAt: z.string().nullable(),
+  lastHealthCheckAt: z.string().nullable(),
+  pendingJobs: z.number(),
+  deadLetterJobs: z.number(),
+  failedSyncEvents: z.number(),
+  lastError: z.string().nullable(),
+});
+export type Health = z.infer<typeof HealthSchema>;
+
+export const JobSchema = z.object({
+  id: z.string(),
+  jobType: z.string(),
+  status: z.union([z.string(), z.number()]),
+  attempts: z.number(),
+  maxAttempts: z.number(),
+  nextAttemptAt: z.string().nullable(),
+  lastError: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type Job = z.infer<typeof JobSchema>;
+
+export const AuditEntrySchema = z.object({
+  id: z.string(),
+  action: z.string(),
+  entityType: z.string(),
+  entityId: z.string().nullable(),
+  actorDisplayName: z.string().nullable(),
+  correlationId: z.string().nullable(),
+  createdAt: z.string(),
+  detailJson: z.string().nullable(),
+});
+export type AuditEntry = z.infer<typeof AuditEntrySchema>;
+
 export const ProfileSchema = z.object({
   displayName: z.string().nullable(),
   email: z.string().nullable(),
