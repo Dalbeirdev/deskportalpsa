@@ -1,0 +1,86 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { authConfig, oidc, cookies as ck, isProd } from '@/lib/authConfig';
+
+// Backend-for-frontend proxy. The browser calls same-origin /api/bff/*; this handler attaches the
+// access token (from the httpOnly cookie) server-side and forwards to the .NET API. The token never
+// reaches client JavaScript, and a 401 triggers a transparent refresh-token exchange + retry.
+
+async function refresh(refreshToken: string) {
+  const body = new URLSearchParams({
+    grant_type: 'refresh_token',
+    refresh_token: refreshToken,
+    client_id: authConfig.clientId,
+    ...(authConfig.clientSecret ? { client_secret: authConfig.clientSecret } : {}),
+  });
+  const r = await fetch(oidc.token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+    cache: 'no-store',
+  });
+  if (!r.ok) return null;
+  return (await r.json()) as { access_token: string; refresh_token?: string; expires_in?: number };
+}
+
+function upstreamHeaders(req: NextRequest, token: string | undefined): Headers {
+  const h = new Headers();
+  for (const key of ['content-type', 'accept', 'x-correlation-id']) {
+    const v = req.headers.get(key);
+    if (v) h.set(key, v);
+  }
+  if (token) h.set('authorization', `Bearer ${token}`);
+  return h;
+}
+
+function passthroughHeaders(res: Response): Headers {
+  const h = new Headers();
+  for (const key of ['content-type', 'content-disposition', 'cache-control']) {
+    const v = res.headers.get(key);
+    if (v) h.set(key, v);
+  }
+  return h;
+}
+
+async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
+  const { path } = await ctx.params;
+  const target = `${authConfig.apiBase}/${path.join('/')}${new URL(req.url).search}`;
+
+  const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
+  const bodyBuf = hasBody ? Buffer.from(await req.arrayBuffer()) : undefined;
+  let access = req.cookies.get(ck.access)?.value;
+
+  const call = (token?: string) =>
+    fetch(target, { method: req.method, headers: upstreamHeaders(req, token), body: bodyBuf, cache: 'no-store', redirect: 'manual' });
+
+  let upstream = await call(access);
+
+  let refreshed: { access: string; refresh?: string; maxAge?: number } | null = null;
+  if (upstream.status === 401) {
+    const rt = req.cookies.get(ck.refresh)?.value;
+    if (rt) {
+      const t = await refresh(rt);
+      if (t) {
+        access = t.access_token;
+        refreshed = { access: t.access_token, refresh: t.refresh_token, maxAge: t.expires_in };
+        upstream = await call(access);
+      }
+    }
+  }
+
+  const out = new NextResponse(Buffer.from(await upstream.arrayBuffer()), {
+    status: upstream.status,
+    headers: passthroughHeaders(upstream),
+  });
+  if (refreshed) {
+    out.cookies.set(ck.access, refreshed.access, {
+      httpOnly: true, secure: isProd, sameSite: 'lax', path: '/', maxAge: refreshed.maxAge ?? 300,
+    });
+    if (refreshed.refresh)
+      out.cookies.set(ck.refresh, refreshed.refresh, {
+        httpOnly: true, secure: isProd, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 * 7,
+      });
+  }
+  return out;
+}
+
+export { proxy as GET, proxy as POST, proxy as PUT, proxy as PATCH, proxy as DELETE };

@@ -56,7 +56,7 @@ All found defects resolved. **No open critical or high defects.**
 | K-2 | Live DAST, penetration test, load run, DR restore drill | Production-readiness gates — need a running stack |
 | K-3 | Dev-only ESLint `brace-expansion` advisory (not shipped) | ESLint 10 upgrade |
 | K-4 | Cross-browser visual validation on Firefox/Safari | Portable standards used; validate with real browsers pre-GA |
-| K-5 | Full Keycloak login flow in the web app | Wire OIDC auth-code + PKCE (needs Keycloak) |
+| ~~K-5~~ Resolved | Keycloak login flow in the web app | **Built**: OIDC auth-code + PKCE (S256), tokens in httpOnly cookies (BFF pattern — no token in JS), same-origin proxy with refresh-on-401, middleware guard, login/logout/session. End-to-end verified up to the Keycloak redirect (live IdP still needed for the full round-trip). |
 
 ## Cross-browser / mobile / accessibility
 - **Rendering engine tested**: Chromium (in-app browser) — light + dark, mobile viewport, no horizontal scroll, 0 console errors.

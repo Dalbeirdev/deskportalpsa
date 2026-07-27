@@ -22,7 +22,7 @@ running stack (DAST/pen-test/load) not available in the current environment.
 | A04 | Insecure design | ✅ | Connector capability model, sync loop-prevention, append-only audit, fail-closed tenant default. |
 | A05 | Security misconfiguration | ✅ | CSP, X-Frame-Options DENY, nosniff, Referrer-Policy, HSTS; CORS allowlist; 25 MB request cap; prod refuses the in-memory secret store. |
 | A06 | Vulnerable components | ✅ Verified | See dependency posture above. |
-| A07 | Auth failures | ✅ / Pending | Keycloak OIDC, short-lived tokens, brute-force + lockout in realm. Live auth-flow test: **pending (needs Keycloak)**. |
+| A07 | Auth failures | ✅ / Pending | Keycloak OIDC; web login is auth-code + **PKCE (S256)** with tokens in **httpOnly cookies** (BFF — never in client JS) and refresh-on-401; short-lived tokens; brute-force + lockout in realm. Full round-trip test: **pending (needs a running Keycloak)**. |
 | A08 | Integrity failures | ✅ Verified | Webhook signature + timestamp (replay) validation; idempotency + update-hash echo suppression. |
 | A09 | Logging/monitoring | ✅ | Structured Serilog + correlation IDs; **immutable audit log** (modify/delete throws); admin actions audited. |
 | A10 | SSRF | ✅ Verified | Connector base URLs are admin-configured. An opt-in `EgressGuard` blocks connector calls to loopback/private/link-local/reserved hosts (incl. the 169.254.169.254 metadata endpoint); the IP classifier is unit-tested. Enable via `Connectors:BlockPrivateEgress` with an optional host allowlist for self-hosted PSA. |

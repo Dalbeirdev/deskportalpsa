@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { QueryProvider } from '@/components/QueryProvider';
+import { UserMenu } from '@/components/UserMenu';
 import { LayoutDashboard, Ticket, Plug, Bell, User, BarChart3, Activity, ListChecks, ShieldCheck } from 'lucide-react';
 
 const nav = [
@@ -39,8 +40,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <div className="flex flex-1 flex-col">
         <header className="flex h-14 items-center justify-between border-b border-[var(--border)] bg-[var(--surface)] px-4 sm:px-6">
-          <span className="text-sm text-[var(--muted)]">Multi-tenant PSA ticket portal</span>
-          <ThemeToggle />
+          <span className="hidden text-sm text-[var(--muted)] sm:inline">Multi-tenant PSA ticket portal</span>
+          <div className="flex items-center gap-3">
+            <UserMenu />
+            <ThemeToggle />
+          </div>
         </header>
 
         {/* Mobile navigation — the sidebar is hidden below md, so provide a scrollable strip. */}

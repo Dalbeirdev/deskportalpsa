@@ -8,26 +8,21 @@ import {
   type ConnectionSummary, type Health, type Job, type AuditEntry,
 } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:5080';
-
-/** Reads the access token a real login flow would have stored. Absent in this build. */
-function token(): string | undefined {
-  if (typeof window === 'undefined') return undefined;
-  return window.localStorage.getItem('desk-token') ?? undefined;
-}
+// All API calls go through the same-origin BFF proxy, which attaches the bearer token from the
+// httpOnly session cookie server-side. No token is ever held in client JavaScript.
+const BFF_BASE = '/api/bff';
 
 async function request<T>(path: string, schema: z.ZodType<T>, init?: RequestInit): Promise<T> {
-  const t = token();
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${BFF_BASE}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      ...(t ? { Authorization: `Bearer ${t}` } : {}),
       'X-Correlation-ID': crypto.randomUUID(),
       ...(init?.headers ?? {}),
     },
     cache: 'no-store',
   });
+  if (res.status === 401) throw new ApiError(401, 'Not authenticated');
   if (!res.ok) throw new ApiError(res.status, `${init?.method ?? 'GET'} ${path} → ${res.status}`);
   if (res.status === 204 || res.headers.get('content-length') === '0') return undefined as T;
   return schema.parse(await res.json());
@@ -59,13 +54,12 @@ export const api = {
   addComment: (id: string, body: string) =>
     request(`/api/tickets/${id}/comments`, TicketNoteResponse, { method: 'POST', body: JSON.stringify({ body }) }),
   uploadAttachment: async (ticketId: string, file: File) => {
-    const t = token();
     const fd = new FormData();
     fd.append('file', file);
-    const res = await fetch(`${API_BASE}/api/tickets/${ticketId}/attachments`, {
+    const res = await fetch(`${BFF_BASE}/api/tickets/${ticketId}/attachments`, {
       method: 'POST',
-      headers: { ...(t ? { Authorization: `Bearer ${t}` } : {}), 'X-Correlation-ID': crypto.randomUUID() },
-      body: fd, // no Content-Type — the browser sets the multipart boundary
+      headers: { 'X-Correlation-ID': crypto.randomUUID() }, // no Content-Type — browser sets multipart boundary
+      body: fd,
     });
     if (!res.ok) throw new ApiError(res.status, `upload → ${res.status}`);
     return AttachmentSchema.parse(await res.json());
@@ -78,7 +72,7 @@ export const api = {
   technicianMetrics: () => request('/api/dashboard/technician', TechnicianResponseSchema) as Promise<TechnicianResponse>,
   teamMetrics: () => request('/api/dashboard/team', TeamResponseSchema) as Promise<TeamResponse>,
   trend: () => request('/api/dashboard/trend', z.array(TrendPointSchema)) as Promise<TrendPoint[]>,
-  teamExportUrl: `${API_BASE}/api/dashboard/team/export`,
+  teamExportUrl: `${BFF_BASE}/api/dashboard/team/export`,
 
   // Admin
   connections: () => request('/api/admin/connections', z.array(ConnectionSummarySchema)) as Promise<ConnectionSummary[]>,
