@@ -5,10 +5,12 @@ using Desk.Application.Abstractions;
 using Desk.Infrastructure;
 using Desk.Infrastructure.Persistence;
 using Desk.Infrastructure.Secrets;
+using Desk.Infrastructure.Tenancy;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -90,6 +92,18 @@ if (app.Environment.IsProduction() &&
     app.Services.GetRequiredService<ISecretStore>() is InMemorySecretStore)
 {
     throw new InvalidOperationException("Refusing to start in Production without a configured Vault secret store.");
+}
+
+// Apply migrations + seed the built-in roles on startup for local/dev bring-up. In production run
+// migrations as an explicit deploy step; opt in here with RunMigrationsOnStartup=true if desired.
+if (app.Environment.IsDevelopment() || config.GetValue("RunMigrationsOnStartup", false))
+{
+    using var startupScope = app.Services.CreateScope();
+    startupScope.ServiceProvider.GetRequiredService<TenantContext>().SetPlatformScope();
+    var startupDb = startupScope.ServiceProvider.GetRequiredService<DeskDbContext>();
+    await startupDb.Database.MigrateAsync();
+    await DatabaseSeeder.SeedBuiltInRolesAsync(startupDb);
+    app.Logger.LogInformation("Database migrated and built-in roles seeded.");
 }
 
 // ---- Pipeline order matters ----

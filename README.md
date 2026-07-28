@@ -38,6 +38,9 @@ infrastructure/   docker-compose, Keycloak realm, Vault, Terraform (VPS)
 docs/             architecture, security, setup, integration guides
 ```
 
+> Full end-to-end bring-up (services + API + worker + web + Keycloak login + live validations):
+> [docs/deployment/local-run.md](docs/deployment/local-run.md).
+
 ## Quick start (local)
 
 ```bash
