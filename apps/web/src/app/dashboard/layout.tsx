@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { QueryProvider } from '@/components/QueryProvider';
 import { UserMenu } from '@/components/UserMenu';
-import { LayoutDashboard, Ticket, Plug, Bell, User, BarChart3, Activity, ListChecks, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, Ticket, Plug, Bell, User, BarChart3, Activity, ListChecks, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 
 const nav = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
@@ -11,6 +11,7 @@ const nav = [
   { href: '/dashboard/notifications', label: 'Notifications', icon: Bell },
   { href: '/dashboard/profile', label: 'Profile', icon: User },
   { href: '/dashboard/connections', label: 'PSA Connections', icon: Plug },
+  { href: '/dashboard/mappings', label: 'Field Mapping', icon: SlidersHorizontal },
   { href: '/dashboard/health', label: 'Integration Health', icon: Activity },
   { href: '/dashboard/jobs', label: 'Background Jobs', icon: ListChecks },
   { href: '/dashboard/audit', label: 'Audit Log', icon: ShieldCheck },

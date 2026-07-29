@@ -4,6 +4,7 @@ import {
   TechnicianResponseSchema, TeamResponseSchema, TrendPointSchema,
   ConnectionSummarySchema, HealthSchema, JobSchema, AuditEntrySchema, AttachmentSchema,
   ConnectionFieldsSchema, type ConnectionFields,
+  MappingRuleSchema, type MappingRule,
   type TicketDetail, type TicketListItem, type Notification, type Profile,
   type TechnicianResponse, type TeamResponse, type TrendPoint,
   type ConnectionSummary, type Health, type Job, type AuditEntry,
@@ -91,6 +92,17 @@ export const api = {
   }) => request(`/api/admin/connections/${id}`, ConnectionSummarySchema, { method: 'PUT', body: JSON.stringify(body) }),
   connectionFields: (id: string) =>
     request(`/api/admin/connections/${id}/fields`, ConnectionFieldsSchema) as Promise<ConnectionFields>,
+  listMappings: (provider: number) =>
+    request(`/api/admin/mappings?provider=${provider}`, z.array(MappingRuleSchema)) as Promise<MappingRule[]>,
+  upsertMapping: (
+    body: {
+      id?: string; provider: number; scope: number; psaConnectionId: string;
+      portalField: string; portalValue: string; externalField: string; externalValue: string;
+      direction: number; isRequired: boolean; fallbackValue: string | null;
+    },
+    note?: string,
+  ) => request(`/api/admin/mappings${note ? `?note=${encodeURIComponent(note)}` : ''}`,
+    MappingRuleSchema, { method: 'POST', body: JSON.stringify(body) }),
   health: () => request('/api/admin/health', z.array(HealthSchema)) as Promise<Health[]>,
   jobs: (status?: number) =>
     request(`/api/admin/jobs${status != null ? `?status=${status}` : ''}`, z.array(JobSchema)) as Promise<Job[]>,

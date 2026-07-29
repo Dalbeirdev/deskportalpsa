@@ -121,6 +121,23 @@ export const ConnectionSummarySchema = z.object({
 });
 export type ConnectionSummary = z.infer<typeof ConnectionSummarySchema>;
 
+export const MappingRuleSchema = z.object({
+  id: z.string(),
+  provider: z.union([z.string(), z.number()]),
+  scope: z.union([z.string(), z.number()]),
+  psaConnectionId: z.string().nullable(),
+  portalField: z.string(),
+  portalValue: z.string().nullable(),
+  externalField: z.string(),
+  externalValue: z.string().nullable(),
+  direction: z.union([z.string(), z.number()]),
+  isRequired: z.boolean(),
+  fallbackValue: z.string().nullable(),
+  isActive: z.boolean(),
+  version: z.number(),
+});
+export type MappingRule = z.infer<typeof MappingRuleSchema>;
+
 export const FieldOptionSchema = z.object({ value: z.string(), label: z.string() });
 export const ConnectionFieldsSchema = z.object({
   queuesOrBoards: z.array(FieldOptionSchema),
