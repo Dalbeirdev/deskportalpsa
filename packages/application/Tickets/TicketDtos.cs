@@ -40,7 +40,9 @@ public sealed record TicketDetailDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset? ResolvedAt,
     IReadOnlyList<TicketNoteDto> Conversation,
-    IReadOnlyList<AttachmentDto> Attachments);
+    IReadOnlyList<AttachmentDto> Attachments,
+    string? CustomerName,
+    DateTimeOffset UpdatedAt);
 
 public sealed record AttachmentDto(
     Guid Id,
