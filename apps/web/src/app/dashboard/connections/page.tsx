@@ -73,6 +73,17 @@ export default function ConnectionsPage() {
     onError: (_e, id) => setResults((m) => ({ ...m, [id]: { ok: false, msg: 'Request failed' } })),
   });
 
+  const sync = useMutation({
+    mutationFn: (id: string) => api.syncConnection(id),
+    onSuccess: (r, id) => {
+      setResults((m) => ({ ...m, [id]: { ok: true, msg: `Synced · ${r.created} new, ${r.updated} updated (${r.fetched} fetched)` } }));
+      // Refresh every page that reads synced data.
+      ['connections', 'tickets', 'team', 'trend', 'health', 'notifications', 'audit', 'jobs'].forEach((k) =>
+        qc.invalidateQueries({ queryKey: [k] }));
+    },
+    onError: (e, id) => setResults((m) => ({ ...m, [id]: { ok: false, msg: e instanceof Error ? `Sync failed: ${e.message}` : 'Sync failed' } })),
+  });
+
   // Live field discovery (boards/queues, statuses, priorities, categories)
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [fieldsById, setFieldsById] = useState<Record<string, ConnectionFields | 'loading' | 'error'>>({});
@@ -178,6 +189,8 @@ export default function ConnectionsPage() {
                   fields={fieldsById[c.id]}
                   onTest={() => test.mutate(c.id)}
                   testing={test.isPending && test.variables === c.id}
+                  onSync={() => sync.mutate(c.id)}
+                  syncing={sync.isPending && sync.variables === c.id}
                   onEdit={() => openEdit(c)}
                   onToggleFields={() => toggleFields(c.id)}
                 />
@@ -191,7 +204,7 @@ export default function ConnectionsPage() {
 }
 
 function FragmentRow({
-  c, result, expanded, fields, onTest, testing, onEdit, onToggleFields,
+  c, result, expanded, fields, onTest, testing, onSync, syncing, onEdit, onToggleFields,
 }: {
   c: ConnectionSummary;
   result?: { ok: boolean; msg: string };
@@ -199,6 +212,8 @@ function FragmentRow({
   fields?: ConnectionFields | 'loading' | 'error';
   onTest: () => void;
   testing: boolean;
+  onSync: () => void;
+  syncing: boolean;
   onEdit: () => void;
   onToggleFields: () => void;
 }) {
@@ -221,6 +236,7 @@ function FragmentRow({
             </ActionButton>
             <ActionButton onClick={onEdit}>Edit</ActionButton>
             <ActionButton onClick={onTest} disabled={testing}>{testing ? 'Testing…' : 'Test'}</ActionButton>
+            <ActionButton onClick={onSync} disabled={syncing}>{syncing ? 'Syncing…' : 'Sync now'}</ActionButton>
           </div>
         </td>
       </tr>

@@ -1,15 +1,23 @@
 using Desk.Application.Admin;
+using Desk.Application.Sync;
 using Desk.Domain.Authorization;
 using Desk.Domain.Enums;
+using Desk.Domain.Tenancy;
 using Desk.Api.Auth;
+using Desk.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Desk.Api.Controllers;
 
 /// <summary>PSA connection administration. Secrets are written to Vault and never returned.</summary>
 [ApiController]
 [Route("api/admin/connections")]
-public sealed class AdminConnectionsController(IConnectionAdminService svc) : ControllerBase
+public sealed class AdminConnectionsController(
+    IConnectionAdminService svc,
+    IConnectionSyncRunner syncRunner,
+    DeskDbContext db,
+    IConfiguration config) : ControllerBase
 {
     [HttpGet]
     [RequirePermission(Permissions.ConnectionsView)]
@@ -33,6 +41,16 @@ public sealed class AdminConnectionsController(IConnectionAdminService svc) : Co
     public async Task<IActionResult> Test(Guid id, CancellationToken ct)
         => Ok(await svc.TestAsync(id, ct));
 
+    /// <summary>Pull tickets from the provider into the portal (manual "sync now").</summary>
+    [HttpPost("{id:guid}/sync")]
+    [RequirePermission(Permissions.ConnectionsManage)]
+    public async Task<IActionResult> Sync(Guid id, CancellationToken ct)
+    {
+        var result = await syncRunner.RunAsync(id, ct);
+        await EnsureLocalClientIdentityAsync(id, ct);
+        return Ok(result);
+    }
+
     [HttpPut("{id:guid}")]
     [RequirePermission(Permissions.ConnectionsManage)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateConnectionInput input, CancellationToken ct)
@@ -42,7 +60,39 @@ public sealed class AdminConnectionsController(IConnectionAdminService svc) : Co
     [RequirePermission(Permissions.ConnectionsView)]
     public async Task<IActionResult> Fields(Guid id, CancellationToken ct)
         => Ok(await svc.GetFieldsAsync(id, ct));
+
+    // Local demo only: the dev auto-login is an MSP admin, not a client. The client-portal pages
+    // (Tickets, Notifications, Profile) resolve by client identity, so once a sync has produced real
+    // tickets we link the dev subject to the busiest synced company (as its administrator) — using
+    // real synced data, never fabricated rows — so the whole portal shows live data under one login.
+    private async Task EnsureLocalClientIdentityAsync(Guid connectionId, CancellationToken ct)
+    {
+        if (!config.GetValue("LocalMode:Enabled", false)) return;
+        if (await db.ClientUsers.IgnoreQueryFilters().AnyAsync(u => u.IdpSubject == DatabaseSeeder.DevAdminSubject, ct)) return;
+
+        var companyId = await db.Tickets
+            .Where(t => t.PsaConnectionId == connectionId)
+            .GroupBy(t => t.ClientCompanyId)
+            .OrderByDescending(g => g.Count())
+            .Select(g => g.Key)
+            .FirstOrDefaultAsync(ct);
+        if (companyId == Guid.Empty) return; // no tickets synced yet — nothing to attach to
+
+        var company = await db.ClientCompanies.FirstAsync(c => c.Id == companyId, ct);
+        db.ClientUsers.Add(new ClientUser
+        {
+            MspOrganizationId = company.MspOrganizationId,
+            ClientCompanyId = companyId,
+            Email = "dev-admin@local",
+            DisplayName = "Demo Admin",
+            IdpSubject = DatabaseSeeder.DevAdminSubject,
+            IsCompanyAdministrator = true,
+            IsActive = true,
+        });
+        await db.SaveChangesAsync(ct);
+    }
 }
+
 
 /// <summary>Field-mapping administration with versioning + rollback (all audited).</summary>
 [ApiController]

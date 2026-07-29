@@ -86,6 +86,10 @@ export const api = {
     request(`/api/admin/connections/${id}/test`,
       z.object({ success: z.boolean(), message: z.string().nullable(), latencyMs: z.number() }),
       { method: 'POST' }),
+  syncConnection: (id: string) =>
+    request(`/api/admin/connections/${id}/sync`,
+      z.object({ fetched: z.number(), created: z.number(), updated: z.number(), skipped: z.number(), pages: z.number() }),
+      { method: 'POST' }),
   updateConnection: (id: string, body: {
     name: string; apiEndpoint: string; tenantIdentifier?: string; timeZone?: string;
     isEnabled: boolean; credentials?: Record<string, string>;
