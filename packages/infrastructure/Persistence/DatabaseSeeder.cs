@@ -2,6 +2,7 @@ using Desk.Domain.Audit;
 using Desk.Domain.Authorization;
 using Desk.Domain.Enums;
 using Desk.Domain.Identity;
+using Desk.Domain.Mapping;
 using Desk.Domain.Sync;
 using Desk.Domain.Tenancy;
 using Desk.Domain.Tickets;
@@ -124,7 +125,54 @@ public static class DatabaseSeeder
 
         SeedTickets(db, org.Id, connection.Id, company.Id, client.Id);
         SeedOps(db, org.Id, connection.Id);
+        SeedMappings(db, org.Id, connection.Id);
         await db.SaveChangesAsync(ct);
+    }
+
+    // ---- Field mappings -------------------------------------------------------------------------
+
+    private static readonly (string Field, (string Portal, string External)[] Pairs)[] MappingSets =
+    {
+        ("status", new[]
+        {
+            ("NEW", "New (Not Responded)"), ("IN_PROGRESS", "In Progress"),
+            ("WAITING_CUSTOMER", "Waiting on Customer"), ("ON_HOLD", "On Hold"),
+            ("RESOLVED", "Resolved"), ("CLOSED", "Closed"),
+        }),
+        ("priority", new[]
+        {
+            ("CRITICAL", "Priority 1 - Emergency"), ("HIGH", "Priority 2 - High"),
+            ("NORMAL", "Priority 3 - Medium"), ("LOW", "Priority 4 - Low"),
+        }),
+        ("queue", new[]
+        {
+            ("Help Desk", "Service Desk"), ("Network", "Network Operations"),
+            ("Projects", "Professional Services"),
+        }),
+        ("category", new[]
+        {
+            ("Hardware", "Hardware"), ("Software", "Software"),
+            ("Network", "Network"), ("Access", "Account / Access"),
+        }),
+    };
+
+    private static void SeedMappings(DeskDbContext db, Guid orgId, Guid connId)
+    {
+        foreach (var (field, pairs) in MappingSets)
+            foreach (var (portal, external) in pairs)
+                db.FieldMappings.Add(new FieldMapping
+                {
+                    MspOrganizationId = orgId,
+                    Provider = ProviderType.ConnectWisePsa,
+                    Scope = MappingScope.ConnectionOverride,
+                    PsaConnectionId = connId,
+                    PortalField = field,
+                    PortalValue = portal,
+                    ExternalField = field,
+                    ExternalValue = external,
+                    Direction = MappingDirection.Bidirectional,
+                    IsActive = true,
+                });
     }
 
     // ---- Demo tickets ---------------------------------------------------------------------------
