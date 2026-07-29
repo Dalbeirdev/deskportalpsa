@@ -28,16 +28,16 @@ export default function TicketsPage() {
 
       {isError && (
         <EmptyState
-          title="Nothing to show yet"
-          body="Sign in to your organization's portal to load your tickets. This preview runs without a live backend."
+          title="No tickets to show"
+          body="Connect your PSA under PSA Connections, then run a sync to load tickets. They appear here after the first successful sync."
         />
       )}
 
-      {data && data.length === 0 && (
-        <EmptyState title="No tickets yet" body="Create your first ticket to get help from your IT team." />
+      {!isError && data && data.length === 0 && (
+        <EmptyState title="No tickets yet" body="Create a ticket, or run a sync from PSA Connections to pull them from your PSA." />
       )}
 
-      {data && data.length > 0 && (
+      {!isError && data && data.length > 0 && (
         <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase tracking-wide text-[var(--muted)]">
