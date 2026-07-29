@@ -1,13 +1,13 @@
 'use client';
 
-import { use, useRef, useState } from 'react';
+import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Pencil, MoreHorizontal, Paperclip,
   Send, Bold, Smile, Link2, ArrowUpDown, Lock, Monitor, Wifi, Mail, KeyRound, Cpu, Ticket,
-  Copy, RefreshCw, Download, Clock,
+  Copy, RefreshCw, Download, Clock, Play, Square, Trash2, Check, X,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 
@@ -57,6 +57,23 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const [timeNotes, setTimeNotes] = useState('');
   const [workType, setWorkType] = useState('');
   const [workRole, setWorkRole] = useState('');
+  const [timerStart, setTimerStart] = useState<number | null>(null);
+  const [elapsed, setElapsed] = useState(0); // seconds
+  const [editEntry, setEditEntry] = useState<{ id: string; hours: string; notes: string } | null>(null);
+
+  useEffect(() => {
+    if (timerStart === null) return;
+    const t = setInterval(() => setElapsed(Math.floor((Date.now() - timerStart) / 1000)), 1000);
+    return () => clearInterval(t);
+  }, [timerStart]);
+  function stopTimer() {
+    if (timerStart === null) return;
+    const secs = Math.floor((Date.now() - timerStart) / 1000);
+    const rounded = Math.max(0.25, Math.round((secs / 3600) / 0.25) * 0.25); // nearest 0.25h, min 15 min
+    setHours(rounded.toFixed(2));
+    setTimerStart(null);
+    setElapsed(0);
+  }
   const replyRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -69,12 +86,22 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
     onSuccess: () => { setComment(''); qc.invalidateQueries({ queryKey: ['ticket', id] }); },
   });
 
+  const { data: entries } = useQuery({ queryKey: ['time-entries', id], queryFn: () => api.listTimeEntries(id), enabled: !!ticket, retry: false });
+
+  const refreshTime = () =>
+    [['time-entries', id], ['ticket', id], ['team'], ['trend']].forEach((k) => qc.invalidateQueries({ queryKey: k }));
+
   const logTime = useMutation({
     mutationFn: () => api.logTime(id, { hours: parseFloat(hours), billable, notes: timeNotes || undefined, workType: workType || undefined, workRole: workRole || undefined }),
-    onSuccess: () => {
-      setHours(''); setTimeNotes('');
-      ['ticket', 'team', 'trend'].forEach((k) => qc.invalidateQueries({ queryKey: k === 'ticket' ? ['ticket', id] : [k] }));
-    },
+    onSuccess: () => { setHours(''); setTimeNotes(''); refreshTime(); },
+  });
+  const delEntry = useMutation({
+    mutationFn: (entryId: string) => api.deleteTimeEntry(id, entryId),
+    onSuccess: refreshTime,
+  });
+  const updEntry = useMutation({
+    mutationFn: (v: { entryId: string; hours: number; notes: string }) => api.updateTimeEntry(id, v.entryId, { hours: v.hours, notes: v.notes }),
+    onSuccess: () => { setEditEntry(null); refreshTime(); },
   });
 
   async function upload(file: File) {
@@ -168,6 +195,20 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   <input type="number" step="0.25" min="0" value={hours} onChange={(e) => setHours(e.target.value)} placeholder="0.5"
                     className="w-24 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
                 </label>
+                <div className="flex flex-col">
+                  <span className="mb-1 text-xs text-[var(--muted)]">Timer</span>
+                  {timerStart === null ? (
+                    <button type="button" onClick={() => { setElapsed(0); setTimerStart(Date.now()); }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--bg)]">
+                      <Play size={14} /> Start
+                    </button>
+                  ) : (
+                    <button type="button" onClick={stopTimer}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium tabular-nums text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+                      <Square size={13} /> {String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')} · Stop
+                    </button>
+                  )}
+                </div>
                 <label className="block">
                   <span className="mb-1 block text-xs text-[var(--muted)]">Billable</span>
                   <select value={billable} onChange={(e) => setBillable(e.target.value)}
@@ -215,8 +256,49 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
               {logTime.isError && (
                 <p className="mt-2 text-xs text-red-600 dark:text-red-400">Couldn&apos;t log time — the PSA rejected it or the connection is unreachable.</p>
               )}
-              <p className="mt-2 text-xs text-[var(--faint)]">Posts a time entry to the PSA against this ticket. Work type &amp; role arrive in a later update.</p>
+              <p className="mt-2 text-xs text-[var(--faint)]">Posts a time entry to the PSA against this ticket. Use the timer to track live, or enter hours directly.</p>
             </div>
+
+            {/* Time entries */}
+            {entries && entries.length > 0 && (
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+                <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-3">
+                  <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--faint)]">
+                    Time entries <span className="rounded-full bg-[var(--bg)] px-2 py-0.5 text-xs text-[var(--muted)]">{entries.length}</span>
+                  </h2>
+                  <span className="text-xs text-[var(--muted)]">{entries.reduce((a, e) => a + e.hours, 0).toFixed(2)}h total</span>
+                </div>
+                <ul className="divide-y divide-[var(--border)]">
+                  {entries.map((e) => (
+                    <li key={e.externalId} className="px-5 py-3">
+                      {editEntry?.id === e.externalId ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input type="number" step="0.25" min="0" value={editEntry.hours}
+                            onChange={(ev) => setEditEntry({ ...editEntry, hours: ev.target.value })}
+                            className="w-20 rounded-md border border-brand bg-[var(--bg)] px-2 py-1 text-sm outline-none" />
+                          <input value={editEntry.notes} onChange={(ev) => setEditEntry({ ...editEntry, notes: ev.target.value })}
+                            placeholder="Notes" className="min-w-40 flex-1 rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-sm outline-none focus:border-brand" />
+                          <button onClick={() => { const h = parseFloat(editEntry.hours); if (h > 0) updEntry.mutate({ entryId: e.externalId, hours: h, notes: editEntry.notes }); }}
+                            disabled={updEntry.isPending} className="rounded-md border border-[var(--border)] p-1.5 text-green-600 hover:bg-[var(--bg)]"><Check size={15} /></button>
+                          <button onClick={() => setEditEntry(null)} className="rounded-md border border-[var(--border)] p-1.5 text-[var(--muted)] hover:bg-[var(--bg)]"><X size={15} /></button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <span className="w-14 shrink-0 font-semibold tabular-nums">{e.hours.toFixed(2)}h</span>
+                          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium ${e.billable ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{e.billable ? 'Billable' : 'No charge'}</span>
+                          <span className="min-w-0 flex-1 truncate text-sm text-[var(--muted)]">{e.notes || '—'}</span>
+                          <span className="shrink-0 text-xs text-[var(--faint)]">{fmt(e.entryDate)}</span>
+                          <button onClick={() => setEditEntry({ id: e.externalId, hours: e.hours.toString(), notes: e.notes ?? '' })}
+                            aria-label="Edit" className="rounded-md p-1.5 text-[var(--muted)] hover:bg-[var(--bg)] hover:text-brand"><Pencil size={14} /></button>
+                          <button onClick={() => { if (window.confirm('Delete this time entry from the PSA?')) delEntry.mutate(e.externalId); }}
+                            disabled={delEntry.isPending} aria-label="Delete" className="rounded-md p-1.5 text-[var(--muted)] hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"><Trash2 size={14} /></button>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* Conversation */}
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">

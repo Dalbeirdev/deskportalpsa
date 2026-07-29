@@ -62,6 +62,12 @@ export const api = {
   ticketTimeOptions: (id: string) =>
     request(`/api/tickets/${id}/time-options`,
       z.object({ workTypes: z.array(FieldOptionSchema), workRoles: z.array(FieldOptionSchema) })),
+  listTimeEntries: (id: string) =>
+    request(`/api/tickets/${id}/time`, z.array(TimeEntrySchema)) as Promise<TimeEntry[]>,
+  updateTimeEntry: (id: string, entryId: string, body: { hours?: number; billable?: string; notes?: string }) =>
+    request(`/api/tickets/${id}/time/${entryId}`, TimeAggregateSchema, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteTimeEntry: (id: string, entryId: string) =>
+    request(`/api/tickets/${id}/time/${entryId}`, TimeAggregateSchema, { method: 'DELETE' }),
   uploadAttachment: async (ticketId: string, file: File) => {
     const fd = new FormData();
     fd.append('file', file);
@@ -121,6 +127,23 @@ export const api = {
     request(`/api/admin/jobs/${id}/reprocess`, z.unknown(), { method: 'POST' }),
   audit: () => request('/api/admin/audit', z.array(AuditEntrySchema)) as Promise<AuditEntry[]>,
 };
+
+const TimeEntrySchema = z.object({
+  externalId: z.string(),
+  hours: z.number(),
+  billable: z.boolean(),
+  entryDate: z.string(),
+  notes: z.string().nullable(),
+  technician: z.string(),
+});
+export type TimeEntry = z.infer<typeof TimeEntrySchema>;
+
+const TimeAggregateSchema = z.object({
+  count: z.number(),
+  timeWorkedHours: z.number(),
+  billableHours: z.number(),
+  nonBillableHours: z.number(),
+});
 
 const TicketNoteResponse = z.object({
   id: z.string(), authorName: z.string(), authoredByClient: z.boolean(),

@@ -103,6 +103,12 @@ public record UnifiedTimeEntryCreateRequest(
     string? Notes,
     string? MemberIdentifier);
 
+/// <summary>Partial update of an existing time entry — only non-null fields are applied.</summary>
+public record UnifiedTimeEntryUpdate(
+    decimal? Hours,
+    BillableOption? Billable,
+    string? Notes);
+
 public record UnifiedAttachment(
     string ExternalId,
     string FileName,

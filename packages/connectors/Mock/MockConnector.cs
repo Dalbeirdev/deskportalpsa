@@ -147,6 +147,12 @@ public sealed class MockConnector : IServiceManagementConnector
     public Task<CreateTimeEntryResult> AddTimeEntryAsync(string ticketId, UnifiedTimeEntryCreateRequest entry, CancellationToken ct = default)
     { Guard(); return Task.FromResult(new CreateTimeEntryResult(true, $"TE-{Interlocked.Increment(ref _seq)}", null)); }
 
+    public Task<UpdateTimeEntryResult> UpdateTimeEntryAsync(string entryId, UnifiedTimeEntryUpdate update, CancellationToken ct = default)
+    { Guard(); return Task.FromResult(new UpdateTimeEntryResult(true, null)); }
+
+    public Task<UpdateTimeEntryResult> DeleteTimeEntryAsync(string entryId, CancellationToken ct = default)
+    { Guard(); return Task.FromResult(new UpdateTimeEntryResult(true, null)); }
+
     public Task<IReadOnlyList<ExternalFieldOption>> GetStatusesAsync(CancellationToken ct = default) =>
         Options("New", "In Progress", "Waiting Customer", "Resolved", "Closed");
 

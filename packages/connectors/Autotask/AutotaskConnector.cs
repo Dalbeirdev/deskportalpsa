@@ -167,6 +167,12 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
     public Task<CreateTimeEntryResult> AddTimeEntryAsync(string ticketId, UnifiedTimeEntryCreateRequest entry, CancellationToken ct = default)
         => Task.FromResult(new CreateTimeEntryResult(false, null, "Time logging is not yet supported for Autotask."));
 
+    public Task<UpdateTimeEntryResult> UpdateTimeEntryAsync(string entryId, UnifiedTimeEntryUpdate update, CancellationToken ct = default)
+        => Task.FromResult(new UpdateTimeEntryResult(false, "Time editing is not yet supported for Autotask."));
+
+    public Task<UpdateTimeEntryResult> DeleteTimeEntryAsync(string entryId, CancellationToken ct = default)
+        => Task.FromResult(new UpdateTimeEntryResult(false, "Time deletion is not yet supported for Autotask."));
+
     public Task<IReadOnlyList<ExternalFieldOption>> GetStatusesAsync(CancellationToken ct = default) => PicklistAsync("status", ct);
     public Task<IReadOnlyList<ExternalFieldOption>> GetPrioritiesAsync(CancellationToken ct = default) => PicklistAsync("priority", ct);
     public Task<IReadOnlyList<ExternalFieldOption>> GetQueuesOrBoardsAsync(CancellationToken ct = default) => PicklistAsync("queueID", ct);

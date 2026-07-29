@@ -40,6 +40,8 @@ public interface IServiceManagementConnector
     // Time
     Task<IReadOnlyList<UnifiedTimeEntry>> GetTimeEntriesAsync(string ticketId, CancellationToken ct = default);
     Task<CreateTimeEntryResult> AddTimeEntryAsync(string ticketId, UnifiedTimeEntryCreateRequest entry, CancellationToken ct = default);
+    Task<UpdateTimeEntryResult> UpdateTimeEntryAsync(string entryId, UnifiedTimeEntryUpdate update, CancellationToken ct = default);
+    Task<UpdateTimeEntryResult> DeleteTimeEntryAsync(string entryId, CancellationToken ct = default);
 
     // Field discovery (live from the connected tenant — never hard-coded)
     Task<IReadOnlyList<ExternalFieldOption>> GetStatusesAsync(CancellationToken ct = default);

@@ -194,6 +194,25 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         return new CreateTimeEntryResult(true, created!.Id.ToString(), null);
     }
 
+    public async Task<UpdateTimeEntryResult> UpdateTimeEntryAsync(string entryId, UnifiedTimeEntryUpdate update, CancellationToken ct = default)
+    {
+        var ops = new List<object>();
+        if (update.Hours is { } h) ops.Add(new { op = "replace", path = "actualHours", value = h });
+        if (update.Notes is not null) ops.Add(new { op = "replace", path = "notes", value = update.Notes });
+        if (update.Billable is { } b)
+            ops.Add(new { op = "replace", path = "billableOption", value = b switch { BillableOption.DoNotBill => "DoNotBill", BillableOption.NoCharge => "NoCharge", _ => "Billable" } });
+        if (ops.Count == 0) return new UpdateTimeEntryResult(true, null);
+
+        await SendAsync<CwRef>(HttpMethod.Patch, $"time/entries/{entryId}", ops, ct);
+        return new UpdateTimeEntryResult(true, null);
+    }
+
+    public async Task<UpdateTimeEntryResult> DeleteTimeEntryAsync(string entryId, CancellationToken ct = default)
+    {
+        await SendVoidAsync(HttpMethod.Delete, $"time/entries/{entryId}", null, ct);
+        return new UpdateTimeEntryResult(true, null);
+    }
+
     public async Task<IReadOnlyList<ExternalFieldOption>> GetStatusesAsync(CancellationToken ct = default)
     {
         var board = (await GetListAsync<CwRef>("service/boards", new() { ["pageSize"] = "1" }, ct)).FirstOrDefault();
@@ -314,6 +333,28 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
             throw MapError(resp);
 
         return await resp.Content.ReadFromJsonAsync<T>(JsonOpts, ct);
+    }
+
+    /// <summary>Send a request that returns no body (e.g. DELETE → 204). Same auth/error handling.</summary>
+    private async Task SendVoidAsync(HttpMethod method, string path, object? body, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(method, path);
+        var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes(
+            $"{config.Credentials.CompanyId}+{config.Credentials.PublicKey}:{config.Credentials.PrivateKey}"));
+        req.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
+        req.Headers.Add("clientId", config.Credentials.ClientId);
+        if (body is not null)
+            req.Content = JsonContent.Create(body, options: JsonOpts);
+
+        HttpResponseMessage resp;
+        try { resp = await http.SendAsync(req, ct); }
+        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        { throw new ConnectorException(ConnectorFailureKind.Timeout, "ConnectWise request timed out."); }
+        catch (HttpRequestException ex)
+        { throw new ConnectorException(ConnectorFailureKind.Timeout, "ConnectWise request failed.", ex); }
+
+        if (!resp.IsSuccessStatusCode)
+            throw MapError(resp);
     }
 
     private static ConnectorException MapError(HttpResponseMessage resp) => resp.StatusCode switch
