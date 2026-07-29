@@ -65,7 +65,6 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
     setHours(rounded.toFixed(2));
     timer.pause();
   }
-  const replyRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { data: ticket, isLoading, isError } = useQuery({ queryKey: ['ticket', id], queryFn: () => api.getTicket(id) });
@@ -126,9 +125,6 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
           <ArrowLeft size={16} /> Back to tickets
         </Link>
         <div className="flex items-center gap-2">
-          <button onClick={() => replyRef.current?.focus()} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium hover:bg-[var(--bg)]">
-            <Pencil size={14} /> Edit ticket
-          </button>
           <div className="relative">
             <button onClick={() => setMenuOpen((v) => !v)} onBlur={() => setTimeout(() => setMenuOpen(false), 150)}
               className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium hover:bg-[var(--bg)]">
@@ -172,7 +168,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`rounded-md px-2.5 py-1 text-xs font-semibold ${STATUS_TONE[ticket.portalStatus] ?? STATUS_TONE.NEW}`}>{ticket.portalStatus.replace(/_/g, ' ')}</span>
-                  <span className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold ${PRIORITY_TONE[ticket.portalPriority.toUpperCase()] ?? PRIORITY_TONE.NORMAL}`}>{ticket.portalPriority.toUpperCase()} <ChevronDown size={12} /></span>
+                  <span className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold ${PRIORITY_TONE[ticket.portalPriority.toUpperCase()] ?? PRIORITY_TONE.NORMAL}`}>{ticket.portalPriority.toUpperCase()}</span>
                 </div>
               </div>
               <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-[var(--border)] pt-4 text-sm sm:grid-cols-3 lg:grid-cols-6">
@@ -188,73 +184,77 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
             {/* Log time */}
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
               <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--faint)]"><Clock size={14} /> Log time</h2>
-              <form onSubmit={(e) => { e.preventDefault(); if (parseFloat(hours) > 0) logTime.mutate(); }} className="flex flex-wrap items-end gap-3">
-                <label className="block">
-                  <span className="mb-1 block text-xs text-[var(--muted)]">Hours</span>
-                  <input type="number" step="0.25" min="0" value={hours} onChange={(e) => setHours(e.target.value)} placeholder="0.5"
-                    className="w-24 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
-                </label>
-                <div className="flex flex-col">
-                  <span className="mb-1 text-xs text-[var(--muted)]">Global timer</span>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={startTimerHere}
-                      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium ${timer.running && timer.target?.ticketId === id ? 'border-brand/40 bg-brand/5 text-brand' : 'border-[var(--border)] hover:bg-[var(--bg)]'}`}>
-                      <Clock size={14} /> {timer.running && timer.target?.ticketId === id ? 'Timing…' : 'Start timer here'}
-                    </button>
-                    <button type="button" onClick={applyTimer} disabled={timer.seconds === 0}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium tabular-nums hover:bg-[var(--bg)] disabled:opacity-50">
-                      Use {String(Math.floor(timer.seconds / 60)).padStart(2, '0')}:{String(timer.seconds % 60).padStart(2, '0')}
-                    </button>
-                  </div>
+              <form onSubmit={(e) => { e.preventDefault(); if (parseFloat(hours) > 0) logTime.mutate(); }} className="space-y-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-[var(--muted)]">Hours</span>
+                    <input type="number" step="0.25" min="0" value={hours} onChange={(e) => setHours(e.target.value)} placeholder="0.5"
+                      className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-[var(--muted)]">Billable</span>
+                    <select value={billable} onChange={(e) => setBillable(e.target.value)}
+                      className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
+                      <option value="Billable">Billable</option>
+                      <option value="DoNotBill">Do not bill</option>
+                      <option value="NoCharge">No charge</option>
+                    </select>
+                  </label>
+                  {timeOpts && timeOpts.workTypes.length > 0 && (
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-[var(--muted)]">Work type</span>
+                      <select value={workType} onChange={(e) => setWorkType(e.target.value)}
+                        className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
+                        <option value="">—</option>
+                        {timeOpts.workTypes.map((o) => <option key={o.value} value={o.label}>{o.label}</option>)}
+                      </select>
+                    </label>
+                  )}
+                  {timeOpts && timeOpts.workRoles.length > 0 && (
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-[var(--muted)]">Work role</span>
+                      <select value={workRole} onChange={(e) => setWorkRole(e.target.value)}
+                        className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
+                        <option value="">—</option>
+                        {timeOpts.workRoles.map((o) => <option key={o.value} value={o.label}>{o.label}</option>)}
+                      </select>
+                    </label>
+                  )}
                 </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-[var(--muted)]">Global timer</span>
+                  <button type="button" onClick={startTimerHere}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium ${timer.running && timer.target?.ticketId === id ? 'border-brand/40 bg-brand/5 text-brand' : 'border-[var(--border)] hover:bg-[var(--bg)]'}`}>
+                    <Clock size={14} /> {timer.running && timer.target?.ticketId === id ? 'Timing…' : 'Start timer here'}
+                  </button>
+                  <button type="button" onClick={applyTimer} disabled={timer.seconds === 0}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm font-medium tabular-nums hover:bg-[var(--bg)] disabled:opacity-50">
+                    Use {String(Math.floor(timer.seconds / 60)).padStart(2, '0')}:{String(timer.seconds % 60).padStart(2, '0')}
+                  </button>
+                </div>
+
                 <label className="block">
-                  <span className="mb-1 block text-xs text-[var(--muted)]">Billable</span>
-                  <select value={billable} onChange={(e) => setBillable(e.target.value)}
-                    className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
-                    <option value="Billable">Billable</option>
-                    <option value="DoNotBill">Do not bill</option>
-                    <option value="NoCharge">No charge</option>
-                  </select>
-                </label>
-                {timeOpts && timeOpts.workTypes.length > 0 && (
-                  <label className="block">
-                    <span className="mb-1 block text-xs text-[var(--muted)]">Work type</span>
-                    <select value={workType} onChange={(e) => setWorkType(e.target.value)}
-                      className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
-                      <option value="">—</option>
-                      {timeOpts.workTypes.map((o) => <option key={o.value} value={o.label}>{o.label}</option>)}
-                    </select>
-                  </label>
-                )}
-                {timeOpts && timeOpts.workRoles.length > 0 && (
-                  <label className="block">
-                    <span className="mb-1 block text-xs text-[var(--muted)]">Work role</span>
-                    <select value={workRole} onChange={(e) => setWorkRole(e.target.value)}
-                      className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
-                      <option value="">—</option>
-                      {timeOpts.workRoles.map((o) => <option key={o.value} value={o.label}>{o.label}</option>)}
-                    </select>
-                  </label>
-                )}
-                <label className="block min-w-48 flex-1">
                   <span className="mb-1 block text-xs text-[var(--muted)]">Notes</span>
                   <input value={timeNotes} onChange={(e) => setTimeNotes(e.target.value)} placeholder="What did you work on?"
                     className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
                 </label>
-                <button type="submit" disabled={logTime.isPending || !(parseFloat(hours) > 0)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50">
-                  <Clock size={15} /> {logTime.isPending ? 'Logging…' : 'Log time'}
-                </button>
+
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-[var(--faint)]">Posts a time entry to the PSA against this ticket. Use the timer to track live, or enter hours directly.</p>
+                  <button type="submit" disabled={logTime.isPending || !(parseFloat(hours) > 0)}
+                    className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50">
+                    <Clock size={15} /> {logTime.isPending ? 'Logging…' : 'Log time'}
+                  </button>
+                </div>
+
+                {logTime.isSuccess && logTime.data && (
+                  <p className="text-xs font-medium text-green-600 dark:text-green-400">Logged to the PSA · ticket total {logTime.data.timeWorkedHours}h ({logTime.data.billableHours}h billable).</p>
+                )}
+                {logTime.isError && (
+                  <p className="text-xs text-red-600 dark:text-red-400">Couldn&apos;t log time — the PSA rejected it or the connection is unreachable.</p>
+                )}
               </form>
-              {logTime.isSuccess && logTime.data && (
-                <p className="mt-2 text-xs font-medium text-green-600 dark:text-green-400">
-                  Logged to the PSA · ticket total {logTime.data.timeWorkedHours}h ({logTime.data.billableHours}h billable).
-                </p>
-              )}
-              {logTime.isError && (
-                <p className="mt-2 text-xs text-red-600 dark:text-red-400">Couldn&apos;t log time — the PSA rejected it or the connection is unreachable.</p>
-              )}
-              <p className="mt-2 text-xs text-[var(--faint)]">Posts a time entry to the PSA against this ticket. Use the timer to track live, or enter hours directly.</p>
             </div>
 
             {/* Time entries */}
@@ -338,7 +338,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                     <button type="button" className="rounded p-1.5 hover:bg-[var(--surface)]"><Smile size={15} /></button>
                     <button type="button" className="rounded p-1.5 hover:bg-[var(--surface)]"><Link2 size={15} /></button>
                   </div>
-                  <textarea ref={replyRef} value={comment} onChange={(e) => setComment(e.target.value)} rows={3} maxLength={4000}
+                  <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} maxLength={4000}
                     placeholder="Add a reply…" className="w-full resize-y bg-transparent px-4 py-3 text-sm outline-none" />
                   <div className="flex items-center justify-between px-4 pb-3">
                     <span className="text-xs text-[var(--faint)]">{comment.length} / 4000</span>
