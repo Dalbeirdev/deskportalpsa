@@ -44,6 +44,8 @@ export const TicketDetailSchema = z.object({
   resolvedAt: z.string().nullable(),
   conversation: z.array(TicketNoteSchema),
   attachments: z.array(AttachmentSchema),
+  customerName: z.string().nullable(),
+  updatedAt: z.string(),
 });
 export type TicketDetail = z.infer<typeof TicketDetailSchema>;
 

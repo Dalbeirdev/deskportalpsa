@@ -35,6 +35,12 @@ public sealed class TicketReadService(DeskDbContext db) : ITicketReadService
             .FirstOrDefaultAsync(t => t.Id == ticketId, ct);
         if (ticket is null) return null; // not found OR not permitted — indistinguishable to the client
 
+        var customerName = await db.ClientCompanies
+            .AsNoTracking()
+            .Where(c => c.Id == ticket.ClientCompanyId)
+            .Select(c => c.Name)
+            .FirstOrDefaultAsync(ct);
+
         return new TicketDetailDto(
             ticket.Id, ticket.ExternalTicketId, ticket.Provider, ticket.Title, ticket.Description,
             ticket.PortalStatus, ticket.PortalPriority, ticket.PortalCategory, ticket.QueueOrBoard,
@@ -47,7 +53,9 @@ public sealed class TicketReadService(DeskDbContext db) : ITicketReadService
             Attachments: ticket.Attachments
                 .OrderBy(a => a.UploadedAt)
                 .Select(a => new AttachmentDto(a.Id, a.OriginalFileName, a.ContentType, a.SizeBytes, a.ScanStatus, a.UploadedAt))
-                .ToList());
+                .ToList(),
+            CustomerName: customerName,
+            UpdatedAt: ticket.UpdatedAt);
     }
 
     public async Task<IReadOnlyList<NotificationDto>> RecentActivityAsync(ClientAccess access, int take = 10, CancellationToken ct = default)
