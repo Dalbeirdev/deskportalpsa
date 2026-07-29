@@ -112,6 +112,23 @@ story += [bullets([
     "<b>Boards</b> — discovers the connection's service boards/queues, statuses, priorities and categories live.",
 ])]
 
+story += [Paragraph("Rotating PSA credentials", h2_s)]
+story += [Paragraph("If an API key is ever exposed, rotate it promptly. The portal is built so this needs no "
+                    "redeploy and no code or config changes:", body_s)]
+story += [bullets([
+    "In your PSA, revoke the exposed key and generate a new one. In <b>ConnectWise Manage</b> this is "
+    "<b>System &rarr; Members &rarr; API Members</b>: open the member, delete the old key pair on the "
+    "<b>API Keys</b> tab, then create a new pair. The new private key is shown only once — copy it immediately.",
+    "In the portal, open <b>PSA Connections &rarr; Edit</b> for that connection and enter the new credentials. "
+    "Sensitive fields are masked and are never pre-filled, so type the new key(s) and save.",
+    "Leaving a credential field blank keeps the current value; only the fields you fill are overwritten in the "
+    "secret vault.",
+    "Click <b>Test</b> to confirm the new key works, then check <b>Integration Health</b>.",
+])]
+story += [Paragraph("Never paste API keys into chat, tickets, email, code, or config files. The portal only accepts "
+                    "credentials through the masked fields on this screen, which write straight to the secret vault — "
+                    "treat any key that has been shared anywhere else as compromised and rotate it.", note_s)]
+
 story += [Paragraph("Field Mapping", h2_s)]
 story += [Paragraph("Under <b>Field Mapping</b>, translate the portal's neutral values to each PSA's real values — this "
                     "is how the portal and your PSA agree on what a status, priority, queue or category means.", body_s)]
