@@ -1,5 +1,6 @@
-using Desk.Application.Abstractions;
+using Desk.Application.Jobs;
 using Desk.Domain.Enums;
+using Desk.Infrastructure.Jobs;
 using Desk.Infrastructure.Persistence;
 using Desk.Infrastructure.Tenancy;
 using Microsoft.EntityFrameworkCore;
@@ -7,10 +8,9 @@ using Microsoft.EntityFrameworkCore;
 namespace Desk.Worker;
 
 /// <summary>
-/// Phase-2 skeleton of the background job processor. It claims due jobs and (for now) logs
-/// them; retry/backoff/dead-letter and the concrete job handlers (sync, polling, reconciliation)
-/// arrive in Phase 3. Each job is processed under an explicit tenant scope so all data access
-/// respects isolation exactly as the API does.
+/// Claims due background jobs and runs each through <see cref="JobProcessor"/>, which applies the
+/// retry / backoff / dead-letter policy. Runs under platform scope to discover jobs across all
+/// tenants; each handler narrows to its job's tenant before touching tenant-scoped data.
 /// </summary>
 public sealed class BackgroundJobPollingService(
     IServiceProvider services,
@@ -40,13 +40,14 @@ public sealed class BackgroundJobPollingService(
     private async Task PollOnceAsync(CancellationToken ct)
     {
         using var scope = services.CreateScope();
-
-        // The poller runs under platform scope to discover jobs across all tenants; each job's
-        // handler will narrow to that job's tenant before touching tenant-scoped data.
         scope.ServiceProvider.GetRequiredService<TenantContext>().SetPlatformScope();
-        var db = scope.ServiceProvider.GetRequiredService<DeskDbContext>();
 
-        var now = scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow();
+        var db = scope.ServiceProvider.GetRequiredService<DeskDbContext>();
+        var clock = scope.ServiceProvider.GetRequiredService<TimeProvider>();
+        var handlers = scope.ServiceProvider.GetServices<IJobHandler>();
+        var processor = new JobProcessor(db, handlers, clock);
+
+        var now = clock.GetUtcNow();
         var due = await db.BackgroundJobs
             .Where(j => j.Status == BackgroundJobStatus.Queued
                         && (j.NextAttemptAt == null || j.NextAttemptAt <= now))
@@ -55,7 +56,13 @@ public sealed class BackgroundJobPollingService(
             .ToListAsync(ct);
 
         if (due.Count == 0) return;
-        logger.LogInformation("Claimed {Count} due background job(s)", due.Count);
-        // Handler dispatch is implemented in Phase 3.
+        logger.LogInformation("Processing {Count} due background job(s)", due.Count);
+
+        foreach (var job in due)
+        {
+            var result = await processor.ProcessAsync(job, ct);
+            if (result == BackgroundJobStatus.DeadLettered)
+                logger.LogWarning("Job {JobId} ({Type}) dead-lettered: {Error}", job.Id, job.JobType, job.LastError);
+        }
     }
 }

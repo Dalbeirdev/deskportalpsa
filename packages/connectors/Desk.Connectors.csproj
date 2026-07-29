@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Desk.Connectors</RootNamespace>
+    <AssemblyName>Desk.Connectors</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\psa-core\Desk.PsaCore.csproj" />
+    <ProjectReference Include="..\domain\Desk.Domain.csproj" />
+  </ItemGroup>
+</Project>

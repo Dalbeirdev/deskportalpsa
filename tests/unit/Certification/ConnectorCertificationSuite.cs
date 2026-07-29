@@ -1,0 +1,190 @@
+using System.Security.Cryptography;
+using System.Text;
+using Desk.Domain.Enums;
+using Desk.PsaCore.Contracts;
+using Desk.PsaCore.Models;
+using FluentAssertions;
+using Xunit;
+
+namespace Desk.Tests.Unit.Certification;
+
+/// <summary>
+/// Provider-agnostic connector certification suite (Integration Plan §"Connector Testing
+/// Requirements"). Every connector must pass these; derived classes supply a concrete connector.
+/// Behaviours that are platform concerns (e.g. create idempotency across retries) are tested at
+/// the sync-engine layer, not here, because not every PSA supports them natively.
+/// </summary>
+public abstract class ConnectorCertificationSuite
+{
+    protected readonly TestClock Clock = new();
+
+    /// <summary>A healthy connector seeded with at least one organization + contact + technician.</summary>
+    protected abstract IServiceManagementConnector CreateConnector();
+
+    /// <summary>A connector rigged so every call fails with the given kind (fault injection).</summary>
+    protected abstract IServiceManagementConnector CreateFailingConnector(ConnectorFailureKind kind);
+
+    /// <summary>The external id of a seeded organization the connector knows about.</summary>
+    protected abstract string SeededOrganizationId { get; }
+
+    /// <summary>Shared webhook secret used to sign the certification's webhook payloads.</summary>
+    protected abstract string WebhookSecret { get; }
+
+    protected static string Hmac(string body, string secret)
+        => Convert.ToHexStringLower(HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes(body)));
+
+    // ---- capability + connection ----
+
+    [Fact]
+    public async Task Declares_capabilities()
+    {
+        var caps = await CreateConnector().GetCapabilitiesAsync();
+        caps.SupportsTicketCreate.Should().BeTrue();
+        caps.AuthenticationTypes.Should().NotBeEmpty();
+        caps.MaximumPageSize.Should().BePositive();
+    }
+
+    [Fact]
+    public async Task Test_connection_succeeds()
+        => (await CreateConnector().TestConnectionAsync()).Success.Should().BeTrue();
+
+    // ---- error mapping ----
+
+    [Fact]
+    public async Task Invalid_credentials_surface_as_authentication_failure()
+    {
+        var act = async () => await CreateFailingConnector(ConnectorFailureKind.Authentication).TestConnectionAsync();
+        (await act.Should().ThrowAsync<ConnectorException>()).Which.Kind.Should().Be(ConnectorFailureKind.Authentication);
+    }
+
+    [Fact]
+    public async Task Permission_denied_is_reported()
+    {
+        var act = async () => await CreateFailingConnector(ConnectorFailureKind.PermissionDenied).GetOrganizationsAsync();
+        (await act.Should().ThrowAsync<ConnectorException>()).Which.Kind.Should().Be(ConnectorFailureKind.PermissionDenied);
+    }
+
+    [Fact]
+    public async Task Rate_limit_is_transient_with_retry_after()
+    {
+        var act = (Func<Task>)(() => CreateFailingConnector(ConnectorFailureKind.RateLimited).GetOrganizationsAsync());
+        var ex = (await act.Should().ThrowAsync<ConnectorException>()).Which;
+        ex.IsTransient.Should().BeTrue();
+        ex.RetryAfter.Should().NotBeNull();
+    }
+
+    // ---- directory sync ----
+
+    [Fact]
+    public async Task Directory_sync_returns_orgs_contacts_and_technicians()
+    {
+        var c = CreateConnector();
+        (await c.GetOrganizationsAsync()).Should().NotBeEmpty();
+        (await c.GetContactsAsync(SeededOrganizationId)).Should().NotBeEmpty();
+        (await c.GetTechniciansAsync()).Should().NotBeEmpty();
+    }
+
+    // ---- ticket lifecycle ----
+
+    [Fact]
+    public async Task Ticket_create_read_update_round_trips()
+    {
+        var c = CreateConnector();
+        var created = await c.CreateTicketAsync(new UnifiedTicketCreateRequest
+        {
+            Title = "Printer down", ExternalCompanyId = SeededOrganizationId, IdempotencyKey = "k1", Priority = "High",
+        });
+        created.Success.Should().BeTrue();
+        created.ExternalId.Should().NotBeNull();
+
+        var read = await c.GetTicketAsync(created.ExternalId!);
+        read!.Title.Should().Be("Printer down");
+
+        (await c.UpdateTicketAsync(created.ExternalId!, new UnifiedTicketUpdate { Status = "Resolved", IdempotencyKey = "k2" }))
+            .Success.Should().BeTrue();
+        (await c.GetTicketAsync(created.ExternalId!))!.Status.Should().Be("Resolved");
+    }
+
+    [Fact]
+    public async Task Update_of_missing_ticket_is_not_found()
+    {
+        var act = async () => await CreateConnector().UpdateTicketAsync("999999", new UnifiedTicketUpdate { IdempotencyKey = "x" });
+        (await act.Should().ThrowAsync<ConnectorException>()).Which.Kind.Should().Be(ConnectorFailureKind.NotFound);
+    }
+
+    [Fact]
+    public async Task Public_note_is_added_and_only_public_notes_are_returned()
+    {
+        var c = CreateConnector();
+        var t = await c.CreateTicketAsync(new UnifiedTicketCreateRequest { Title = "T", ExternalCompanyId = SeededOrganizationId, IdempotencyKey = "n1" });
+        await c.AddPublicNoteAsync(t.ExternalId!, new UnifiedTicketNoteCreateRequest("hello", IsPublic: true, "note-key"));
+        var notes = await c.GetPublicNotesAsync(t.ExternalId!);
+        notes.Should().NotBeEmpty();
+        notes.Should().OnlyContain(n => n.IsPublic);
+    }
+
+    // ---- field discovery ----
+
+    [Fact]
+    public async Task Field_options_are_retrieved_live()
+    {
+        var c = CreateConnector();
+        (await c.GetStatusesAsync()).Should().NotBeEmpty();
+        (await c.GetPrioritiesAsync()).Should().NotBeEmpty();
+        (await c.GetQueuesOrBoardsAsync()).Should().NotBeEmpty();
+    }
+
+    // ---- incremental read ----
+
+    [Fact]
+    public async Task Incremental_read_filters_by_modified_since()
+    {
+        var c = CreateConnector();
+        await c.CreateTicketAsync(new UnifiedTicketCreateRequest { Title = "old", ExternalCompanyId = SeededOrganizationId, IdempotencyKey = "old" });
+        Clock.Advance(TimeSpan.FromHours(1));
+        var cutoff = Clock.GetUtcNow();
+        Clock.Advance(TimeSpan.FromMinutes(1));
+        await c.CreateTicketAsync(new UnifiedTicketCreateRequest { Title = "new", ExternalCompanyId = SeededOrganizationId, IdempotencyKey = "new" });
+
+        var page = await c.GetTicketsAsync(new TicketFilter { ModifiedSince = cutoff });
+        page.Items.Should().OnlyContain(t => t.Title == "new");
+    }
+
+    // ---- webhook validation ----
+
+    private WebhookRequest SignedWebhook(string body, DateTimeOffset? ts = null)
+        => new(
+            Headers: new Dictionary<string, string> { ["X-Timestamp"] = (ts ?? Clock.GetUtcNow()).ToString("o") },
+            Body: body,
+            RawSignature: Hmac(body, WebhookSecret),
+            ReceivedAt: Clock.GetUtcNow());
+
+    [Fact]
+    public async Task Valid_webhook_signature_passes()
+        => (await CreateConnector().ValidateWebhookAsync(SignedWebhook("{\"eventType\":\"ticket.updated\"}"))).IsValid.Should().BeTrue();
+
+    [Fact]
+    public async Task Tampered_signature_is_rejected()
+    {
+        var req = SignedWebhook("{\"x\":1}") with { RawSignature = "deadbeef" };
+        (await CreateConnector().ValidateWebhookAsync(req)).IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Stale_timestamp_is_rejected_replay_protection()
+    {
+        var stale = Clock.GetUtcNow() - TimeSpan.FromMinutes(30);
+        (await CreateConnector().ValidateWebhookAsync(SignedWebhook("{\"x\":1}", stale))).IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Webhook_payload_normalizes_to_a_provider_event()
+    {
+        var body = "{\"eventType\":\"ticket.updated\",\"ticketId\":\"1001\",\"id\":\"evt-9\"}";
+        var evt = await CreateConnector().ProcessWebhookAsync(
+            new WebhookRequest(new Dictionary<string, string>(), body, null, Clock.GetUtcNow()));
+        evt.EventType.Should().Be("ticket.updated");
+        evt.ExternalTicketId.Should().Be("1001");
+        evt.IdempotencyKey.Should().Be("evt-9");
+    }
+}

@@ -132,6 +132,9 @@ public sealed class TicketConfig : IEntityTypeConfiguration<Ticket>
             .HasFilter("\"ExternalTicketId\" IS NOT NULL");
         b.HasIndex(x => new { x.MspOrganizationId, x.PortalStatus });
         b.HasIndex(x => x.CorrelationId);
+        // Client-portal list queries filter by company; dashboard metrics group by technician.
+        b.HasIndex(x => x.ClientCompanyId);
+        b.HasIndex(x => new { x.MspOrganizationId, x.AssignedTechnicianExternalId });
         b.HasMany(x => x.Notes).WithOne(n => n.Ticket!).HasForeignKey(n => n.TicketId);
         b.HasMany(x => x.Attachments).WithOne(a => a.Ticket!).HasForeignKey(a => a.TicketId);
     }

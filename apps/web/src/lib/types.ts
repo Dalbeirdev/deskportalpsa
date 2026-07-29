@@ -1,0 +1,194 @@
+import { z } from 'zod';
+
+export const TicketListItemSchema = z.object({
+  id: z.string(),
+  externalTicketId: z.string().nullable(),
+  provider: z.union([z.string(), z.number()]),
+  title: z.string(),
+  portalStatus: z.string(),
+  portalPriority: z.string(),
+  queueOrBoard: z.string().nullable(),
+  createdAt: z.string(),
+  lastSyncedAt: z.string().nullable(),
+});
+export type TicketListItem = z.infer<typeof TicketListItemSchema>;
+
+export const TicketNoteSchema = z.object({
+  id: z.string(),
+  authorName: z.string(),
+  authoredByClient: z.boolean(),
+  body: z.string(),
+  createdAt: z.string(),
+});
+
+export const AttachmentSchema = z.object({
+  id: z.string(),
+  fileName: z.string(),
+  contentType: z.string(),
+  sizeBytes: z.number(),
+  scanStatus: z.union([z.string(), z.number()]),
+  uploadedAt: z.string(),
+});
+
+export const TicketDetailSchema = z.object({
+  id: z.string(),
+  externalTicketId: z.string().nullable(),
+  provider: z.union([z.string(), z.number()]),
+  title: z.string(),
+  description: z.string().nullable(),
+  portalStatus: z.string(),
+  portalPriority: z.string(),
+  portalCategory: z.string().nullable(),
+  queueOrBoard: z.string().nullable(),
+  createdAt: z.string(),
+  resolvedAt: z.string().nullable(),
+  conversation: z.array(TicketNoteSchema),
+  attachments: z.array(AttachmentSchema),
+});
+export type TicketDetail = z.infer<typeof TicketDetailSchema>;
+
+export const NotificationSchema = z.object({
+  ticketId: z.string(),
+  title: z.string(),
+  kind: z.string(),
+  summary: z.string(),
+  at: z.string(),
+});
+export type Notification = z.infer<typeof NotificationSchema>;
+
+export const ScoreContributionSchema = z.object({
+  component: z.string(),
+  score: z.number(),
+  weight: z.number(),
+  weightedPoints: z.number(),
+});
+
+export const ProductivityScoreSchema = z.object({
+  overall: z.number(),
+  measuredWeightFraction: z.number(),
+  breakdown: z.array(ScoreContributionSchema),
+});
+
+export const TechnicianMetricsSchema = z.object({
+  technicianExternalId: z.string(),
+  assigned: z.number(),
+  resolved: z.number(),
+  open: z.number(),
+  overdue: z.number(),
+  slaCompliancePct: z.number(),
+  avgResolutionHours: z.number(),
+  timeWorkedHours: z.number(),
+  billableHours: z.number(),
+  nonBillableHours: z.number(),
+  score: ProductivityScoreSchema.nullable(),
+});
+
+export const TechnicianResponseSchema = z.object({
+  metrics: TechnicianMetricsSchema,
+  disclaimer: z.string(),
+});
+
+export const TeamRowSchema = z.object({
+  technicianExternalId: z.string(),
+  resolved: z.number(),
+  slaCompliancePct: z.number(),
+  score: z.number().nullable(),
+});
+export const TeamResponseSchema = z.object({
+  team: z.array(TeamRowSchema),
+  disclaimer: z.string(),
+});
+
+export const TrendPointSchema = z.object({
+  date: z.string(),
+  created: z.number(),
+  resolved: z.number(),
+});
+export type TrendPoint = z.infer<typeof TrendPointSchema>;
+export type TechnicianResponse = z.infer<typeof TechnicianResponseSchema>;
+export type TeamResponse = z.infer<typeof TeamResponseSchema>;
+
+export const ConnectionSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  provider: z.union([z.string(), z.number()]),
+  apiEndpoint: z.string(),
+  tenantIdentifier: z.string().nullable(),
+  status: z.union([z.string(), z.number()]),
+  isEnabled: z.boolean(),
+  lastSuccessfulSyncAt: z.string().nullable(),
+  lastError: z.string().nullable(),
+});
+export type ConnectionSummary = z.infer<typeof ConnectionSummarySchema>;
+
+export const MappingRuleSchema = z.object({
+  id: z.string(),
+  provider: z.union([z.string(), z.number()]),
+  scope: z.union([z.string(), z.number()]),
+  psaConnectionId: z.string().nullable(),
+  portalField: z.string(),
+  portalValue: z.string().nullable(),
+  externalField: z.string(),
+  externalValue: z.string().nullable(),
+  direction: z.union([z.string(), z.number()]),
+  isRequired: z.boolean(),
+  fallbackValue: z.string().nullable(),
+  isActive: z.boolean(),
+  version: z.number(),
+});
+export type MappingRule = z.infer<typeof MappingRuleSchema>;
+
+export const FieldOptionSchema = z.object({ value: z.string(), label: z.string() });
+export const ConnectionFieldsSchema = z.object({
+  queuesOrBoards: z.array(FieldOptionSchema),
+  statuses: z.array(FieldOptionSchema),
+  priorities: z.array(FieldOptionSchema),
+  categories: z.array(FieldOptionSchema),
+});
+export type ConnectionFields = z.infer<typeof ConnectionFieldsSchema>;
+
+export const HealthSchema = z.object({
+  connectionId: z.string(),
+  name: z.string(),
+  provider: z.union([z.string(), z.number()]),
+  status: z.union([z.string(), z.number()]),
+  lastSuccessfulSyncAt: z.string().nullable(),
+  lastHealthCheckAt: z.string().nullable(),
+  pendingJobs: z.number(),
+  deadLetterJobs: z.number(),
+  failedSyncEvents: z.number(),
+  lastError: z.string().nullable(),
+});
+export type Health = z.infer<typeof HealthSchema>;
+
+export const JobSchema = z.object({
+  id: z.string(),
+  jobType: z.string(),
+  status: z.union([z.string(), z.number()]),
+  attempts: z.number(),
+  maxAttempts: z.number(),
+  nextAttemptAt: z.string().nullable(),
+  lastError: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type Job = z.infer<typeof JobSchema>;
+
+export const AuditEntrySchema = z.object({
+  id: z.string(),
+  action: z.string(),
+  entityType: z.string(),
+  entityId: z.string().nullable(),
+  actorDisplayName: z.string().nullable(),
+  correlationId: z.string().nullable(),
+  createdAt: z.string(),
+  detailJson: z.string().nullable(),
+});
+export type AuditEntry = z.infer<typeof AuditEntrySchema>;
+
+export const ProfileSchema = z.object({
+  displayName: z.string().nullable(),
+  email: z.string().nullable(),
+  clientCompanyId: z.string(),
+  isCompanyAdministrator: z.boolean(),
+});
+export type Profile = z.infer<typeof ProfileSchema>;

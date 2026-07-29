@@ -9,6 +9,7 @@
     <ProjectReference Include="..\..\packages\application\Desk.Application.csproj" />
     <ProjectReference Include="..\..\packages\infrastructure\Desk.Infrastructure.csproj" />
     <ProjectReference Include="..\..\packages\psa-core\Desk.PsaCore.csproj" />
+    <ProjectReference Include="..\..\packages\connectors\Desk.Connectors.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />

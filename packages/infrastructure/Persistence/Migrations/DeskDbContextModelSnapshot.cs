@@ -754,7 +754,11 @@ namespace Desk.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ClientCompanyId");
+
                     b.HasIndex("CorrelationId");
+
+                    b.HasIndex("MspOrganizationId", "AssignedTechnicianExternalId");
 
                     b.HasIndex("MspOrganizationId", "PortalStatus");
 

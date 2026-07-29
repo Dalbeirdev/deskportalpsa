@@ -1,3 +1,4 @@
+using Desk.Application.Jobs;
 using Desk.Infrastructure;
 using Desk.Worker;
 using Serilog;
@@ -10,7 +11,15 @@ builder.Services.AddSerilog(cfg => cfg
     .WriteTo.Console(new Serilog.Formatting.Compact.CompactJsonFormatter()));
 
 builder.Services.AddDeskInfrastructure(builder.Configuration);
+
+// Job handlers
+builder.Services.AddScoped<IJobHandler, InboundEventJobHandler>();
+
+// Connectors — the real Autotask + ConnectWise factories come from AddDeskInfrastructure.
+
+// Hosted services
 builder.Services.AddHostedService<BackgroundJobPollingService>();
+builder.Services.AddHostedService<PollingSyncService>();
 
 var host = builder.Build();
 host.Run();
