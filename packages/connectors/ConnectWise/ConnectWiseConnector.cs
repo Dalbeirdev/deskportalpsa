@@ -160,8 +160,39 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         return new CreateAttachmentResult(true, created!.Id.ToString(), null);
     }
 
-    public Task<IReadOnlyList<UnifiedTimeEntry>> GetTimeEntriesAsync(string ticketId, CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<UnifiedTimeEntry>>([]);
+    public async Task<IReadOnlyList<UnifiedTimeEntry>> GetTimeEntriesAsync(string ticketId, CancellationToken ct = default)
+    {
+        var items = await GetListAsync<CwTimeEntry>("time/entries",
+            new() { ["conditions"] = $"chargeToId={ticketId} and chargeToType=\"ServiceTicket\"", ["pageSize"] = "1000" }, ct);
+        return items.Select(e => new UnifiedTimeEntry(
+            e.Id.ToString(), e.Member?.Id.ToString() ?? "", e.ActualHours ?? 0m,
+            !string.Equals(e.BillableOption, "DoNotBill", StringComparison.OrdinalIgnoreCase),
+            e.TimeStart ?? clock.GetUtcNow(), e.Notes)).ToList();
+    }
+
+    public async Task<CreateTimeEntryResult> AddTimeEntryAsync(string ticketId, UnifiedTimeEntryCreateRequest entry, CancellationToken ct = default)
+    {
+        var body = new Dictionary<string, object?>
+        {
+            ["chargeToId"] = long.Parse(ticketId),
+            ["chargeToType"] = "ServiceTicket",
+            ["timeStart"] = clock.GetUtcNow().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            ["actualHours"] = entry.Hours,
+            ["billableOption"] = entry.Billable switch
+            {
+                BillableOption.DoNotBill => "DoNotBill",
+                BillableOption.NoCharge => "NoCharge",
+                _ => "Billable",
+            },
+            ["notes"] = entry.Notes,
+        };
+        if (entry.WorkType is not null) body["workType"] = Ref(entry.WorkType);
+        if (entry.WorkRole is not null) body["workRole"] = Ref(entry.WorkRole);
+        if (entry.MemberIdentifier is not null) body["member"] = new { identifier = entry.MemberIdentifier };
+
+        var created = await SendAsync<CwRef>(HttpMethod.Post, "time/entries", body, ct);
+        return new CreateTimeEntryResult(true, created!.Id.ToString(), null);
+    }
 
     public async Task<IReadOnlyList<ExternalFieldOption>> GetStatusesAsync(CancellationToken ct = default)
     {

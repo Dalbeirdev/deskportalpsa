@@ -55,6 +55,10 @@ export const api = {
     }),
   addComment: (id: string, body: string) =>
     request(`/api/tickets/${id}/comments`, TicketNoteResponse, { method: 'POST', body: JSON.stringify({ body }) }),
+  logTime: (id: string, body: { hours: number; billable: string; notes?: string }) =>
+    request(`/api/tickets/${id}/time`,
+      z.object({ externalId: z.string().nullable(), timeWorkedHours: z.number(), billableHours: z.number(), nonBillableHours: z.number() }),
+      { method: 'POST', body: JSON.stringify(body) }),
   uploadAttachment: async (ticketId: string, file: File) => {
     const fd = new FormData();
     fd.append('file', file);

@@ -162,6 +162,11 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
     public Task<IReadOnlyList<UnifiedTimeEntry>> GetTimeEntriesAsync(string ticketId, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<UnifiedTimeEntry>>([]);
 
+    // Autotask time-entry write is not wired yet (Phase 1 targets ConnectWise); fail clearly rather
+    // than silently succeed so callers surface an honest message.
+    public Task<CreateTimeEntryResult> AddTimeEntryAsync(string ticketId, UnifiedTimeEntryCreateRequest entry, CancellationToken ct = default)
+        => Task.FromResult(new CreateTimeEntryResult(false, null, "Time logging is not yet supported for Autotask."));
+
     public Task<IReadOnlyList<ExternalFieldOption>> GetStatusesAsync(CancellationToken ct = default) => PicklistAsync("status", ct);
     public Task<IReadOnlyList<ExternalFieldOption>> GetPrioritiesAsync(CancellationToken ct = default) => PicklistAsync("priority", ct);
     public Task<IReadOnlyList<ExternalFieldOption>> GetQueuesOrBoardsAsync(CancellationToken ct = default) => PicklistAsync("queueID", ct);

@@ -72,3 +72,13 @@ internal sealed class CwTicketNote
     [JsonPropertyName("dateCreated")] public DateTimeOffset? DateCreated { get; set; }
     [JsonPropertyName("member")] public CwRef? Member { get; set; }
 }
+
+internal sealed class CwTimeEntry
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("member")] public CwRef? Member { get; set; }
+    [JsonPropertyName("actualHours")] public decimal? ActualHours { get; set; }
+    [JsonPropertyName("billableOption")] public string? BillableOption { get; set; }
+    [JsonPropertyName("timeStart")] public DateTimeOffset? TimeStart { get; set; }
+    [JsonPropertyName("notes")] public string? Notes { get; set; }
+}

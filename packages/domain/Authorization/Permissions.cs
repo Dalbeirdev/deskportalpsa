@@ -33,6 +33,7 @@ public static class Permissions
     public const string TicketsViewOwn = "tickets.view.own";
     public const string TicketsCreate = "tickets.create";
     public const string TicketsAddPublicNote = "tickets.note.public.add";
+    public const string TicketsLogTime = "tickets.time.log";
 
     // Dashboards & reports
     public const string ReportsView = "reports.view";
@@ -52,7 +53,7 @@ public static class Permissions
         OrgManage, ConnectionsManage, ConnectionsView, MappingsManage, MappingsView,
         UsersManage, RolesManage, ClientUsersManage,
         TicketsViewAll, TicketsViewAssigned, TicketsViewOwnCompany, TicketsViewOwn,
-        TicketsCreate, TicketsAddPublicNote,
+        TicketsCreate, TicketsAddPublicNote, TicketsLogTime,
         ReportsView, ProductivityViewTeam, ProductivityViewOwn,
         IntegrationHealthView, JobsManage, AuditView, SecurityConfigView,
     };
@@ -65,17 +66,17 @@ public static class Permissions
         {
             OrgManage, ConnectionsManage, ConnectionsView, MappingsManage, MappingsView,
             UsersManage, RolesManage, ClientUsersManage, TicketsViewAll, TicketsCreate,
-            TicketsAddPublicNote, ReportsView, ProductivityViewTeam, IntegrationHealthView,
+            TicketsAddPublicNote, TicketsLogTime, ReportsView, ProductivityViewTeam, IntegrationHealthView,
             JobsManage, AuditView, SecurityConfigView,
         },
         RoleType.Manager => new[]
         {
-            ConnectionsView, MappingsView, TicketsViewAll, ReportsView,
+            ConnectionsView, MappingsView, TicketsViewAll, TicketsLogTime, ReportsView,
             ProductivityViewTeam, IntegrationHealthView,
         },
         RoleType.Technician => new[]
         {
-            TicketsViewAssigned, TicketsAddPublicNote, ProductivityViewOwn,
+            TicketsViewAssigned, TicketsAddPublicNote, TicketsLogTime, ProductivityViewOwn,
         },
         RoleType.ClientAdministrator => new[]
         {

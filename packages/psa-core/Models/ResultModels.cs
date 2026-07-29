@@ -8,6 +8,8 @@ public record UpdateTicketResult(bool Success, string? Error);
 
 public record CreateNoteResult(bool Success, string? ExternalId, string? Error);
 
+public record CreateTimeEntryResult(bool Success, string? ExternalId, string? Error);
+
 public record CreateAttachmentResult(bool Success, string? ExternalId, string? Error);
 
 /// <summary>Raw inbound webhook request handed to a connector for validation.</summary>

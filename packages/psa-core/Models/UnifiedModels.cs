@@ -90,6 +90,19 @@ public record UnifiedTimeEntry(
     DateTimeOffset EntryDate,
     string? Notes);
 
+/// <summary>How a time entry is charged. Maps to ConnectWise billableOption / Autotask billing flags.</summary>
+public enum BillableOption { Billable, DoNotBill, NoCharge }
+
+/// <summary>Request to log time against a provider ticket. WorkType/WorkRole/Member are optional in
+/// Phase 1 (wired to discovery + mapping in a later phase); Hours + Billable are the core inputs.</summary>
+public record UnifiedTimeEntryCreateRequest(
+    decimal Hours,
+    string? WorkType,
+    string? WorkRole,
+    BillableOption Billable,
+    string? Notes,
+    string? MemberIdentifier);
+
 public record UnifiedAttachment(
     string ExternalId,
     string FileName,

@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Pencil, MoreHorizontal, Paperclip,
   Send, Bold, Smile, Link2, ArrowUpDown, Lock, Monitor, Wifi, Mail, KeyRound, Cpu, Ticket,
-  Copy, RefreshCw, Download,
+  Copy, RefreshCw, Download, Clock,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 
@@ -52,6 +52,9 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const [dragOver, setDragOver] = useState(false);
   const [oldestFirst, setOldestFirst] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [hours, setHours] = useState('');
+  const [billable, setBillable] = useState('Billable');
+  const [timeNotes, setTimeNotes] = useState('');
   const replyRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -61,6 +64,14 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const addComment = useMutation({
     mutationFn: (body: string) => api.addComment(id, body),
     onSuccess: () => { setComment(''); qc.invalidateQueries({ queryKey: ['ticket', id] }); },
+  });
+
+  const logTime = useMutation({
+    mutationFn: () => api.logTime(id, { hours: parseFloat(hours), billable, notes: timeNotes || undefined }),
+    onSuccess: () => {
+      setHours(''); setTimeNotes('');
+      ['ticket', 'team', 'trend'].forEach((k) => qc.invalidateQueries({ queryKey: k === 'ticket' ? ['ticket', id] : [k] }));
+    },
   });
 
   async function upload(file: File) {
@@ -143,6 +154,45 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 <Meta label="Opened" value={fmt(ticket.createdAt)} />
                 <Meta label="Updated" value={fmt(ticket.updatedAt)} />
               </dl>
+            </div>
+
+            {/* Log time */}
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
+              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--faint)]"><Clock size={14} /> Log time</h2>
+              <form onSubmit={(e) => { e.preventDefault(); if (parseFloat(hours) > 0) logTime.mutate(); }} className="flex flex-wrap items-end gap-3">
+                <label className="block">
+                  <span className="mb-1 block text-xs text-[var(--muted)]">Hours</span>
+                  <input type="number" step="0.25" min="0" value={hours} onChange={(e) => setHours(e.target.value)} placeholder="0.5"
+                    className="w-24 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs text-[var(--muted)]">Billable</span>
+                  <select value={billable} onChange={(e) => setBillable(e.target.value)}
+                    className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
+                    <option value="Billable">Billable</option>
+                    <option value="DoNotBill">Do not bill</option>
+                    <option value="NoCharge">No charge</option>
+                  </select>
+                </label>
+                <label className="block min-w-48 flex-1">
+                  <span className="mb-1 block text-xs text-[var(--muted)]">Notes</span>
+                  <input value={timeNotes} onChange={(e) => setTimeNotes(e.target.value)} placeholder="What did you work on?"
+                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
+                </label>
+                <button type="submit" disabled={logTime.isPending || !(parseFloat(hours) > 0)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50">
+                  <Clock size={15} /> {logTime.isPending ? 'Logging…' : 'Log time'}
+                </button>
+              </form>
+              {logTime.isSuccess && logTime.data && (
+                <p className="mt-2 text-xs font-medium text-green-600 dark:text-green-400">
+                  Logged to the PSA · ticket total {logTime.data.timeWorkedHours}h ({logTime.data.billableHours}h billable).
+                </p>
+              )}
+              {logTime.isError && (
+                <p className="mt-2 text-xs text-red-600 dark:text-red-400">Couldn&apos;t log time — the PSA rejected it or the connection is unreachable.</p>
+              )}
+              <p className="mt-2 text-xs text-[var(--faint)]">Posts a time entry to the PSA against this ticket. Work type &amp; role arrive in a later update.</p>
             </div>
 
             {/* Conversation */}
