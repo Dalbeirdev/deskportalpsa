@@ -97,7 +97,7 @@ export function TimerWidget() {
   return (
     <div className="relative hidden sm:block">
       <div className={`flex items-center gap-1 rounded-lg border px-2 py-1 ${running ? 'border-brand/40 bg-brand/5' : 'border-[var(--border)] bg-[var(--bg)]'}`}>
-        <Timer size={14} className={running ? 'text-brand' : 'text-[var(--muted)]'} />
+        <Timer size={14} className={running ? 'text-brand motion-safe:animate-pulse' : 'text-[var(--muted)]'} />
         {target?.ref && (
           <span className="flex items-center gap-1" title={target.title}>
             <span className="max-w-[6rem] truncate text-xs font-medium">#{target.ref}</span>
