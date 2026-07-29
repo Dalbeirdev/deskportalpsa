@@ -6,10 +6,13 @@ import { LogOut, UserCircle2 } from 'lucide-react';
 type Session = { authenticated: boolean; name?: string | null; email?: string | null };
 
 /** Shows the signed-in user and a logout action, or a sign-in link when there's no session. */
+const LOCAL_MODE = process.env.NEXT_PUBLIC_LOCAL_MODE === 'true';
+
 export function UserMenu() {
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<Session | null>(LOCAL_MODE ? { authenticated: true, name: 'Demo Admin' } : null);
 
   useEffect(() => {
+    if (LOCAL_MODE) return; // demo mode signs in automatically; no Keycloak session to read
     fetch('/api/auth/session')
       .then((r) => r.json())
       .then(setSession)
@@ -17,6 +20,14 @@ export function UserMenu() {
   }, []);
 
   if (!session) return <div className="h-8 w-24 animate-pulse rounded-lg bg-[var(--bg)]" />;
+
+  if (LOCAL_MODE) {
+    return (
+      <span className="flex items-center gap-1.5 text-sm text-[var(--muted)]">
+        <UserCircle2 size={16} /> Demo Admin
+      </span>
+    );
+  }
 
   if (!session.authenticated) {
     return (
