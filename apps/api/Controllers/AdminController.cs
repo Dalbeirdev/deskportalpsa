@@ -61,6 +61,12 @@ public sealed class AdminConnectionsController(
     public async Task<IActionResult> Fields(Guid id, CancellationToken ct)
         => Ok(await svc.GetFieldsAsync(id, ct));
 
+    /// <summary>Force a fresh discovery of field options from the PSA and update the cache.</summary>
+    [HttpPost("{id:guid}/fields/refresh")]
+    [RequirePermission(Permissions.ConnectionsManage)]
+    public async Task<IActionResult> RefreshFields(Guid id, CancellationToken ct)
+        => Ok(await svc.RefreshFieldsAsync(id, ct));
+
     // Local demo only: the dev auto-login is an MSP admin, not a client. The client-portal pages
     // (Tickets, Notifications, Profile) resolve by client identity, so once a sync has produced real
     // tickets we link the dev subject to the busiest synced company (as its administrator) — using

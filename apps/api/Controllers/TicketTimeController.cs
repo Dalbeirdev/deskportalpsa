@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Desk.Api.Auth;
+using Desk.Application.Admin;
 using Desk.Application.Common;
 using Desk.Application.Connectors;
 using Desk.Domain.Authorization;
@@ -20,20 +21,19 @@ namespace Desk.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/tickets")]
-public sealed class TicketTimeController(DeskDbContext db, IConnectorResolver connectors) : ControllerBase
+public sealed class TicketTimeController(DeskDbContext db, IConnectorResolver connectors, IConnectionAdminService admin) : ControllerBase
 {
     [HttpGet("{id:guid}/time-options")]
     [RequirePermission(Permissions.TicketsLogTime)]
     public async Task<IActionResult> TimeOptions(Guid id, CancellationToken ct)
     {
         var ticket = await LoadAsync(id, ct);
-        var connector = await connectors.ResolveAsync(ticket.PsaConnectionId, ct);
-        var workTypes = await Safe(() => connector.GetWorkTypesAsync(ct));
-        var workRoles = await Safe(() => connector.GetWorkRolesAsync(ct));
+        // Read from the cached field set (discovered when the connection was configured).
+        var fields = await admin.GetFieldsAsync(ticket.PsaConnectionId, ct);
         return Ok(new
         {
-            workTypes = workTypes.Select(o => new { o.Value, o.Label }),
-            workRoles = workRoles.Select(o => new { o.Value, o.Label }),
+            workTypes = fields.WorkTypes.Select(o => new { o.Value, o.Label }),
+            workRoles = fields.WorkRoles.Select(o => new { o.Value, o.Label }),
         });
     }
 
@@ -124,12 +124,6 @@ public sealed class TicketTimeController(DeskDbContext db, IConnectorResolver co
         "nocharge" or "no charge" => BillableOption.NoCharge,
         _ => BillableOption.Billable,
     };
-
-    private static async Task<IReadOnlyList<ExternalFieldOption>> Safe(Func<Task<IReadOnlyList<ExternalFieldOption>>> get)
-    {
-        try { return await get(); }
-        catch { return []; }
-    }
 
     public sealed record LogTimeRequest(
         [Range(0.01, 1000, ErrorMessage = "Hours must be between 0.01 and 1000.")] decimal Hours,

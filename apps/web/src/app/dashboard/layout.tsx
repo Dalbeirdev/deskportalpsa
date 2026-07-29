@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { QueryProvider } from '@/components/QueryProvider';
 import { UserMenu } from '@/components/UserMenu';
+import { TimerProvider, TimerWidget } from '@/components/TimerProvider';
 import {
   LayoutDashboard, Ticket, Plug, Bell, User, BarChart3, Activity, ListChecks, ShieldCheck,
   SlidersHorizontal, FileText, Search, HelpCircle, HardDrive, ChevronLeft,
@@ -82,6 +83,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </button>
       </aside>
 
+      <TimerProvider>
       <div className="flex flex-1 flex-col">
         <header className="flex h-14 items-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 sm:px-6">
           <div className="relative hidden max-w-xl flex-1 md:block">
@@ -93,6 +95,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             />
           </div>
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+            <TimerWidget />
             <button aria-label="Notifications" className="relative rounded-lg p-2 text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--fg)]">
               <Bell size={18} />
               <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold text-brand-fg">4</span>
@@ -128,6 +131,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </a>
         </footer>
       </div>
+      </TimerProvider>
     </div>
   );
 }

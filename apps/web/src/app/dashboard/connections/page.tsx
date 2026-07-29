@@ -84,6 +84,17 @@ export default function ConnectionsPage() {
     onError: (e, id) => setResults((m) => ({ ...m, [id]: { ok: false, msg: e instanceof Error ? `Sync failed: ${e.message}` : 'Sync failed' } })),
   });
 
+  const refreshFields = useMutation({
+    mutationFn: (id: string) => api.refreshConnectionFields(id),
+    onSuccess: (f, id) => {
+      setFieldsById((m) => ({ ...m, [id]: f }));
+      setExpandedId(id);
+      setResults((m) => ({ ...m, [id]: { ok: true, msg: `Fields refreshed · ${f.statuses.length} statuses, ${f.workTypes.length} work types` } }));
+      qc.invalidateQueries({ queryKey: ['connections'] });
+    },
+    onError: (_e, id) => setResults((m) => ({ ...m, [id]: { ok: false, msg: 'Field refresh failed' } })),
+  });
+
   // Live field discovery (boards/queues, statuses, priorities, categories)
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [fieldsById, setFieldsById] = useState<Record<string, ConnectionFields | 'loading' | 'error'>>({});
@@ -191,6 +202,8 @@ export default function ConnectionsPage() {
                   testing={test.isPending && test.variables === c.id}
                   onSync={() => sync.mutate(c.id)}
                   syncing={sync.isPending && sync.variables === c.id}
+                  onRefreshFields={() => refreshFields.mutate(c.id)}
+                  refreshingFields={refreshFields.isPending && refreshFields.variables === c.id}
                   onEdit={() => openEdit(c)}
                   onToggleFields={() => toggleFields(c.id)}
                 />
@@ -204,7 +217,7 @@ export default function ConnectionsPage() {
 }
 
 function FragmentRow({
-  c, result, expanded, fields, onTest, testing, onSync, syncing, onEdit, onToggleFields,
+  c, result, expanded, fields, onTest, testing, onSync, syncing, onRefreshFields, refreshingFields, onEdit, onToggleFields,
 }: {
   c: ConnectionSummary;
   result?: { ok: boolean; msg: string };
@@ -214,6 +227,8 @@ function FragmentRow({
   testing: boolean;
   onSync: () => void;
   syncing: boolean;
+  onRefreshFields: () => void;
+  refreshingFields: boolean;
   onEdit: () => void;
   onToggleFields: () => void;
 }) {
@@ -234,6 +249,7 @@ function FragmentRow({
             <ActionButton onClick={onToggleFields}>
               <ChevronDown size={13} className={expanded ? 'rotate-180 transition-transform' : 'transition-transform'} /> Boards
             </ActionButton>
+            <ActionButton onClick={onRefreshFields} disabled={refreshingFields}>{refreshingFields ? 'Refreshing…' : 'Refresh fields'}</ActionButton>
             <ActionButton onClick={onEdit}>Edit</ActionButton>
             <ActionButton onClick={onTest} disabled={testing}>{testing ? 'Testing…' : 'Test'}</ActionButton>
             <ActionButton onClick={onSync} disabled={syncing}>{syncing ? 'Syncing…' : 'Sync now'}</ActionButton>

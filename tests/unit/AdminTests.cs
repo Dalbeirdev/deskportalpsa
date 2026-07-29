@@ -26,7 +26,7 @@ public class AdminTests
         var h = AdminHarness.Create(Org);
         var audit = new AuditWriter(h.Db, h.User, h.Tenant, h.Clock);
         var resolver = new FakeResolver(connector ?? new MockConnector(new MockConnectorOptions(), h.Clock));
-        return (new ConnectionAdminService(h.Db, h.Secrets, audit, resolver, h.Clock), h);
+        return (new ConnectionAdminService(h.Db, h.Secrets, audit, resolver, new ConnectionFieldCache(), h.Clock), h);
     }
 
     private static async Task<Guid> CreateConnAsync(ConnectionAdminService svc)

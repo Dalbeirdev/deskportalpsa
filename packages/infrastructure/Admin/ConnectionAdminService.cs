@@ -15,6 +15,7 @@ public sealed class ConnectionAdminService(
     ISecretStore secrets,
     IAuditWriter audit,
     IConnectorResolver connectors,
+    IConnectionFieldCache fieldCache,
     TimeProvider clock) : IConnectionAdminService
 {
     public async Task<IReadOnlyList<ConnectionSummary>> ListAsync(CancellationToken ct = default)
@@ -51,6 +52,9 @@ public sealed class ConnectionAdminService(
         // Audit detail deliberately excludes credentials.
         await audit.WriteAsync("connection.created", "PsaConnection", connection.Id.ToString(),
             new { connection.Name, connection.Provider, connection.ApiEndpoint }, ct);
+
+        // Fetch field options once at configure time (best-effort — creds may not be valid yet).
+        await TryCacheFieldsAsync(connection.Id, ct);
 
         return new ConnectionSummary(connection.Id, connection.Name, connection.Provider, connection.ApiEndpoint,
             connection.TenantIdentifier, connection.Status, connection.IsEnabled, null, null);
@@ -92,6 +96,9 @@ public sealed class ConnectionAdminService(
         await db.SaveChangesAsync(ct);
         await audit.WriteAsync("connection.tested", "PsaConnection", connectionId.ToString(),
             new { dto.Success, dto.Message }, ct);
+
+        // A successful test means creds work — refresh the field cache off the same configure action.
+        if (dto.Success) await TryCacheFieldsAsync(connectionId, ct);
         return dto;
     }
 
@@ -116,27 +123,54 @@ public sealed class ConnectionAdminService(
         await audit.WriteAsync("connection.updated", "PsaConnection", connectionId.ToString(),
             new { connection.Name, connection.ApiEndpoint, CredentialsRotated = rotated }, ct);
 
+        // Endpoint/creds may have changed — drop the cache so the next read re-discovers.
+        fieldCache.Remove(connectionId);
+
         return new ConnectionSummary(connection.Id, connection.Name, connection.Provider, connection.ApiEndpoint,
             connection.TenantIdentifier, connection.Status, connection.IsEnabled, connection.LastSuccessfulSyncAt, connection.LastError);
     }
 
+    /// <summary>Returns cached field options if present (populated at configure time), else discovers
+    /// live once and caches. Use <see cref="RefreshFieldsAsync"/> to force a fresh pull.</summary>
     public async Task<ConnectionFieldsDto> GetFieldsAsync(Guid connectionId, CancellationToken ct = default)
     {
         _ = await db.PsaConnections.FirstOrDefaultAsync(c => c.Id == connectionId, ct)
             ?? throw new NotFoundException("PSA connection");
 
-        var connector = await connectors.ResolveAsync(connectionId, ct);
+        if (fieldCache.Get(connectionId) is { } cached) return cached;
+        var fields = await DiscoverAsync(connectionId, ct);
+        fieldCache.Set(connectionId, fields);
+        return fields;
+    }
 
-        // Discover live from the connected PSA. Individual lookups degrade to empty rather than
-        // failing the whole request if the provider doesn't support one.
+    public async Task<ConnectionFieldsDto> RefreshFieldsAsync(Guid connectionId, CancellationToken ct = default)
+    {
+        _ = await db.PsaConnections.FirstOrDefaultAsync(c => c.Id == connectionId, ct)
+            ?? throw new NotFoundException("PSA connection");
+        var fields = await DiscoverAsync(connectionId, ct);
+        fieldCache.Set(connectionId, fields);
+        await audit.WriteAsync("connection.fields.refreshed", "PsaConnection", connectionId.ToString(), null, ct);
+        return fields;
+    }
+
+    // Live discovery from the connected PSA. Individual lookups degrade to empty rather than
+    // failing the whole request if the provider doesn't support one.
+    private async Task<ConnectionFieldsDto> DiscoverAsync(Guid connectionId, CancellationToken ct)
+    {
+        var connector = await connectors.ResolveAsync(connectionId, ct);
         var boards = await SafeAsync(() => connector.GetQueuesOrBoardsAsync(ct));
         var statuses = await SafeAsync(() => connector.GetStatusesAsync(ct));
         var priorities = await SafeAsync(() => connector.GetPrioritiesAsync(ct));
         var categories = await SafeAsync(() => connector.GetCategoriesAsync(ct));
         var workTypes = await SafeAsync(() => connector.GetWorkTypesAsync(ct));
         var workRoles = await SafeAsync(() => connector.GetWorkRolesAsync(ct));
-
         return new ConnectionFieldsDto(Map(boards), Map(statuses), Map(priorities), Map(categories), Map(workTypes), Map(workRoles));
+    }
+
+    private async Task TryCacheFieldsAsync(Guid connectionId, CancellationToken ct)
+    {
+        try { fieldCache.Set(connectionId, await DiscoverAsync(connectionId, ct)); }
+        catch { /* creds may be invalid/unreachable at configure time — refresh later */ }
     }
 
     private static IReadOnlyList<FieldOptionDto> Map(IReadOnlyList<Desk.PsaCore.Models.ExternalFieldOption> options)

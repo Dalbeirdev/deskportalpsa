@@ -1,14 +1,15 @@
 'use client';
 
-import { use, useEffect, useRef, useState } from 'react';
+import { use, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Pencil, MoreHorizontal, Paperclip,
   Send, Bold, Smile, Link2, ArrowUpDown, Lock, Monitor, Wifi, Mail, KeyRound, Cpu, Ticket,
-  Copy, RefreshCw, Download, Clock, Play, Square, Trash2, Check, X,
+  Copy, RefreshCw, Download, Clock, Trash2, Check, X,
 } from 'lucide-react';
+import { useTimer } from '@/components/TimerProvider';
 import { api } from '@/lib/api';
 
 const STATUS_TONE: Record<string, string> = {
@@ -57,22 +58,12 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const [timeNotes, setTimeNotes] = useState('');
   const [workType, setWorkType] = useState('');
   const [workRole, setWorkRole] = useState('');
-  const [timerStart, setTimerStart] = useState<number | null>(null);
-  const [elapsed, setElapsed] = useState(0); // seconds
   const [editEntry, setEditEntry] = useState<{ id: string; hours: string; notes: string } | null>(null);
-
-  useEffect(() => {
-    if (timerStart === null) return;
-    const t = setInterval(() => setElapsed(Math.floor((Date.now() - timerStart) / 1000)), 1000);
-    return () => clearInterval(t);
-  }, [timerStart]);
-  function stopTimer() {
-    if (timerStart === null) return;
-    const secs = Math.floor((Date.now() - timerStart) / 1000);
-    const rounded = Math.max(0.25, Math.round((secs / 3600) / 0.25) * 0.25); // nearest 0.25h, min 15 min
+  const timer = useTimer();
+  function applyTimer() {
+    const rounded = Math.max(0.25, Math.round((timer.seconds / 3600) / 0.25) * 0.25); // nearest 0.25h, min 15 min
     setHours(rounded.toFixed(2));
-    setTimerStart(null);
-    setElapsed(0);
+    timer.pause();
   }
   const replyRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -196,18 +187,11 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                     className="w-24 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
                 </label>
                 <div className="flex flex-col">
-                  <span className="mb-1 text-xs text-[var(--muted)]">Timer</span>
-                  {timerStart === null ? (
-                    <button type="button" onClick={() => { setElapsed(0); setTimerStart(Date.now()); }}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--bg)]">
-                      <Play size={14} /> Start
-                    </button>
-                  ) : (
-                    <button type="button" onClick={stopTimer}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium tabular-nums text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
-                      <Square size={13} /> {String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')} · Stop
-                    </button>
-                  )}
+                  <span className="mb-1 text-xs text-[var(--muted)]">Global timer</span>
+                  <button type="button" onClick={applyTimer} disabled={timer.seconds === 0}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium tabular-nums hover:bg-[var(--bg)] disabled:opacity-50">
+                    <Clock size={14} /> Use {String(Math.floor(timer.seconds / 60)).padStart(2, '0')}:{String(timer.seconds % 60).padStart(2, '0')}
+                  </button>
                 </div>
                 <label className="block">
                   <span className="mb-1 block text-xs text-[var(--muted)]">Billable</span>

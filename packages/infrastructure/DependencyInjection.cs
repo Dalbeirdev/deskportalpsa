@@ -102,6 +102,7 @@ public static class DependencyInjection
 
         // Administration (Phase 8)
         services.AddScoped<IAuditWriter, AuditWriter>();
+        services.AddSingleton<IConnectionFieldCache, ConnectionFieldCache>();
         services.AddScoped<IConnectionAdminService, ConnectionAdminService>();
         services.AddScoped<IMappingAdminService, MappingAdminService>();
         services.AddScoped<IJobMonitorService, JobMonitorService>();
