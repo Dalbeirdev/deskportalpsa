@@ -121,6 +121,15 @@ export const ConnectionSummarySchema = z.object({
 });
 export type ConnectionSummary = z.infer<typeof ConnectionSummarySchema>;
 
+export const FieldOptionSchema = z.object({ value: z.string(), label: z.string() });
+export const ConnectionFieldsSchema = z.object({
+  queuesOrBoards: z.array(FieldOptionSchema),
+  statuses: z.array(FieldOptionSchema),
+  priorities: z.array(FieldOptionSchema),
+  categories: z.array(FieldOptionSchema),
+});
+export type ConnectionFields = z.infer<typeof ConnectionFieldsSchema>;
+
 export const HealthSchema = z.object({
   connectionId: z.string(),
   name: z.string(),

@@ -21,6 +21,12 @@ public interface IConnectionAdminService
 
     /// <summary>Live-tests a saved connection against its PSA, updates its health status, and audits it.</summary>
     Task<ConnectionTestResultDto> TestAsync(Guid connectionId, CancellationToken ct = default);
+
+    /// <summary>Updates a connection's settings and, if new credentials are supplied, rotates them in the store. Audited.</summary>
+    Task<ConnectionSummary> UpdateAsync(Guid connectionId, UpdateConnectionInput input, CancellationToken ct = default);
+
+    /// <summary>Discovers boards/queues, statuses, priorities and categories live from the connected PSA.</summary>
+    Task<ConnectionFieldsDto> GetFieldsAsync(Guid connectionId, CancellationToken ct = default);
 }
 
 /// <summary>

@@ -105,6 +105,33 @@ public class AdminTests
     }
 
     [Fact]
+    public async Task Update_changes_settings_and_audits()
+    {
+        var (svc, h) = Connections();
+        var id = await CreateConnAsync(svc);
+
+        await svc.UpdateAsync(id, new UpdateConnectionInput("Renamed", "https://new", "t2", "UTC", true, null));
+
+        var row = await h.Db.PsaConnections.FirstAsync(c => c.Id == id);
+        row.Name.Should().Be("Renamed");
+        row.ApiEndpoint.Should().Be("https://new");
+        (await h.Db.AuditLog.CountAsync(a => a.Action == "connection.updated")).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Get_fields_discovers_boards_statuses_and_priorities()
+    {
+        var (svc, h) = Connections();
+        var id = await CreateConnAsync(svc);
+
+        var fields = await svc.GetFieldsAsync(id);
+
+        fields.QueuesOrBoards.Should().NotBeEmpty();
+        fields.Statuses.Should().NotBeEmpty();
+        fields.Priorities.Should().NotBeEmpty();
+    }
+
+    [Fact]
     public async Task Mapping_upsert_creates_a_version_snapshot_and_audit_entry()
     {
         var (svc, h) = Mappings();

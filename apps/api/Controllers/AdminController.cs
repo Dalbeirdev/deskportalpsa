@@ -32,6 +32,16 @@ public sealed class AdminConnectionsController(IConnectionAdminService svc) : Co
     [RequirePermission(Permissions.ConnectionsManage)]
     public async Task<IActionResult> Test(Guid id, CancellationToken ct)
         => Ok(await svc.TestAsync(id, ct));
+
+    [HttpPut("{id:guid}")]
+    [RequirePermission(Permissions.ConnectionsManage)]
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateConnectionInput input, CancellationToken ct)
+        => Ok(await svc.UpdateAsync(id, input, ct));
+
+    [HttpGet("{id:guid}/fields")]
+    [RequirePermission(Permissions.ConnectionsView)]
+    public async Task<IActionResult> Fields(Guid id, CancellationToken ct)
+        => Ok(await svc.GetFieldsAsync(id, ct));
 }
 
 /// <summary>Field-mapping administration with versioning + rollback (all audited).</summary>

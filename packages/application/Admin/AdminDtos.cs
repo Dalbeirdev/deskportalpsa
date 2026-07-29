@@ -87,3 +87,21 @@ public sealed record ConnectionHealthDto(
 public sealed record UserSummary(Guid Id, string Email, string DisplayName, bool IsActive, IReadOnlyList<string> Roles);
 
 public sealed record ConnectionTestResultDto(bool Success, string? Message, double LatencyMs);
+
+public sealed record UpdateConnectionInput(
+    string Name,
+    string ApiEndpoint,
+    string? TenantIdentifier,
+    string? TimeZone,
+    bool IsEnabled,
+    // When non-empty, replaces the stored credentials (rotation). Leave empty to keep existing.
+    IReadOnlyDictionary<string, string>? Credentials);
+
+public sealed record FieldOptionDto(string Value, string Label);
+
+/// <summary>Live field discovery for a connection: service boards/queues, statuses, priorities, categories.</summary>
+public sealed record ConnectionFieldsDto(
+    IReadOnlyList<FieldOptionDto> QueuesOrBoards,
+    IReadOnlyList<FieldOptionDto> Statuses,
+    IReadOnlyList<FieldOptionDto> Priorities,
+    IReadOnlyList<FieldOptionDto> Categories);

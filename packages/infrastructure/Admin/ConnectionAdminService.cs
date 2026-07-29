@@ -94,4 +94,56 @@ public sealed class ConnectionAdminService(
             new { dto.Success, dto.Message }, ct);
         return dto;
     }
+
+    public async Task<ConnectionSummary> UpdateAsync(Guid connectionId, UpdateConnectionInput input, CancellationToken ct = default)
+    {
+        var connection = await db.PsaConnections.FirstOrDefaultAsync(c => c.Id == connectionId, ct)
+            ?? throw new NotFoundException("PSA connection");
+
+        connection.Name = input.Name;
+        connection.ApiEndpoint = input.ApiEndpoint;
+        connection.TenantIdentifier = input.TenantIdentifier;
+        connection.TimeZone = input.TimeZone ?? connection.TimeZone;
+        connection.IsEnabled = input.IsEnabled;
+        if (!input.IsEnabled) connection.Status = ConnectionStatus.Disabled;
+
+        // Rotate credentials only if new ones were supplied — the secret ref stays the same.
+        var rotated = input.Credentials is { Count: > 0 };
+        if (rotated)
+            await secrets.RotateAsync(connection.CredentialSecretRef, input.Credentials!, ct);
+
+        await db.SaveChangesAsync(ct);
+        await audit.WriteAsync("connection.updated", "PsaConnection", connectionId.ToString(),
+            new { connection.Name, connection.ApiEndpoint, CredentialsRotated = rotated }, ct);
+
+        return new ConnectionSummary(connection.Id, connection.Name, connection.Provider, connection.ApiEndpoint,
+            connection.TenantIdentifier, connection.Status, connection.IsEnabled, connection.LastSuccessfulSyncAt, connection.LastError);
+    }
+
+    public async Task<ConnectionFieldsDto> GetFieldsAsync(Guid connectionId, CancellationToken ct = default)
+    {
+        _ = await db.PsaConnections.FirstOrDefaultAsync(c => c.Id == connectionId, ct)
+            ?? throw new NotFoundException("PSA connection");
+
+        var connector = await connectors.ResolveAsync(connectionId, ct);
+
+        // Discover live from the connected PSA. Individual lookups degrade to empty rather than
+        // failing the whole request if the provider doesn't support one.
+        var boards = await SafeAsync(() => connector.GetQueuesOrBoardsAsync(ct));
+        var statuses = await SafeAsync(() => connector.GetStatusesAsync(ct));
+        var priorities = await SafeAsync(() => connector.GetPrioritiesAsync(ct));
+        var categories = await SafeAsync(() => connector.GetCategoriesAsync(ct));
+
+        return new ConnectionFieldsDto(Map(boards), Map(statuses), Map(priorities), Map(categories));
+    }
+
+    private static IReadOnlyList<FieldOptionDto> Map(IReadOnlyList<Desk.PsaCore.Models.ExternalFieldOption> options)
+        => options.Select(o => new FieldOptionDto(o.Value, o.Label)).ToList();
+
+    private static async Task<IReadOnlyList<Desk.PsaCore.Models.ExternalFieldOption>> SafeAsync(
+        Func<Task<IReadOnlyList<Desk.PsaCore.Models.ExternalFieldOption>>> fetch)
+    {
+        try { return await fetch(); }
+        catch (ConnectorException) { return []; }
+    }
 }

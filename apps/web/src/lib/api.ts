@@ -3,6 +3,7 @@ import {
   TicketListItemSchema, TicketDetailSchema, NotificationSchema, ProfileSchema,
   TechnicianResponseSchema, TeamResponseSchema, TrendPointSchema,
   ConnectionSummarySchema, HealthSchema, JobSchema, AuditEntrySchema, AttachmentSchema,
+  ConnectionFieldsSchema, type ConnectionFields,
   type TicketDetail, type TicketListItem, type Notification, type Profile,
   type TechnicianResponse, type TeamResponse, type TrendPoint,
   type ConnectionSummary, type Health, type Job, type AuditEntry,
@@ -84,6 +85,12 @@ export const api = {
     request(`/api/admin/connections/${id}/test`,
       z.object({ success: z.boolean(), message: z.string().nullable(), latencyMs: z.number() }),
       { method: 'POST' }),
+  updateConnection: (id: string, body: {
+    name: string; apiEndpoint: string; tenantIdentifier?: string; timeZone?: string;
+    isEnabled: boolean; credentials?: Record<string, string>;
+  }) => request(`/api/admin/connections/${id}`, ConnectionSummarySchema, { method: 'PUT', body: JSON.stringify(body) }),
+  connectionFields: (id: string) =>
+    request(`/api/admin/connections/${id}/fields`, ConnectionFieldsSchema) as Promise<ConnectionFields>,
   health: () => request('/api/admin/health', z.array(HealthSchema)) as Promise<Health[]>,
   jobs: (status?: number) =>
     request(`/api/admin/jobs${status != null ? `?status=${status}` : ''}`, z.array(JobSchema)) as Promise<Job[]>,
