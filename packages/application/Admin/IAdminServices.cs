@@ -18,6 +18,9 @@ public interface IConnectionAdminService
     Task<IReadOnlyList<ConnectionSummary>> ListAsync(CancellationToken ct = default);
     Task<ConnectionSummary> CreateAsync(CreateConnectionInput input, CancellationToken ct = default);
     Task SetEnabledAsync(Guid connectionId, bool enabled, CancellationToken ct = default);
+
+    /// <summary>Live-tests a saved connection against its PSA, updates its health status, and audits it.</summary>
+    Task<ConnectionTestResultDto> TestAsync(Guid connectionId, CancellationToken ct = default);
 }
 
 /// <summary>

@@ -27,6 +27,11 @@ public sealed class AdminConnectionsController(IConnectionAdminService svc) : Co
         await svc.SetEnabledAsync(id, enabled, ct);
         return NoContent();
     }
+
+    [HttpPost("{id:guid}/test")]
+    [RequirePermission(Permissions.ConnectionsManage)]
+    public async Task<IActionResult> Test(Guid id, CancellationToken ct)
+        => Ok(await svc.TestAsync(id, ct));
 }
 
 /// <summary>Field-mapping administration with versioning + rollback (all audited).</summary>

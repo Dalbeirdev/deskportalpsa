@@ -80,6 +80,10 @@ export const api = {
     name: string; provider: number; apiEndpoint: string; tenantIdentifier?: string;
     credentials: Record<string, string>; timeZone?: string;
   }) => request('/api/admin/connections', ConnectionSummarySchema, { method: 'POST', body: JSON.stringify(body) }),
+  testConnection: (id: string) =>
+    request(`/api/admin/connections/${id}/test`,
+      z.object({ success: z.boolean(), message: z.string().nullable(), latencyMs: z.number() }),
+      { method: 'POST' }),
   health: () => request('/api/admin/health', z.array(HealthSchema)) as Promise<Health[]>,
   jobs: (status?: number) =>
     request(`/api/admin/jobs${status != null ? `?status=${status}` : ''}`, z.array(JobSchema)) as Promise<Job[]>,

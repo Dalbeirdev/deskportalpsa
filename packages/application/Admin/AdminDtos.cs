@@ -85,3 +85,5 @@ public sealed record ConnectionHealthDto(
     string? LastError);
 
 public sealed record UserSummary(Guid Id, string Email, string DisplayName, bool IsActive, IReadOnlyList<string> Roles);
+
+public sealed record ConnectionTestResultDto(bool Success, string? Message, double LatencyMs);

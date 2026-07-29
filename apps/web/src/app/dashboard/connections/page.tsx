@@ -10,6 +10,9 @@ const PROVIDERS = [
   { value: 1, label: 'ConnectWise Manage', creds: ['CompanyId', 'PublicKey', 'PrivateKey', 'ClientId'] },
 ];
 
+// ConnectionStatus enum: 0 Disabled, 1 Pending, 2 Healthy, 3 Degraded, 4 Failed
+const STATUS_LABEL: Record<number, string> = { 0: 'Disabled', 1: 'Pending', 2: 'Healthy', 3: 'Degraded', 4: 'Failed' };
+
 export default function ConnectionsPage() {
   const qc = useQueryClient();
   const { data, isError } = useQuery({ queryKey: ['connections'], queryFn: api.connections });
@@ -32,6 +35,19 @@ export default function ConnectionsPage() {
       setForm({ name: '', apiEndpoint: '' });
       qc.invalidateQueries({ queryKey: ['connections'] });
     },
+  });
+
+  const [results, setResults] = useState<Record<string, { ok: boolean; msg: string }>>({});
+  const test = useMutation({
+    mutationFn: (id: string) => api.testConnection(id),
+    onSuccess: (r, id) => {
+      setResults((m) => ({
+        ...m,
+        [id]: { ok: r.success, msg: r.success ? `Healthy · ${Math.round(r.latencyMs)}ms` : r.message ?? 'Failed' },
+      }));
+      qc.invalidateQueries({ queryKey: ['connections'] });
+    },
+    onError: (_e, id) => setResults((m) => ({ ...m, [id]: { ok: false, msg: 'Request failed' } })),
   });
 
   return (
@@ -108,6 +124,7 @@ export default function ConnectionsPage() {
                 <th className="px-4 py-3 font-medium">Endpoint</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Enabled</th>
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody>
@@ -115,8 +132,24 @@ export default function ConnectionsPage() {
                 <tr key={c.id} className="border-b border-[var(--border)] last:border-0">
                   <td className="px-4 py-3 font-medium">{c.name}</td>
                   <td className="px-4 py-3 text-[var(--muted)]">{c.apiEndpoint}</td>
-                  <td className="px-4 py-3">{String(c.status)}</td>
+                  <td className="px-4 py-3">{STATUS_LABEL[Number(c.status)] ?? String(c.status)}</td>
                   <td className="px-4 py-3">{c.isEnabled ? 'Yes' : 'No'}</td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      {results[c.id] && (
+                        <span className={results[c.id].ok ? 'text-xs text-green-600 dark:text-green-400' : 'text-xs text-red-600 dark:text-red-400'}>
+                          {results[c.id].msg}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => test.mutate(c.id)}
+                        disabled={test.isPending}
+                        className="rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium hover:bg-[var(--bg)] disabled:opacity-50"
+                      >
+                        {test.isPending && test.variables === c.id ? 'Testing…' : 'Test'}
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

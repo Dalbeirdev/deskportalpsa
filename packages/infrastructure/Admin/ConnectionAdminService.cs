@@ -1,9 +1,11 @@
 using Desk.Application.Abstractions;
 using Desk.Application.Admin;
 using Desk.Application.Common;
+using Desk.Application.Connectors;
 using Desk.Domain.Enums;
 using Desk.Domain.Tenancy;
 using Desk.Infrastructure.Persistence;
+using Desk.PsaCore.Contracts;
 using Microsoft.EntityFrameworkCore;
 
 namespace Desk.Infrastructure.Admin;
@@ -11,7 +13,9 @@ namespace Desk.Infrastructure.Admin;
 public sealed class ConnectionAdminService(
     DeskDbContext db,
     ISecretStore secrets,
-    IAuditWriter audit) : IConnectionAdminService
+    IAuditWriter audit,
+    IConnectorResolver connectors,
+    TimeProvider clock) : IConnectionAdminService
 {
     public async Task<IReadOnlyList<ConnectionSummary>> ListAsync(CancellationToken ct = default)
         => await db.PsaConnections.AsNoTracking()
@@ -61,5 +65,33 @@ public sealed class ConnectionAdminService(
         await db.SaveChangesAsync(ct);
         await audit.WriteAsync(enabled ? "connection.enabled" : "connection.disabled",
             "PsaConnection", connectionId.ToString(), null, ct);
+    }
+
+    public async Task<ConnectionTestResultDto> TestAsync(Guid connectionId, CancellationToken ct = default)
+    {
+        var connection = await db.PsaConnections.FirstOrDefaultAsync(c => c.Id == connectionId, ct)
+            ?? throw new NotFoundException("PSA connection");
+
+        ConnectionTestResultDto dto;
+        try
+        {
+            var connector = await connectors.ResolveAsync(connectionId, ct);
+            var result = await connector.TestConnectionAsync(ct);
+            connection.Status = result.Success ? ConnectionStatus.Healthy : ConnectionStatus.Failed;
+            connection.LastError = result.Success ? null : result.Message;
+            dto = new ConnectionTestResultDto(result.Success, result.Message, result.Latency.TotalMilliseconds);
+        }
+        catch (ConnectorException ex)
+        {
+            connection.Status = ConnectionStatus.Failed;
+            connection.LastError = ex.Message;
+            dto = new ConnectionTestResultDto(false, $"{ex.Kind}: {ex.Message}", 0);
+        }
+
+        connection.LastHealthCheckAt = clock.GetUtcNow();
+        await db.SaveChangesAsync(ct);
+        await audit.WriteAsync("connection.tested", "PsaConnection", connectionId.ToString(),
+            new { dto.Success, dto.Message }, ct);
+        return dto;
     }
 }

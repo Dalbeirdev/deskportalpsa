@@ -1,8 +1,11 @@
 using Desk.Application.Admin;
 using Desk.Application.Common;
+using Desk.Application.Connectors;
+using Desk.Connectors.Mock;
 using Desk.Domain.Enums;
 using Desk.Domain.Sync;
 using Desk.Infrastructure.Admin;
+using Desk.PsaCore.Contracts;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -13,12 +16,23 @@ public class AdminTests
 {
     private static readonly Guid Org = Guid.NewGuid();
 
-    private static (ConnectionAdminService svc, AdminHarness h) Connections()
+    private sealed class FakeResolver(IServiceManagementConnector c) : IConnectorResolver
+    {
+        public Task<IServiceManagementConnector> ResolveAsync(Guid id, CancellationToken ct = default) => Task.FromResult(c);
+    }
+
+    private static (ConnectionAdminService svc, AdminHarness h) Connections(IServiceManagementConnector? connector = null)
     {
         var h = AdminHarness.Create(Org);
         var audit = new AuditWriter(h.Db, h.User, h.Tenant, h.Clock);
-        return (new ConnectionAdminService(h.Db, h.Secrets, audit), h);
+        var resolver = new FakeResolver(connector ?? new MockConnector(new MockConnectorOptions(), h.Clock));
+        return (new ConnectionAdminService(h.Db, h.Secrets, audit, resolver, h.Clock), h);
     }
+
+    private static async Task<Guid> CreateConnAsync(ConnectionAdminService svc)
+        => (await svc.CreateAsync(new CreateConnectionInput(
+            "CW", ProviderType.ConnectWisePsa, "https://x", null,
+            new Dictionary<string, string> { ["CompanyId"] = "c", ["PrivateKey"] = "p" }, null))).Id;
 
     private static (MappingAdminService svc, AdminHarness h) Mappings()
     {
@@ -59,6 +73,35 @@ public class AdminTests
         entry.DetailJson.Should().NotBeNull();
         entry.DetailJson!.Should().NotContain("topsecret"); // secret never enters the audit trail
         entry.ActorDisplayName.Should().Be("Admin User");
+    }
+
+    [Fact]
+    public async Task Test_connection_marks_healthy_on_success_and_audits()
+    {
+        var (svc, h) = Connections(); // default mock connector succeeds
+        var id = await CreateConnAsync(svc);
+
+        var result = await svc.TestAsync(id);
+
+        result.Success.Should().BeTrue();
+        (await h.Db.PsaConnections.FirstAsync(c => c.Id == id)).Status.Should().Be(ConnectionStatus.Healthy);
+        (await h.Db.AuditLog.CountAsync(a => a.Action == "connection.tested")).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Test_connection_marks_failed_on_auth_error()
+    {
+        var h0 = AdminHarness.Create(Org);
+        var failing = new MockConnector(new MockConnectorOptions { FailEveryCallWith = ConnectorFailureKind.Authentication }, h0.Clock);
+        var (svc, h) = Connections(failing);
+        var id = await CreateConnAsync(svc);
+
+        var result = await svc.TestAsync(id);
+
+        result.Success.Should().BeFalse();
+        var row = await h.Db.PsaConnections.FirstAsync(c => c.Id == id);
+        row.Status.Should().Be(ConnectionStatus.Failed);
+        row.LastError.Should().NotBeNull();
     }
 
     [Fact]
