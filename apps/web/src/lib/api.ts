@@ -3,7 +3,7 @@ import {
   TicketListItemSchema, TicketDetailSchema, NotificationSchema, ProfileSchema,
   TechnicianResponseSchema, TeamResponseSchema, TrendPointSchema,
   ConnectionSummarySchema, HealthSchema, JobSchema, AuditEntrySchema, AttachmentSchema,
-  ConnectionFieldsSchema, type ConnectionFields,
+  ConnectionFieldsSchema, FieldOptionSchema, type ConnectionFields,
   MappingRuleSchema, type MappingRule,
   type TicketDetail, type TicketListItem, type Notification, type Profile,
   type TechnicianResponse, type TeamResponse, type TrendPoint,
@@ -55,10 +55,13 @@ export const api = {
     }),
   addComment: (id: string, body: string) =>
     request(`/api/tickets/${id}/comments`, TicketNoteResponse, { method: 'POST', body: JSON.stringify({ body }) }),
-  logTime: (id: string, body: { hours: number; billable: string; notes?: string }) =>
+  logTime: (id: string, body: { hours: number; billable: string; notes?: string; workType?: string; workRole?: string }) =>
     request(`/api/tickets/${id}/time`,
       z.object({ externalId: z.string().nullable(), timeWorkedHours: z.number(), billableHours: z.number(), nonBillableHours: z.number() }),
       { method: 'POST', body: JSON.stringify(body) }),
+  ticketTimeOptions: (id: string) =>
+    request(`/api/tickets/${id}/time-options`,
+      z.object({ workTypes: z.array(FieldOptionSchema), workRoles: z.array(FieldOptionSchema) })),
   uploadAttachment: async (ticketId: string, file: File) => {
     const fd = new FormData();
     fd.append('file', file);

@@ -104,4 +104,6 @@ public sealed record ConnectionFieldsDto(
     IReadOnlyList<FieldOptionDto> QueuesOrBoards,
     IReadOnlyList<FieldOptionDto> Statuses,
     IReadOnlyList<FieldOptionDto> Priorities,
-    IReadOnlyList<FieldOptionDto> Categories);
+    IReadOnlyList<FieldOptionDto> Categories,
+    IReadOnlyList<FieldOptionDto> WorkTypes,
+    IReadOnlyList<FieldOptionDto> WorkRoles);

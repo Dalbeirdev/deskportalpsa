@@ -222,6 +222,18 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         return types.Select(t => new ExternalFieldOption(t.Id.ToString(), t.Name ?? "")).ToList();
     }
 
+    public async Task<IReadOnlyList<ExternalFieldOption>> GetWorkTypesAsync(CancellationToken ct = default)
+    {
+        var items = await GetListAsync<CwRef>("time/workTypes", new() { ["pageSize"] = "1000" }, ct);
+        return items.Select(w => new ExternalFieldOption(w.Id.ToString(), w.Name ?? "")).ToList();
+    }
+
+    public async Task<IReadOnlyList<ExternalFieldOption>> GetWorkRolesAsync(CancellationToken ct = default)
+    {
+        var items = await GetListAsync<CwRef>("time/workRoles", new() { ["pageSize"] = "1000" }, ct);
+        return items.Select(w => new ExternalFieldOption(w.Id.ToString(), w.Name ?? "")).ToList();
+    }
+
     public Task<IReadOnlyList<ExternalFieldDefinition>> GetCustomFieldsAsync(CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<ExternalFieldDefinition>>([]);
 

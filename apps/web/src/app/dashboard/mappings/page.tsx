@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeftRight, Link2, AlertTriangle, RefreshCw, ShieldCheck, CheckCircle2, ChevronDown,
-  FileText, Plus, Pencil, Trash2, Info, ListChecks, Flag, LayoutGrid, FolderClosed,
+  FileText, Plus, Pencil, Trash2, Info, ListChecks, Flag, LayoutGrid, FolderClosed, Clock,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { MappingRule } from '@/lib/types';
@@ -17,6 +17,7 @@ const TABS = [
   { key: 'priority', label: 'Priority', icon: Flag },
   { key: 'queue', label: 'Queue / Board', icon: LayoutGrid },
   { key: 'category', label: 'Category', icon: FolderClosed },
+  { key: 'workType', label: 'Work Type', icon: Clock },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
 
@@ -27,6 +28,7 @@ const CURATED: Record<TabKey, string[]> = {
   priority: ['Priority 1 - Emergency', 'Priority 2 - High', 'Priority 3 - Medium', 'Priority 4 - Low', 'No SLA'],
   queue: ['Service Desk', 'Network Operations', 'Professional Services', 'Triage', 'Onboarding'],
   category: ['Hardware', 'Software', 'Network', 'Account / Access', 'Email', 'Security'],
+  workType: [], // discovered live from the connection (see options memo)
 };
 
 const badgeTone: Record<string, string> = {
@@ -77,6 +79,10 @@ export default function MappingsPage() {
   const { data: mappings, isLoading } = useQuery({
     queryKey: ['mappings', provider], queryFn: () => api.listMappings(provider!), enabled: provider != null,
   });
+  // Live field discovery — used for the Work Type tab's PSA options (needs a reachable connection).
+  const { data: fields } = useQuery({
+    queryKey: ['fields', conn?.id], queryFn: () => api.connectionFields(conn!.id), enabled: !!conn, retry: false,
+  });
 
   const upsert = useMutation({
     mutationFn: (body: Parameters<typeof api.upsertMapping>[0]) => api.upsertMapping(body, `map ${tab}`),
@@ -90,8 +96,9 @@ export default function MappingsPage() {
   const mapped = rows.filter((r) => r.externalValue).length;
   const options = useMemo(() => {
     const fromRules = (mappings ?? []).filter((m) => m.portalField === tab && m.externalValue).map((m) => m.externalValue as string);
-    return Array.from(new Set([...CURATED[tab], ...fromRules]));
-  }, [mappings, tab]);
+    const base = tab === 'workType' ? (fields?.workTypes ?? []).map((o) => o.label) : CURATED[tab];
+    return Array.from(new Set([...base, ...fromRules]));
+  }, [mappings, tab, fields]);
 
   function save(row: MappingRule, externalValue: string | null, portalValue?: string) {
     if (!conn || provider == null) return;

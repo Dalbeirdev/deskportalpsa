@@ -133,8 +133,10 @@ public sealed class ConnectionAdminService(
         var statuses = await SafeAsync(() => connector.GetStatusesAsync(ct));
         var priorities = await SafeAsync(() => connector.GetPrioritiesAsync(ct));
         var categories = await SafeAsync(() => connector.GetCategoriesAsync(ct));
+        var workTypes = await SafeAsync(() => connector.GetWorkTypesAsync(ct));
+        var workRoles = await SafeAsync(() => connector.GetWorkRolesAsync(ct));
 
-        return new ConnectionFieldsDto(Map(boards), Map(statuses), Map(priorities), Map(categories));
+        return new ConnectionFieldsDto(Map(boards), Map(statuses), Map(priorities), Map(categories), Map(workTypes), Map(workRoles));
     }
 
     private static IReadOnlyList<FieldOptionDto> Map(IReadOnlyList<Desk.PsaCore.Models.ExternalFieldOption> options)

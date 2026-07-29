@@ -146,6 +146,8 @@ export const ConnectionFieldsSchema = z.object({
   statuses: z.array(FieldOptionSchema),
   priorities: z.array(FieldOptionSchema),
   categories: z.array(FieldOptionSchema),
+  workTypes: z.array(FieldOptionSchema).default([]),
+  workRoles: z.array(FieldOptionSchema).default([]),
 });
 export type ConnectionFields = z.infer<typeof ConnectionFieldsSchema>;
 

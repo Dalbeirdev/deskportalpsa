@@ -46,6 +46,8 @@ public interface IServiceManagementConnector
     Task<IReadOnlyList<ExternalFieldOption>> GetPrioritiesAsync(CancellationToken ct = default);
     Task<IReadOnlyList<ExternalFieldOption>> GetQueuesOrBoardsAsync(CancellationToken ct = default);
     Task<IReadOnlyList<ExternalFieldOption>> GetCategoriesAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<ExternalFieldOption>> GetWorkTypesAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<ExternalFieldOption>> GetWorkRolesAsync(CancellationToken ct = default);
     Task<IReadOnlyList<ExternalFieldDefinition>> GetCustomFieldsAsync(CancellationToken ct = default);
 
     // Webhooks

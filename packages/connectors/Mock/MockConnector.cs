@@ -158,6 +158,10 @@ public sealed class MockConnector : IServiceManagementConnector
 
     public Task<IReadOnlyList<ExternalFieldOption>> GetCategoriesAsync(CancellationToken ct = default) =>
         Options("Hardware", "Software", "Access");
+    public Task<IReadOnlyList<ExternalFieldOption>> GetWorkTypesAsync(CancellationToken ct = default) =>
+        Options("Remote", "Onsite", "Project");
+    public Task<IReadOnlyList<ExternalFieldOption>> GetWorkRolesAsync(CancellationToken ct = default) =>
+        Options("Engineer", "Consultant");
 
     public Task<IReadOnlyList<ExternalFieldDefinition>> GetCustomFieldsAsync(CancellationToken ct = default)
     {

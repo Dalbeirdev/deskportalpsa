@@ -55,11 +55,14 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const [hours, setHours] = useState('');
   const [billable, setBillable] = useState('Billable');
   const [timeNotes, setTimeNotes] = useState('');
+  const [workType, setWorkType] = useState('');
+  const [workRole, setWorkRole] = useState('');
   const replyRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { data: ticket, isLoading, isError } = useQuery({ queryKey: ['ticket', id], queryFn: () => api.getTicket(id) });
   const { data: list } = useQuery({ queryKey: ['tickets'], queryFn: api.listTickets });
+  const { data: timeOpts } = useQuery({ queryKey: ['time-options', id], queryFn: () => api.ticketTimeOptions(id), enabled: !!ticket, retry: false });
 
   const addComment = useMutation({
     mutationFn: (body: string) => api.addComment(id, body),
@@ -67,7 +70,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   });
 
   const logTime = useMutation({
-    mutationFn: () => api.logTime(id, { hours: parseFloat(hours), billable, notes: timeNotes || undefined }),
+    mutationFn: () => api.logTime(id, { hours: parseFloat(hours), billable, notes: timeNotes || undefined, workType: workType || undefined, workRole: workRole || undefined }),
     onSuccess: () => {
       setHours(''); setTimeNotes('');
       ['ticket', 'team', 'trend'].forEach((k) => qc.invalidateQueries({ queryKey: k === 'ticket' ? ['ticket', id] : [k] }));
@@ -174,6 +177,26 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                     <option value="NoCharge">No charge</option>
                   </select>
                 </label>
+                {timeOpts && timeOpts.workTypes.length > 0 && (
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-[var(--muted)]">Work type</span>
+                    <select value={workType} onChange={(e) => setWorkType(e.target.value)}
+                      className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
+                      <option value="">—</option>
+                      {timeOpts.workTypes.map((o) => <option key={o.value} value={o.label}>{o.label}</option>)}
+                    </select>
+                  </label>
+                )}
+                {timeOpts && timeOpts.workRoles.length > 0 && (
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-[var(--muted)]">Work role</span>
+                    <select value={workRole} onChange={(e) => setWorkRole(e.target.value)}
+                      className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
+                      <option value="">—</option>
+                      {timeOpts.workRoles.map((o) => <option key={o.value} value={o.label}>{o.label}</option>)}
+                    </select>
+                  </label>
+                )}
                 <label className="block min-w-48 flex-1">
                   <span className="mb-1 block text-xs text-[var(--muted)]">Notes</span>
                   <input value={timeNotes} onChange={(e) => setTimeNotes(e.target.value)} placeholder="What did you work on?"

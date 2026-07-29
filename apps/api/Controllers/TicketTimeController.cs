@@ -20,6 +20,23 @@ namespace Desk.Api.Controllers;
 [Route("api/tickets")]
 public sealed class TicketTimeController(DeskDbContext db, IConnectorResolver connectors) : ControllerBase
 {
+    /// <summary>Work type + work role options for the ticket's connection, for the log-time form.</summary>
+    [HttpGet("{id:guid}/time-options")]
+    [RequirePermission(Permissions.TicketsLogTime)]
+    public async Task<IActionResult> TimeOptions(Guid id, CancellationToken ct)
+    {
+        var ticket = await db.Tickets.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id, ct)
+            ?? throw new NotFoundException("Ticket");
+        var connector = await connectors.ResolveAsync(ticket.PsaConnectionId, ct);
+        var workTypes = await Safe(() => connector.GetWorkTypesAsync(ct));
+        var workRoles = await Safe(() => connector.GetWorkRolesAsync(ct));
+        return Ok(new
+        {
+            workTypes = workTypes.Select(o => new { o.Value, o.Label }),
+            workRoles = workRoles.Select(o => new { o.Value, o.Label }),
+        });
+    }
+
     [HttpPost("{id:guid}/time")]
     [RequirePermission(Permissions.TicketsLogTime)]
     public async Task<IActionResult> LogTime(Guid id, [FromBody] LogTimeRequest req, CancellationToken ct)
@@ -38,7 +55,10 @@ public sealed class TicketTimeController(DeskDbContext db, IConnectorResolver co
 
         var connector = await connectors.ResolveAsync(ticket.PsaConnectionId, ct);
         var result = await connector.AddTimeEntryAsync(ticket.ExternalTicketId,
-            new UnifiedTimeEntryCreateRequest(req.Hours, WorkType: null, WorkRole: null, billable, req.Notes, MemberIdentifier: null), ct);
+            new UnifiedTimeEntryCreateRequest(req.Hours,
+                string.IsNullOrWhiteSpace(req.WorkType) ? null : req.WorkType,
+                string.IsNullOrWhiteSpace(req.WorkRole) ? null : req.WorkRole,
+                billable, req.Notes, MemberIdentifier: null), ct);
         if (!result.Success)
             throw new ValidationFailedException(result.Error ?? "The PSA rejected the time entry.");
 
@@ -59,5 +79,14 @@ public sealed class TicketTimeController(DeskDbContext db, IConnectorResolver co
     public sealed record LogTimeRequest(
         [Range(0.01, 1000, ErrorMessage = "Hours must be between 0.01 and 1000.")] decimal Hours,
         string? Billable,
-        [StringLength(2000)] string? Notes);
+        [StringLength(2000)] string? Notes,
+        string? WorkType,
+        string? WorkRole);
+
+    // Discovery of one option list must not fail the whole request if the provider lacks it.
+    private static async Task<IReadOnlyList<ExternalFieldOption>> Safe(Func<Task<IReadOnlyList<ExternalFieldOption>>> get)
+    {
+        try { return await get(); }
+        catch { return []; }
+    }
 }
