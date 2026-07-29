@@ -28,12 +28,21 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddDeskInfrastructure(this IServiceCollection services, IConfiguration config)
     {
-        var connectionString = config.GetConnectionString("Postgres")
-            ?? Environment.GetEnvironmentVariable("DESK_DB_CONNECTION")
-            ?? throw new InvalidOperationException("No Postgres connection string configured (ConnectionStrings:Postgres).");
-
-        services.AddDbContext<DeskDbContext>(o =>
-            o.UseNpgsql(connectionString, npg => npg.MigrationsAssembly(typeof(DeskDbContext).Assembly.FullName)));
+        // Local mode runs with zero external dependencies (in-memory DB + secret store) for a
+        // no-Docker demo. Otherwise, connect to Postgres as usual.
+        var localMode = config.GetValue("LocalMode:Enabled", false);
+        if (localMode)
+        {
+            services.AddDbContext<DeskDbContext>(o => o.UseInMemoryDatabase("desk-local"));
+        }
+        else
+        {
+            var connectionString = config.GetConnectionString("Postgres")
+                ?? Environment.GetEnvironmentVariable("DESK_DB_CONNECTION")
+                ?? throw new InvalidOperationException("No Postgres connection string configured (ConnectionStrings:Postgres).");
+            services.AddDbContext<DeskDbContext>(o =>
+                o.UseNpgsql(connectionString, npg => npg.MigrationsAssembly(typeof(DeskDbContext).Assembly.FullName)));
+        }
 
         services.AddSingleton(TimeProvider.System);
 
@@ -42,7 +51,10 @@ public static class DependencyInjection
         services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<TenantContext>());
         services.AddScoped<ISettableTenantContext>(sp => sp.GetRequiredService<TenantContext>());
 
-        AddSecretStore(services, config);
+        if (localMode)
+            services.AddSingleton<ISecretStore, InMemorySecretStore>();
+        else
+            AddSecretStore(services, config);
 
         // Integration framework (Phase 3)
         services.AddSingleton<IMappingEngine, MappingEngine>();

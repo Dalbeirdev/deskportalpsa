@@ -35,17 +35,30 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<IClaimsTransformation, DeskClaimsTransformation>();
 
-// ---- AuthN: validate Keycloak-issued JWTs ----
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.Authority = config["Keycloak:Authority"];
-        options.Audience = config["Keycloak:Audience"];
-        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
-        options.TokenValidationParameters.ValidateIssuer = true;
-        options.TokenValidationParameters.ValidateAudience = !string.IsNullOrEmpty(config["Keycloak:Audience"]);
-        options.TokenValidationParameters.ValidateLifetime = true;
-    });
+// Local mode: run without external dependencies (in-memory DB/secrets + dev auto-login). Only
+// honoured in Development — a guard below refuses it in Production.
+var localMode = builder.Environment.IsDevelopment() && config.GetValue("LocalMode:Enabled", false);
+
+// ---- AuthN ----
+if (localMode)
+{
+    // Dev auto-login as the seeded admin — never registered outside Development local mode.
+    builder.Services.AddAuthentication(DevAuthHandler.SchemeName)
+        .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, DevAuthHandler>(DevAuthHandler.SchemeName, null);
+}
+else
+{
+    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(options =>
+        {
+            options.Authority = config["Keycloak:Authority"];
+            options.Audience = config["Keycloak:Audience"];
+            options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+            options.TokenValidationParameters.ValidateIssuer = true;
+            options.TokenValidationParameters.ValidateAudience = !string.IsNullOrEmpty(config["Keycloak:Audience"]);
+            options.TokenValidationParameters.ValidateLifetime = true;
+        });
+}
 
 // ---- AuthZ: permission-claim policies ----
 builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
@@ -87,6 +100,12 @@ builder.WebHost.ConfigureKestrel(k => k.Limits.MaxRequestBodySize = 25 * 1024 * 
 
 var app = builder.Build();
 
+// Local mode must never be active in Production.
+if (app.Environment.IsProduction() && config.GetValue("LocalMode:Enabled", false))
+{
+    throw new InvalidOperationException("LocalMode:Enabled is not permitted in Production.");
+}
+
 // Production must not fall back to the in-memory secret store.
 if (app.Environment.IsProduction() &&
     app.Services.GetRequiredService<ISecretStore>() is InMemorySecretStore)
@@ -94,9 +113,19 @@ if (app.Environment.IsProduction() &&
     throw new InvalidOperationException("Refusing to start in Production without a configured Vault secret store.");
 }
 
-// Apply migrations + seed the built-in roles on startup for local/dev bring-up. In production run
-// migrations as an explicit deploy step; opt in here with RunMigrationsOnStartup=true if desired.
-if (app.Environment.IsDevelopment() || config.GetValue("RunMigrationsOnStartup", false))
+// Startup DB init. Local mode creates the in-memory schema and seeds a demo org + admin; otherwise
+// apply migrations for local/dev bring-up (in production run migrations as an explicit deploy step).
+if (localMode)
+{
+    using var startupScope = app.Services.CreateScope();
+    startupScope.ServiceProvider.GetRequiredService<TenantContext>().SetPlatformScope();
+    var startupDb = startupScope.ServiceProvider.GetRequiredService<DeskDbContext>();
+    await startupDb.Database.EnsureCreatedAsync();
+    await DatabaseSeeder.SeedBuiltInRolesAsync(startupDb);
+    await DatabaseSeeder.SeedLocalDemoAsync(startupDb);
+    app.Logger.LogWarning("LOCAL MODE: in-memory DB + dev auto-login active. Not for production.");
+}
+else if (app.Environment.IsDevelopment() || config.GetValue("RunMigrationsOnStartup", false))
 {
     using var startupScope = app.Services.CreateScope();
     startupScope.ServiceProvider.GetRequiredService<TenantContext>().SetPlatformScope();

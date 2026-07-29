@@ -1,6 +1,7 @@
 using Desk.Domain.Authorization;
 using Desk.Domain.Enums;
 using Desk.Domain.Identity;
+using Desk.Domain.Tenancy;
 using Microsoft.EntityFrameworkCore;
 
 namespace Desk.Infrastructure.Persistence;
@@ -31,5 +32,43 @@ public static class DatabaseSeeder
         }
 
         await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Local-mode subject the dev auto-login authenticates as.</summary>
+    public const string DevAdminSubject = "dev-admin";
+
+    /// <summary>
+    /// Local/demo seed: a demo MSP organization and an MSP-administrator user tied to the dev
+    /// auto-login subject, so the running platform has a working tenant + admin without Keycloak.
+    /// Only invoked in local mode.
+    /// </summary>
+    public static async Task SeedLocalDemoAsync(DeskDbContext db, CancellationToken ct = default)
+    {
+        var org = await db.MspOrganizations.IgnoreQueryFilters().FirstOrDefaultAsync(o => o.Slug == "demo", ct);
+        if (org is null)
+        {
+            org = new MspOrganization { Name = "Demo MSP", Slug = "demo" };
+            db.MspOrganizations.Add(org);
+            await db.SaveChangesAsync(ct);
+        }
+
+        var hasUser = await db.AppUsers.IgnoreQueryFilters().AnyAsync(u => u.IdpSubject == DevAdminSubject, ct);
+        if (!hasUser)
+        {
+            var user = new AppUser
+            {
+                MspOrganizationId = org.Id,
+                Email = "dev-admin@local",
+                DisplayName = "Dev Admin",
+                IdpSubject = DevAdminSubject,
+            };
+            db.AppUsers.Add(user);
+            await db.SaveChangesAsync(ct);
+
+            var mspAdmin = await db.Roles.IgnoreQueryFilters()
+                .FirstAsync(r => r.IsSystemRole && r.BuiltInType == RoleType.MspAdministrator, ct);
+            db.UserRoles.Add(new UserRole { AppUserId = user.Id, RoleId = mspAdmin.Id });
+            await db.SaveChangesAsync(ct);
+        }
     }
 }
