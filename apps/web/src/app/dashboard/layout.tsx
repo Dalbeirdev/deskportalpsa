@@ -4,7 +4,7 @@ import { QueryProvider } from '@/components/QueryProvider';
 import { UserMenu } from '@/components/UserMenu';
 import {
   LayoutDashboard, Ticket, Plug, Bell, User, BarChart3, Activity, ListChecks, ShieldCheck,
-  SlidersHorizontal, FileText, Search, HelpCircle,
+  SlidersHorizontal, FileText, Search, HelpCircle, HardDrive, ChevronLeft,
 } from 'lucide-react';
 
 const navGroups = [
@@ -39,7 +39,7 @@ const flatNav = navGroups.flatMap((g) => g.items);
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
-      <aside className="hidden w-64 shrink-0 border-r border-[var(--border)] bg-[var(--surface)] p-4 md:block">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)] p-4 md:flex">
         <div className="mb-6 flex items-center gap-2.5 px-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand font-bold text-brand-fg">D</div>
           <div>
@@ -47,7 +47,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="text-[10px] text-[var(--muted)]">Multi-tenant PSA Portal</div>
           </div>
         </div>
-        <nav className="space-y-5">
+        <nav className="flex-1 space-y-5">
           {navGroups.map((g, gi) => (
             <div key={gi} className="space-y-1">
               {g.label && (
@@ -66,6 +66,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           ))}
         </nav>
+
+        <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-3">
+          <div className="flex items-center justify-between text-xs">
+            <span className="flex items-center gap-1.5 font-medium"><HardDrive size={13} /> Storage Usage</span>
+            <span className="font-semibold">68%</span>
+          </div>
+          <div className="mt-2 h-1.5 rounded-full bg-[var(--surface)]">
+            <div className="h-full rounded-full bg-brand" style={{ width: '68%' }} />
+          </div>
+          <div className="mt-1.5 text-[11px] text-[var(--muted)]">6.8 GB of 10 GB used</div>
+        </div>
+        <button className="mt-2 flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--fg)]">
+          <ChevronLeft size={15} /> Collapse
+        </button>
       </aside>
 
       <div className="flex flex-1 flex-col">
