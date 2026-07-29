@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { QueryProvider } from '@/components/QueryProvider';
 import { UserMenu } from '@/components/UserMenu';
-import { LayoutDashboard, Ticket, Plug, Bell, User, BarChart3, Activity, ListChecks, ShieldCheck, SlidersHorizontal } from 'lucide-react';
+import { LayoutDashboard, Ticket, Plug, Bell, User, BarChart3, Activity, ListChecks, ShieldCheck, SlidersHorizontal, FileText } from 'lucide-react';
 
 const nav = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
@@ -63,6 +63,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
 
         <main className="flex-1 p-4 sm:p-6"><QueryProvider>{children}</QueryProvider></main>
+
+        <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-xs text-[var(--muted)] sm:px-6">
+          <span>Desk Portal · v0.1.0</span>
+          <a
+            href="/user-guide.pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 hover:text-[var(--fg)]"
+          >
+            <FileText size={13} /> User Guide (PDF)
+          </a>
+        </footer>
       </div>
     </div>
   );

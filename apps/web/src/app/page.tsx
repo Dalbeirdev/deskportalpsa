@@ -33,6 +33,9 @@ export default function LoginPage() {
           <Link href="/dashboard" className="underline">Preview dashboard shell</Link>
         </p>
       </div>
+      <footer className="absolute bottom-4 text-xs text-[var(--muted)]">
+        <a href="/user-guide.pdf" target="_blank" rel="noopener noreferrer" className="hover:underline">User Guide (PDF)</a>
+      </footer>
     </main>
   );
 }
