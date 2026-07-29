@@ -48,7 +48,7 @@ public sealed class TicketCommandService(
             Description = input.Description,
             Priority = MapOut(rules, ctx, "priority", input.Priority),
             Category = MapOut(rules, ctx, "category", input.Category),
-            QueueOrBoard = input.QueueOrBoard,
+            QueueOrBoard = MapOut(rules, ctx, "queue", input.QueueOrBoard),
             ExternalCompanyId = company.ExternalCompanyId,
             RequesterExternalId = requester.ExternalContactId,
             RequesterEmail = requester.Email,

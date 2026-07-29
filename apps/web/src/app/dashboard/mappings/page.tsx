@@ -2,30 +2,33 @@
 
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, SlidersHorizontal } from 'lucide-react';
+import { ArrowRight, SlidersHorizontal, Plus } from 'lucide-react';
 import { api } from '@/lib/api';
-
-// Portal-neutral values the platform normalizes to. These are mapped to each PSA's real values.
-const PORTAL_VALUES: Record<string, string[]> = {
-  status: ['NEW', 'IN_PROGRESS', 'WAITING_CUSTOMER', 'RESOLVED', 'CLOSED'],
-  priority: ['LOW', 'NORMAL', 'HIGH', 'CRITICAL'],
-};
-const FIELDS = [
-  { key: 'status', label: 'Status' },
-  { key: 'priority', label: 'Priority' },
-] as const;
+import type { ConnectionFields } from '@/lib/types';
 
 const SCOPE_CONNECTION = 2; // MappingScope.ConnectionOverride
 const DIRECTION_BIDIRECTIONAL = 3; // MappingDirection.Bidirectional
+
+// Status & priority have fixed portal-neutral values. Queue & category are open, so their portal
+// values are defined per connection by adding mappings.
+const FIELDS = [
+  { key: 'status', label: 'Status', optionKey: 'statuses', fixed: ['NEW', 'IN_PROGRESS', 'WAITING_CUSTOMER', 'RESOLVED', 'CLOSED'] },
+  { key: 'priority', label: 'Priority', optionKey: 'priorities', fixed: ['LOW', 'NORMAL', 'HIGH', 'CRITICAL'] },
+  { key: 'queue', label: 'Queue / Board', optionKey: 'queuesOrBoards', fixed: null },
+  { key: 'category', label: 'Category', optionKey: 'categories', fixed: null },
+] as const;
+
+type FieldKey = (typeof FIELDS)[number]['key'];
 
 export default function MappingsPage() {
   const qc = useQueryClient();
   const { data: connections } = useQuery({ queryKey: ['connections'], queryFn: api.connections });
   const [connId, setConnId] = useState<string | null>(null);
-  const [field, setField] = useState<'status' | 'priority'>('status');
+  const [fieldKey, setFieldKey] = useState<FieldKey>('status');
 
   const conn = connections?.find((c) => c.id === connId);
   const provider = conn ? Number(conn.provider) : null;
+  const fieldDef = FIELDS.find((f) => f.key === fieldKey)!;
 
   const { data: fields, isLoading: fieldsLoading } = useQuery({
     queryKey: ['fields', connId], queryFn: () => api.connectionFields(connId!), enabled: !!connId,
@@ -34,40 +37,47 @@ export default function MappingsPage() {
     queryKey: ['mappings', provider], queryFn: () => api.listMappings(provider!), enabled: provider != null,
   });
 
-  const options = field === 'status' ? fields?.statuses ?? [] : fields?.priorities ?? [];
-  const portalValues = PORTAL_VALUES[field];
+  const options = fields ? (fields[fieldDef.optionKey as keyof ConnectionFields] ?? []) : [];
+  const mine = (pv: string) =>
+    mappings?.find((m) => m.psaConnectionId === connId && m.portalField === fieldKey && m.portalValue === pv);
 
-  const existing = (pv: string) =>
-    mappings?.find((m) => m.psaConnectionId === connId && m.portalField === field && m.portalValue === pv);
+  // Portal values to show: the fixed enum, or (for open fields) whatever mappings exist.
+  const existingPortalValues = Array.from(
+    new Set((mappings ?? [])
+      .filter((m) => m.psaConnectionId === connId && m.portalField === fieldKey && m.portalValue)
+      .map((m) => m.portalValue as string)),
+  );
+  const portalValues = fieldDef.fixed ?? existingPortalValues;
 
   const [overrides, setOverrides] = useState<Record<string, string>>({});
-  useEffect(() => setOverrides({}), [connId, field]);
-  const valueFor = (pv: string) => overrides[pv] ?? existing(pv)?.externalValue ?? '';
+  useEffect(() => setOverrides({}), [connId, fieldKey]);
+  const valueFor = (pv: string) => overrides[pv] ?? mine(pv)?.externalValue ?? '';
+
+  function upsert(portalValue: string, externalValue: string, id?: string) {
+    return api.upsertMapping({
+      id, provider: provider!, scope: SCOPE_CONNECTION, psaConnectionId: connId!,
+      portalField: fieldKey, portalValue, externalField: fieldKey, externalValue,
+      direction: DIRECTION_BIDIRECTIONAL, isRequired: false, fallbackValue: null,
+    }, `map ${fieldKey}`);
+  }
 
   const save = useMutation({
     mutationFn: async () => {
       for (const pv of portalValues) {
         const ext = overrides[pv];
-        if (ext === undefined || ext === '') continue; // unchanged or cleared
-        await api.upsertMapping({
-          id: existing(pv)?.id,
-          provider: provider!,
-          scope: SCOPE_CONNECTION,
-          psaConnectionId: connId!,
-          portalField: field,
-          portalValue: pv,
-          externalField: field,
-          externalValue: ext,
-          direction: DIRECTION_BIDIRECTIONAL,
-          isRequired: false,
-          fallbackValue: null,
-        }, `map ${field}`);
+        if (ext === undefined || ext === '') continue;
+        await upsert(pv, ext, mine(pv)?.id);
       }
     },
-    onSuccess: () => {
-      setOverrides({});
-      qc.invalidateQueries({ queryKey: ['mappings', provider] });
-    },
+    onSuccess: () => { setOverrides({}); qc.invalidateQueries({ queryKey: ['mappings', provider] }); },
+  });
+
+  // Free-form add (queue / category)
+  const [addPortal, setAddPortal] = useState('');
+  const [addExternal, setAddExternal] = useState('');
+  const add = useMutation({
+    mutationFn: () => upsert(addPortal.trim(), addExternal),
+    onSuccess: () => { setAddPortal(''); setAddExternal(''); qc.invalidateQueries({ queryKey: ['mappings', provider] }); },
   });
 
   const dirty = Object.values(overrides).some((v) => v !== '');
@@ -81,7 +91,6 @@ export default function MappingsPage() {
         </p>
       </div>
 
-      {/* Connection + field selectors */}
       <div className="flex flex-wrap items-end gap-4">
         <label className="block">
           <span className="mb-1.5 block text-sm font-medium">Connection</span>
@@ -95,13 +104,13 @@ export default function MappingsPage() {
           </select>
         </label>
 
-        <div className="inline-flex rounded-lg border border-[var(--border)] p-0.5">
+        <div className="inline-flex flex-wrap rounded-lg border border-[var(--border)] p-0.5">
           {FIELDS.map((f) => (
             <button
               key={f.key}
-              onClick={() => setField(f.key)}
+              onClick={() => setFieldKey(f.key)}
               className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                field === f.key ? 'bg-brand text-brand-fg' : 'text-[var(--muted)] hover:text-[var(--fg)]'
+                fieldKey === f.key ? 'bg-brand text-brand-fg' : 'text-[var(--muted)] hover:text-[var(--fg)]'
               }`}
             >
               {f.label}
@@ -117,18 +126,20 @@ export default function MappingsPage() {
         </div>
       )}
 
-      {connId && fieldsLoading && (
-        <p className="text-sm text-[var(--muted)]">Discovering {field} values from the PSA…</p>
-      )}
+      {connId && fieldsLoading && <p className="text-sm text-[var(--muted)]">Discovering {fieldDef.label} values from the PSA…</p>}
 
       {connId && !fieldsLoading && (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
           <div className="grid grid-cols-[1fr_auto_1.4fr] gap-3 border-b border-[var(--border)] px-5 py-3 text-xs font-semibold uppercase tracking-wide text-[var(--faint)]">
-            <span>Portal {field}</span>
+            <span>Portal {fieldDef.label}</span>
             <span />
             <span>PSA value</span>
           </div>
+
           <div className="divide-y divide-[var(--border)]">
+            {portalValues.length === 0 && !fieldDef.fixed && (
+              <p className="px-5 py-4 text-sm text-[var(--muted)]">No {fieldDef.label.toLowerCase()} mappings yet — add one below.</p>
+            )}
             {portalValues.map((pv) => (
               <div key={pv} className="grid grid-cols-[1fr_auto_1.4fr] items-center gap-3 px-5 py-3">
                 <span className="font-mono text-sm">{pv.replace(/_/g, ' ')}</span>
@@ -144,9 +155,47 @@ export default function MappingsPage() {
               </div>
             ))}
           </div>
+
+          {/* Free-form add for open fields (queue / category) */}
+          {!fieldDef.fixed && (
+            <form
+              onSubmit={(e) => { e.preventDefault(); if (addPortal.trim() && addExternal) add.mutate(); }}
+              className="grid grid-cols-[1fr_auto_1.4fr_auto] items-end gap-3 border-t border-[var(--border)] bg-[var(--bg)] px-5 py-3"
+            >
+              <label className="block">
+                <span className="mb-1 block text-xs text-[var(--muted)]">New portal value</span>
+                <input
+                  value={addPortal}
+                  onChange={(e) => setAddPortal(e.target.value)}
+                  placeholder="e.g. NETWORK"
+                  className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                />
+              </label>
+              <ArrowRight size={15} className="mb-2.5 text-[var(--faint)]" />
+              <label className="block">
+                <span className="mb-1 block text-xs text-[var(--muted)]">PSA value</span>
+                <select
+                  value={addExternal}
+                  onChange={(e) => setAddExternal(e.target.value)}
+                  className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                >
+                  <option value="">Select…</option>
+                  {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </label>
+              <button
+                type="submit"
+                disabled={!addPortal.trim() || !addExternal || add.isPending}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium hover:bg-[var(--bg)] disabled:opacity-50"
+              >
+                <Plus size={14} /> Add
+              </button>
+            </form>
+          )}
+
           <div className="flex items-center justify-between border-t border-[var(--border)] px-5 py-3">
             <span className="text-xs text-[var(--muted)]">
-              {options.length} PSA {field} value{options.length === 1 ? '' : 's'} discovered · saved as a new version
+              {options.length} PSA {fieldDef.label.toLowerCase()} value{options.length === 1 ? '' : 's'} discovered · saved as a new version
             </span>
             <button
               onClick={() => save.mutate()}

@@ -42,6 +42,7 @@ public sealed class TicketSyncService(
         var portalStatus = Map(rules, ctx, "status", incoming.Status) ?? incoming.Status ?? "NEW";
         var portalPriority = Map(rules, ctx, "priority", incoming.Priority) ?? incoming.Priority ?? "NORMAL";
         var portalCategory = Map(rules, ctx, "category", incoming.Category) ?? incoming.Category;
+        var portalQueue = Map(rules, ctx, "queue", incoming.QueueOrBoard) ?? incoming.QueueOrBoard;
 
         var hash = UpdateHasher.Compute(new Dictionary<string, string?>
         {
@@ -85,7 +86,7 @@ public sealed class TicketSyncService(
         ticket.PsaPriority = incoming.Priority;
         ticket.PortalCategory = portalCategory;
         ticket.PsaCategory = incoming.Category;
-        ticket.QueueOrBoard = incoming.QueueOrBoard;
+        ticket.QueueOrBoard = portalQueue;
         ticket.AssignedTechnicianExternalId = incoming.AssignedTechnicianExternalId;
         ticket.ResolvedAt = incoming.ResolvedAt;
         ticket.UpdateHash = hash;
