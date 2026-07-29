@@ -24,7 +24,7 @@ public sealed class DevAuthHandler(
         var identity = new ClaimsIdentity(
             [
                 new Claim(ClaimTypes.NameIdentifier, DatabaseSeeder.DevAdminSubject),
-                new Claim("name", "Dev Admin"),
+                new Claim("name", "Demo Admin"),
                 new Claim(ClaimTypes.Email, "dev-admin@local"),
             ],
             SchemeName);
