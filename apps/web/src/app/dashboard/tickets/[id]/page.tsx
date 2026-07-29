@@ -72,6 +72,14 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const { data: list } = useQuery({ queryKey: ['tickets'], queryFn: api.listTickets });
   const { data: timeOpts } = useQuery({ queryKey: ['time-options', id], queryFn: () => api.ticketTimeOptions(id), enabled: !!ticket, retry: false });
 
+  function startTimerHere() {
+    if (!ticket) return;
+    if (timer.running && timer.target?.ticketId !== id &&
+        !window.confirm('A timer is already running for another ticket. Attach it to this one?')) return;
+    timer.attach({ ticketId: id, ref: ticket.externalTicketId, title: ticket.title });
+    timer.start();
+  }
+
   const addComment = useMutation({
     mutationFn: (body: string) => api.addComment(id, body),
     onSuccess: () => { setComment(''); qc.invalidateQueries({ queryKey: ['ticket', id] }); },
@@ -188,10 +196,16 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 </label>
                 <div className="flex flex-col">
                   <span className="mb-1 text-xs text-[var(--muted)]">Global timer</span>
-                  <button type="button" onClick={applyTimer} disabled={timer.seconds === 0}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium tabular-nums hover:bg-[var(--bg)] disabled:opacity-50">
-                    <Clock size={14} /> Use {String(Math.floor(timer.seconds / 60)).padStart(2, '0')}:{String(timer.seconds % 60).padStart(2, '0')}
-                  </button>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={startTimerHere}
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium ${timer.running && timer.target?.ticketId === id ? 'border-brand/40 bg-brand/5 text-brand' : 'border-[var(--border)] hover:bg-[var(--bg)]'}`}>
+                      <Clock size={14} /> {timer.running && timer.target?.ticketId === id ? 'Timing…' : 'Start timer here'}
+                    </button>
+                    <button type="button" onClick={applyTimer} disabled={timer.seconds === 0}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium tabular-nums hover:bg-[var(--bg)] disabled:opacity-50">
+                      Use {String(Math.floor(timer.seconds / 60)).padStart(2, '0')}:{String(timer.seconds % 60).padStart(2, '0')}
+                    </button>
+                  </div>
                 </div>
                 <label className="block">
                   <span className="mb-1 block text-xs text-[var(--muted)]">Billable</span>

@@ -83,6 +83,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </button>
       </aside>
 
+      <QueryProvider>
       <TimerProvider>
       <div className="flex flex-1 flex-col">
         <header className="flex h-14 items-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 sm:px-6">
@@ -122,7 +123,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           ))}
         </nav>
 
-        <main className="flex-1 bg-[var(--bg)] p-4 sm:p-6"><QueryProvider>{children}</QueryProvider></main>
+        <main className="flex-1 bg-[var(--bg)] p-4 sm:p-6">{children}</main>
 
         <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-xs text-[var(--muted)] sm:px-6">
           <span>Desk Portal · v0.1.0</span>
@@ -132,6 +133,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </footer>
       </div>
       </TimerProvider>
+      </QueryProvider>
     </div>
   );
 }
