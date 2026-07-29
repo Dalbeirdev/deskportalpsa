@@ -20,8 +20,10 @@ next-env.d.ts
 *.pem
 *.key
 *.pfx
-secrets/
-vault-data/
+# Root-anchored so it ignores a local `secrets/` data dir WITHOUT catching the
+# source folder packages/infrastructure/Secrets/ (case-insensitive match on Windows/macOS).
+/secrets/
+/vault-data/
 
 # Docker volumes
 infrastructure/docker/volumes/
