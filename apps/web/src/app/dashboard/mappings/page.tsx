@@ -176,6 +176,17 @@ export default function MappingsPage() {
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-5 py-3.5">
           <h2 className="text-sm font-semibold">{tabLabel} Field Mapping</h2>
           <div className="flex items-center gap-2">
+            {upsert.isPending && <span className="text-xs text-[var(--muted)]">Saving…</span>}
+            {upsert.isError && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-600 dark:bg-red-950/50 dark:text-red-300">
+                <AlertTriangle size={12} /> Save failed — is the API reachable?
+              </span>
+            )}
+            {upsert.isSuccess && !upsert.isPending && (
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400">
+                <CheckCircle2 size={12} /> Saved
+              </span>
+            )}
             <button onClick={() => setDraft({ portal: '', external: '' })} className="inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline">
               <Plus size={15} /> Add Custom Mapping
             </button>
