@@ -31,6 +31,15 @@ const CURATED: Record<TabKey, string[]> = {
   workType: [], // discovered live from the connection (see options memo)
 };
 
+// Fixed portal-neutral values shown as rows to map even before any rule exists (status/priority are
+// closed enums). Open fields (queue/category/workType) get their rows from existing rules + Add Custom.
+const PORTAL_VALUES: Partial<Record<TabKey, string[]>> = {
+  status: ['NEW', 'IN_PROGRESS', 'WAITING_CUSTOMER', 'ON_HOLD', 'RESOLVED', 'CLOSED'],
+  priority: ['CRITICAL', 'HIGH', 'NORMAL', 'LOW'],
+};
+
+type DisplayRow = { id?: string; portalValue: string; externalValue: string | null; fixed: boolean };
+
 const badgeTone: Record<string, string> = {
   NEW: 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
   IN_PROGRESS: 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
@@ -89,22 +98,39 @@ export default function MappingsPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['mappings', provider] }); setDraft(null); },
   });
 
-  const rows = useMemo(
-    () => (mappings ?? []).filter((m) => m.portalField === tab && m.psaConnectionId === (conn?.id ?? '')),
-    [mappings, tab, conn],
-  );
+  const rows = useMemo<DisplayRow[]>(() => {
+    const rules = (mappings ?? []).filter((m) => m.portalField === tab && m.psaConnectionId === (conn?.id ?? ''));
+    const fixedVals = PORTAL_VALUES[tab];
+    if (fixedVals) {
+      const byPortal = new Map(rules.map((r) => [r.portalValue ?? '', r]));
+      const canonical: DisplayRow[] = fixedVals.map((pv) => {
+        const rule = byPortal.get(pv);
+        return { id: rule?.id, portalValue: pv, externalValue: rule?.externalValue ?? null, fixed: true };
+      });
+      const extra: DisplayRow[] = rules
+        .filter((r) => !fixedVals.includes(r.portalValue ?? ''))
+        .map((r) => ({ id: r.id, portalValue: r.portalValue ?? '', externalValue: r.externalValue, fixed: false }));
+      return [...canonical, ...extra];
+    }
+    return rules.map((r) => ({ id: r.id, portalValue: r.portalValue ?? '', externalValue: r.externalValue, fixed: false }));
+  }, [mappings, tab, conn]);
+
   const mapped = rows.filter((r) => r.externalValue).length;
   const options = useMemo(() => {
     const fromRules = (mappings ?? []).filter((m) => m.portalField === tab && m.externalValue).map((m) => m.externalValue as string);
-    const base = tab === 'workType' ? (fields?.workTypes ?? []).map((o) => o.label) : CURATED[tab];
+    const discovered = ({
+      status: fields?.statuses, priority: fields?.priorities, queue: fields?.queuesOrBoards,
+      category: fields?.categories, workType: fields?.workTypes,
+    }[tab] ?? []).map((o) => o.label);
+    const base = discovered.length ? discovered : CURATED[tab];
     return Array.from(new Set([...base, ...fromRules]));
   }, [mappings, tab, fields]);
 
-  function save(row: MappingRule, externalValue: string | null, portalValue?: string) {
+  function save(row: DisplayRow, externalValue: string | null, portalValue?: string) {
     if (!conn || provider == null) return;
     upsert.mutate({
       id: row.id, provider, scope: SCOPE_CONNECTION, psaConnectionId: conn.id,
-      portalField: tab, portalValue: portalValue ?? row.portalValue ?? '', externalField: tab,
+      portalField: tab, portalValue: portalValue ?? row.portalValue, externalField: tab,
       externalValue: externalValue ?? '', direction: DIRECTION_BIDIRECTIONAL, isRequired: false, fallbackValue: null,
     });
   }
@@ -173,7 +199,7 @@ export default function MappingsPage() {
           sub={rows.length - mapped === 0 ? 'Everything is mapped ✓' : 'Needs attention'}
           subTone={rows.length - mapped === 0 ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'} />
         <StatCard icon={RefreshCw} iconTone="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300"
-          label="Rule Version" value={<span className="text-lg">v{Math.max(1, ...rows.map((r) => r.version), 1)}</span>} sub={upsert.isPending ? 'Saving…' : 'Versioned on every change'} />
+          label="Rule Version" value={<span className="text-lg">v{Math.max(1, ...(mappings ?? []).filter((m) => m.portalField === tab && m.psaConnectionId === (conn?.id ?? '')).map((m) => m.version))}</span>} sub={upsert.isPending ? 'Saving…' : 'Versioned on every change'} />
         <StatCard icon={ShieldCheck} iconTone="bg-violet-50 text-violet-600 dark:bg-violet-950/50 dark:text-violet-300"
           label="Mapping Status" value={<span className="text-lg text-green-600 dark:text-green-400">{rows.length > 0 && mapped === rows.length ? 'Healthy' : 'Review'}</span>} sub={rows.length > 0 && mapped === rows.length ? 'No issues detected' : 'Unmapped values remain'} />
       </div>
@@ -217,15 +243,15 @@ export default function MappingsPage() {
               {isLoading && <tr><td colSpan={5} className="px-5 py-8 text-center text-sm text-[var(--muted)]">Loading mappings…</td></tr>}
 
               {!isLoading && rows.map((r) => (
-                <tr key={r.id} className="border-b border-[var(--border)] last:border-0">
+                <tr key={r.id ?? r.portalValue} className="border-b border-[var(--border)] last:border-0">
                   <td className="px-5 py-3">
-                    {editingId === r.id ? (
-                      <input autoFocus defaultValue={r.portalValue ?? ''}
+                    {!r.fixed && editingId === r.id ? (
+                      <input autoFocus defaultValue={r.portalValue}
                         onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== r.portalValue) save(r, r.externalValue, v); setEditingId(null); }}
                         onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
                         className="w-44 rounded-md border border-brand bg-[var(--bg)] px-2 py-1 text-sm outline-none" />
                     ) : (
-                      <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-medium ${toneFor(r.portalValue ?? '')}`}>{(r.portalValue ?? '').replace(/_/g, ' ')}</span>
+                      <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-medium ${toneFor(r.portalValue)}`}>{r.portalValue.replace(/_/g, ' ')}</span>
                     )}
                   </td>
                   <td className="px-2 py-3 text-center"><ArrowLeftRight size={14} className="mx-auto text-[var(--faint)]" /></td>
@@ -246,8 +272,10 @@ export default function MappingsPage() {
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => setEditingId(r.id)} aria-label="Rename portal value"
-                        className="rounded-md p-1.5 text-[var(--muted)] hover:bg-[var(--bg)] hover:text-brand"><Pencil size={15} /></button>
+                      {!r.fixed && (
+                        <button onClick={() => setEditingId(r.id ?? null)} aria-label="Rename portal value"
+                          className="rounded-md p-1.5 text-[var(--muted)] hover:bg-[var(--bg)] hover:text-brand"><Pencil size={15} /></button>
+                      )}
                       <button onClick={() => save(r, null)} disabled={!r.externalValue || upsert.isPending} aria-label="Clear mapping"
                         className="rounded-md p-1.5 text-[var(--muted)] hover:bg-red-50 hover:text-red-600 disabled:opacity-40 dark:hover:bg-red-950/50"><Trash2 size={15} /></button>
                     </div>
