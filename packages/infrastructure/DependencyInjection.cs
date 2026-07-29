@@ -60,7 +60,12 @@ public static class DependencyInjection
         services.AddSingleton<IMappingEngine, MappingEngine>();
         services.AddSingleton<IResilientExecutor>(_ => new ResilientExecutor());
         services.AddScoped<ISyncEventStore, SyncEventStore>();
-        services.AddScoped<IConnectorResolver, ConnectorResolver>();
+        // Local mode resolves an in-process stub connector (no secret store, no external PSA);
+        // otherwise the real per-provider factories are selected by ConnectorResolver.
+        if (localMode)
+            services.AddScoped<IConnectorResolver, LocalConnectorResolver>();
+        else
+            services.AddScoped<IConnectorResolver, ConnectorResolver>();
 
         // Sync engine + real connectors (Phases 4-5)
         services.AddScoped<ITicketSyncService, TicketSyncService>();

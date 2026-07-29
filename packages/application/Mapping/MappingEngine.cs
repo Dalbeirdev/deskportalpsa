@@ -32,11 +32,18 @@ public sealed class MappingEngine : IMappingEngine
             return MappingResult.Miss($"No mapping rule for field '{field}' ({ctx.Provider}).");
 
         // Rank: narrower scope first; at equal scope, a value-specific rule beats a field-level one.
+        // A rule qualifies only if its source value matches the input, or it is a field-level rule
+        // (no explicit source value) that passes the value through.
         var best = candidates
             .OrderByDescending(r => (int)r.Scope)
             .ThenByDescending(r => ValueMatches(r, value, outbound) ? 1 : 0)
             .ThenByDescending(r => SourceValue(r, outbound) != null ? 1 : 0)
-            .First(r => ValueMatches(r, value, outbound) || SourceValue(r, outbound) == null);
+            .FirstOrDefault(r => ValueMatches(r, value, outbound) || SourceValue(r, outbound) == null);
+
+        // Rules exist for this field but none matches this specific value: report a miss so callers
+        // pass the value through unchanged rather than crashing.
+        if (best is null)
+            return MappingResult.Miss($"No mapping rule matches value '{value}' for field '{field}' ({ctx.Provider}).");
 
         var mapped = TargetValue(best, outbound);
 

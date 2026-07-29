@@ -54,12 +54,12 @@ public sealed class TicketsController(
            ?? throw new ForbiddenException("This endpoint is for client portal users.");
 
     public sealed record CreateTicketRequest(
-        [property: Required, StringLength(500, MinimumLength = 3)] string Title,
+        [Required, StringLength(500, MinimumLength = 3)] string Title,
         string? Description,
         string? Priority,
         string? Category,
         string? QueueOrBoard);
 
     public sealed record AddCommentRequest(
-        [property: Required, StringLength(10000, MinimumLength = 1)] string Body);
+        [Required, StringLength(10000, MinimumLength = 1)] string Body);
 }

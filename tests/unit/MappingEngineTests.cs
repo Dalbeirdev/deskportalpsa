@@ -131,4 +131,19 @@ public class MappingEngineTests
         var r = _engine.MapToProvider(new[] { rule }, Ctx(), "status", "IN_PROGRESS");
         r.Resolved.Should().BeFalse();
     }
+
+    [Fact]
+    public void Value_with_no_matching_rule_reports_a_miss_instead_of_throwing()
+    {
+        // Rules exist for the field, but none maps this specific value and none is a field-level
+        // passthrough. Must return a miss (caller passes the value through), never throw.
+        var rules = new[]
+        {
+            Rule(MappingScope.ConnectionOverride, "IN_PROGRESS", "In Progress"),
+            Rule(MappingScope.ConnectionOverride, "RESOLVED", "Resolved"),
+        };
+        var act = () => _engine.MapToProvider(rules, Ctx(), "status", "ON_HOLD");
+        act.Should().NotThrow();
+        act().Resolved.Should().BeFalse();
+    }
 }
