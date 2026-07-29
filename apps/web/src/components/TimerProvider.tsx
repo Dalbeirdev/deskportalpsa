@@ -98,6 +98,12 @@ export function TimerWidget() {
     <div className="relative hidden sm:block">
       <div className={`flex items-center gap-1 rounded-lg border px-2 py-1 ${running ? 'border-brand/40 bg-brand/5' : 'border-[var(--border)] bg-[var(--bg)]'}`}>
         <Timer size={14} className={running ? 'text-brand' : 'text-[var(--muted)]'} />
+        {target?.ref && (
+          <span className="flex items-center gap-1" title={target.title}>
+            <span className="max-w-[6rem] truncate text-xs font-medium">#{target.ref}</span>
+            <span className="text-[var(--faint)]">·</span>
+          </span>
+        )}
         <span className="tabular-nums text-sm font-medium">{clock(seconds)}</span>
         <button onClick={running ? pause : start} aria-label={running ? 'Pause timer' : 'Start timer'}
           className="rounded p-1 text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--fg)]">
