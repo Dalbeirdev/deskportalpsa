@@ -56,9 +56,15 @@ public static class DependencyInjection
         services.AddScoped<ISettableTenantContext>(sp => sp.GetRequiredService<TenantContext>());
 
         if (localMode)
-            services.AddSingleton<ISecretStore, InMemorySecretStore>();
+        {
+            // File-backed so credentials persist with the SQLite DB across restarts (local only).
+            var secretsPath = config.GetValue<string>("LocalMode:SecretsPath") ?? "desk-local-secrets.json";
+            services.AddSingleton<ISecretStore>(_ => new FileSecretStore(secretsPath));
+        }
         else
+        {
             AddSecretStore(services, config);
+        }
 
         // Integration framework (Phase 3)
         services.AddSingleton<IMappingEngine, MappingEngine>();

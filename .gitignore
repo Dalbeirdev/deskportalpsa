@@ -25,10 +25,11 @@ next-env.d.ts
 /secrets/
 /vault-data/
 
-# Local-mode SQLite database (persisted demo data)
+# Local-mode SQLite database + file secret store (persisted demo data / credentials)
 *.db
 *.db-shm
 *.db-wal
+desk-local-secrets.json
 
 # Docker volumes
 infrastructure/docker/volumes/

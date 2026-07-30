@@ -46,13 +46,19 @@ public sealed class SyncEventStore(DeskDbContext db, TimeProvider clock) : ISync
 
     public async Task<bool> IsPortalEchoAsync(Guid psaConnectionId, Guid ticketId, string payloadHash, CancellationToken ct = default)
     {
-        // Look back a short window for a matching portal-origin change on this ticket.
+        // Look back a short window for a matching portal-origin change on this ticket. The equality
+        // predicates run in the database (indexed, and they narrow to a handful of rows for this
+        // ticket + hash); the timestamp-window check is applied in memory because SQLite can't
+        // translate DateTimeOffset range comparisons in a query (Postgres could, but this keeps the
+        // store provider-agnostic and the materialized set is tiny).
         var cutoff = clock.GetUtcNow().AddMinutes(-10);
-        return await db.SyncEvents.AnyAsync(e =>
-            e.PsaConnectionId == psaConnectionId
-            && e.TicketId == ticketId
-            && e.SourceMarker == SyncSource.Portal
-            && e.PayloadHash == payloadHash
-            && e.OccurredAt >= cutoff, ct);
+        var occurrences = await db.SyncEvents
+            .Where(e => e.PsaConnectionId == psaConnectionId
+                        && e.TicketId == ticketId
+                        && e.SourceMarker == SyncSource.Portal
+                        && e.PayloadHash == payloadHash)
+            .Select(e => e.OccurredAt)
+            .ToListAsync(ct);
+        return occurrences.Any(o => o >= cutoff);
     }
 }

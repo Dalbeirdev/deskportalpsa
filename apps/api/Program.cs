@@ -106,9 +106,9 @@ if (app.Environment.IsProduction() && config.GetValue("LocalMode:Enabled", false
     throw new InvalidOperationException("LocalMode:Enabled is not permitted in Production.");
 }
 
-// Production must not fall back to the in-memory secret store.
+// Production must not fall back to a local (in-memory / file) secret store.
 if (app.Environment.IsProduction() &&
-    app.Services.GetRequiredService<ISecretStore>() is InMemorySecretStore)
+    app.Services.GetRequiredService<ISecretStore>() is InMemorySecretStore or FileSecretStore)
 {
     throw new InvalidOperationException("Refusing to start in Production without a configured Vault secret store.");
 }

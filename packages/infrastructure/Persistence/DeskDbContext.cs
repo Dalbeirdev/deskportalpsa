@@ -50,6 +50,17 @@ public class DeskDbContext(DbContextOptions<DeskDbContext> options, ITenantConte
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(DeskDbContext).Assembly);
 
+        // SQLite (local mode) can't ORDER BY or range-compare DateTimeOffset. Store every timestamp
+        // as a sortable binary long so all timestamp queries translate. No effect on Postgres.
+        if (Database.IsSqlite())
+        {
+            var converter = new Microsoft.EntityFrameworkCore.Storage.ValueConversion.DateTimeOffsetToBinaryConverter();
+            foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+                foreach (var prop in entityType.GetProperties())
+                    if (prop.ClrType == typeof(DateTimeOffset) || prop.ClrType == typeof(DateTimeOffset?))
+                        prop.SetValueConverter(converter);
+        }
+
         // Apply the tenant query filter to every entity implementing ITenantScoped.
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
