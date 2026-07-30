@@ -20,6 +20,7 @@ const STATUS_TONE: Record<string, string> = {
   RESOLVED: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300',
   CLOSED: 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
 };
+const STATUSES = ['NEW', 'IN_PROGRESS', 'WAITING_CUSTOMER', 'ON_HOLD', 'RESOLVED', 'CLOSED'];
 const PRIORITY_TONE: Record<string, string> = {
   LOW: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
   NORMAL: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
@@ -92,6 +93,10 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const logTime = useMutation({
     mutationFn: () => api.logTime(id, { hours: parseFloat(hours), billable, notes: timeNotes || undefined, workType: workType || undefined, workRole: workRole || undefined }),
     onSuccess: () => { setHours(''); setTimeNotes(''); refreshTime(); },
+  });
+  const statusMut = useMutation({
+    mutationFn: (status: string) => api.updateTicketStatus(id, status),
+    onSuccess: () => { [['ticket', id], ['tickets'], ['team'], ['trend']].forEach((k) => qc.invalidateQueries({ queryKey: k })); },
   });
   const delEntry = useMutation({
     mutationFn: (entryId: string) => api.deleteTimeEntry(id, entryId),
@@ -167,10 +172,21 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`rounded-md px-2.5 py-1 text-xs font-semibold ${STATUS_TONE[ticket.portalStatus] ?? STATUS_TONE.NEW}`}>{ticket.portalStatus.replace(/_/g, ' ')}</span>
+                  <span className="relative">
+                    <select value={ticket.portalStatus} disabled={statusMut.isPending}
+                      onChange={(e) => statusMut.mutate(e.target.value)} aria-label="Ticket status"
+                      className={`cursor-pointer appearance-none rounded-md border-0 py-1 pl-2.5 pr-7 text-xs font-semibold outline-none focus:ring-2 focus:ring-brand disabled:opacity-60 ${STATUS_TONE[ticket.portalStatus] ?? STATUS_TONE.NEW}`}>
+                      {!STATUSES.includes(ticket.portalStatus) && <option value={ticket.portalStatus}>{ticket.portalStatus.replace(/_/g, ' ')}</option>}
+                      {STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+                    </select>
+                    <ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 opacity-70" />
+                  </span>
                   <span className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold ${PRIORITY_TONE[ticket.portalPriority.toUpperCase()] ?? PRIORITY_TONE.NORMAL}`}>{ticket.portalPriority.toUpperCase()}</span>
                 </div>
               </div>
+              {statusMut.isError && (
+                <p className="mt-2 text-right text-xs text-red-600 dark:text-red-400">Couldn&apos;t change status — the PSA rejected it or the connection is unreachable.</p>
+              )}
               <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-[var(--border)] pt-4 text-sm sm:grid-cols-3 lg:grid-cols-6">
                 <Meta label="Reference" value={ticket.externalTicketId ?? '—'} />
                 <Meta label="Queue / Board" value={ticket.queueOrBoard ?? '—'} />
