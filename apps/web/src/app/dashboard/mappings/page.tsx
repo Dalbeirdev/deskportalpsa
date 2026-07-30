@@ -102,7 +102,13 @@ export default function MappingsPage() {
     const rules = (mappings ?? []).filter((m) => m.portalField === tab && m.psaConnectionId === (conn?.id ?? ''));
     const fixedVals = PORTAL_VALUES[tab];
     if (fixedVals) {
-      const byPortal = new Map(rules.map((r) => [r.portalValue ?? '', r]));
+      // Several rules can share a portal value (e.g. inbound-only aliases for per-board PSA names);
+      // display the bidirectional rule as the canonical row.
+      const byPortal = new Map<string, MappingRule>();
+      for (const r of rules) {
+        const key = r.portalValue ?? '';
+        if (!byPortal.has(key) || Number(r.direction) === 3) byPortal.set(key, r);
+      }
       const canonical: DisplayRow[] = fixedVals.map((pv) => {
         const rule = byPortal.get(pv);
         return { id: rule?.id, portalValue: pv, externalValue: rule?.externalValue ?? null, fixed: true };
