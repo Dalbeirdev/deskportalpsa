@@ -87,8 +87,10 @@ export const api = {
   profile: () => request('/api/profile', ProfileSchema) as Promise<Profile>,
 
   technicianMetrics: () => request('/api/dashboard/technician', TechnicianResponseSchema) as Promise<TechnicianResponse>,
-  teamMetrics: () => request('/api/dashboard/team', TeamResponseSchema) as Promise<TeamResponse>,
-  trend: () => request('/api/dashboard/trend', z.array(TrendPointSchema)) as Promise<TrendPoint[]>,
+  teamMetrics: (fromIso?: string) =>
+    request(`/api/dashboard/team${fromIso ? `?from=${encodeURIComponent(fromIso)}` : ''}`, TeamResponseSchema) as Promise<TeamResponse>,
+  trend: (fromIso?: string) =>
+    request(`/api/dashboard/trend${fromIso ? `?from=${encodeURIComponent(fromIso)}` : ''}`, z.array(TrendPointSchema)) as Promise<TrendPoint[]>,
   teamExportUrl: `${BFF_BASE}/api/dashboard/team/export`,
 
   // Admin

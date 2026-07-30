@@ -9,8 +9,7 @@ import {
 import { MiniSpark, TrendChart, Donut } from '@/components/charts';
 import { StatusBadge, PriorityBadge } from '@/components/badges';
 import { api } from '@/lib/api';
-
-const OPEN = new Set(['NEW', 'IN_PROGRESS', 'WAITING_CUSTOMER', 'ON_HOLD']);
+import { isResolvedStatus } from '@/lib/status';
 const PRIORITY_META: Record<string, { color: string; order: number }> = {
   CRITICAL: { color: '#ef4444', order: 0 }, HIGH: { color: '#f97316', order: 1 },
   NORMAL: { color: '#3b82f6', order: 2 }, LOW: { color: '#94a3b8', order: 3 },
@@ -39,14 +38,16 @@ function Head({ title, right }: { title: string; right?: React.ReactNode }) {
 export default function Overview() {
   const qc = useQueryClient();
   const { data: tickets } = useQuery({ queryKey: ['tickets'], queryFn: api.listTickets });
-  const { data: team } = useQuery({ queryKey: ['team'], queryFn: api.teamMetrics });
-  const { data: trend } = useQuery({ queryKey: ['trend'], queryFn: api.trend });
+  const { data: team } = useQuery({ queryKey: ['team'], queryFn: () => api.teamMetrics() });
+  const { data: trend } = useQuery({ queryKey: ['trend'], queryFn: () => api.trend() });
   const { data: health } = useQuery({ queryKey: ['health'], queryFn: api.health });
   const { data: activity } = useQuery({ queryKey: ['notifications'], queryFn: api.notifications });
 
   const ts = tickets ?? [];
-  const open = ts.filter((t) => OPEN.has(t.portalStatus)).length;
-  const resolved = ts.length - open;
+  // Resolved is classified by status (tolerates raw PSA values on unmapped tickets); everything
+  // else counts as open — never inferred as "not open" from a closed status list.
+  const resolved = ts.filter((t) => isResolvedStatus(t.portalStatus)).length;
+  const open = ts.length - resolved;
   const teamRows = team?.team ?? [];
   const totalResolved = teamRows.reduce((a, r) => a + r.resolved, 0) || 1;
   const slaPct = teamRows.length

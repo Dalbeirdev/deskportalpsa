@@ -1,14 +1,16 @@
 'use client';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
+import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Calendar, ChevronDown, Gauge, ClipboardList, CheckCircle2, FolderOpen, ShieldCheck, Sparkles,
   TrendingUp, RefreshCw, Users, Info, LayoutGrid,
 } from 'lucide-react';
 import { MiniSpark, TrendChart, BarChart, Donut } from '@/components/charts';
 import { api } from '@/lib/api';
+import { isResolvedStatus } from '@/lib/status';
 
-const OPEN = new Set(['NEW', 'IN_PROGRESS', 'WAITING_CUSTOMER', 'ON_HOLD']);
+const RANGES = [7, 30, 90] as const;
 const PRIORITY_META: Record<string, { color: string; order: number }> = {
   CRITICAL: { color: '#ef4444', order: 0 }, HIGH: { color: '#f97316', order: 1 },
   NORMAL: { color: '#3b82f6', order: 2 }, LOW: { color: '#94a3b8', order: 3 },
@@ -43,23 +45,32 @@ const tone: Record<string, string> = {
 
 export default function Analytics() {
   const qc = useQueryClient();
-  const { data: team } = useQuery({ queryKey: ['team'], queryFn: api.teamMetrics });
-  const { data: trend } = useQuery({ queryKey: ['trend'], queryFn: api.trend });
+  const fetching = useIsFetching();
+  const [days, setDays] = useState<number>(7);
+  const fromIso = useMemo(() => new Date(Date.now() - days * 86400_000).toISOString(), [days]);
+
+  const { data: team } = useQuery({ queryKey: ['team', days], queryFn: () => api.teamMetrics(fromIso) });
+  const { data: trend } = useQuery({ queryKey: ['trend', days], queryFn: () => api.trend(fromIso) });
   const { data: tickets } = useQuery({ queryKey: ['tickets'], queryFn: api.listTickets });
   const { data: activity } = useQuery({ queryKey: ['notifications'], queryFn: api.notifications });
 
   const rows = [...(team?.team ?? [])].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-  const ts = tickets ?? [];
+  // The ticket list isn't range-filtered server-side; apply the window client-side so every KPI
+  // reflects the selected range. Resolved is classified by status (tolerating raw PSA values),
+  // never inferred as "not open" — unmapped statuses count as open.
+  const cutoff = Date.now() - days * 86400_000;
+  const ts = (tickets ?? []).filter((t) => new Date(t.createdAt).getTime() >= cutoff);
   const assigned = ts.length;
-  const open = ts.filter((t) => OPEN.has(t.portalStatus)).length;
-  const resolvedCount = assigned - open;
-  const totalResolved = rows.reduce((a, r) => a + r.resolved, 0) || 1;
-  const slaPct = rows.length ? rows.reduce((a, r) => a + r.slaCompliancePct * r.resolved, 0) / totalResolved : 0;
+  const resolvedCount = ts.filter((t) => isResolvedStatus(t.portalStatus)).length;
+  const open = assigned - resolvedCount;
+  const totalResolved = rows.reduce((a, r) => a + r.resolved, 0);
+  const slaPct = totalResolved > 0 ? rows.reduce((a, r) => a + r.slaCompliancePct * r.resolved, 0) / totalResolved : 0;
   const score = rows.length ? rows.reduce((a, r) => a + (r.score ?? 0), 0) / rows.length : 0;
   const scoreLabel = score >= 90 ? 'Excellent' : score >= 75 ? 'Good' : score >= 60 ? 'Fair' : 'Needs attention';
 
-  const trendRows = (trend ?? []).slice(-7);
-  const trendLabels = trendRows.map((p) => shortDate(p.date));
+  const trendRows = (trend ?? []).slice(-days);
+  const labelStep = Math.max(1, Math.ceil(trendRows.length / 8)); // thin x labels on long ranges
+  const trendLabels = trendRows.map((p, i) => (i % labelStep === 0 ? shortDate(p.date) : ''));
   const created = trendRows.map((p) => p.created);
   const resolvedSeries = trendRows.map((p) => p.resolved);
 
@@ -80,10 +91,12 @@ export default function Analytics() {
 
   const top = rows[0];
   const insights = [
-    { icon: ShieldCheck, color: '#22c55e', title: `SLA compliance at ${slaPct.toFixed(1)}%`, sub: 'Weighted across resolved tickets' },
+    totalResolved > 0
+      ? { icon: ShieldCheck, color: '#22c55e', title: `SLA compliance at ${slaPct.toFixed(1)}%`, sub: 'Weighted across resolved tickets' }
+      : { icon: ShieldCheck, color: '#94a3b8', title: 'No resolved tickets yet', sub: 'SLA compliance appears after resolutions' },
     { icon: FolderOpen, color: '#f59e0b', title: `${open} open tickets`, sub: `${resolvedCount} resolved of ${assigned} total` },
     top ? { icon: Users, color: '#3b82f6', title: `Top performer: ${top.technicianExternalId}`, sub: `Score ${top.score?.toFixed(1) ?? '—'} · ${top.resolved} resolved` } : null,
-    { icon: TrendingUp, color: '#8b5cf6', title: `${created.reduce((a, b) => a + b, 0)} created this week`, sub: `${resolvedSeries.reduce((a, b) => a + b, 0)} resolved in the same period` },
+    { icon: TrendingUp, color: '#8b5cf6', title: `${created.reduce((a, b) => a + b, 0)} created in this range`, sub: `${resolvedSeries.reduce((a, b) => a + b, 0)} resolved in the same period` },
   ].filter(Boolean) as { icon: React.ElementType; color: string; title: string; sub: string }[];
 
   const kpis = [
@@ -101,8 +114,18 @@ export default function Analytics() {
           <p className="text-sm text-[var(--muted)]">Technician and team performance across connected systems.</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--muted)]"><Calendar size={15} /> Last 7 days <ChevronDown size={14} className="text-[var(--faint)]" /></span>
-          <button onClick={() => qc.invalidateQueries()} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium hover:bg-[var(--bg)]"><RefreshCw size={15} /> Refresh</button>
+          <label className="relative inline-flex items-center">
+            <Calendar size={15} className="pointer-events-none absolute left-3 text-[var(--muted)]" />
+            <select value={days} onChange={(e) => setDays(Number(e.target.value))} aria-label="Date range"
+              className="cursor-pointer appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2 pl-9 pr-8 text-sm outline-none focus:border-brand">
+              {RANGES.map((d) => <option key={d} value={d}>Last {d} days</option>)}
+            </select>
+            <ChevronDown size={14} className="pointer-events-none absolute right-2.5 text-[var(--faint)]" />
+          </label>
+          <button onClick={() => qc.invalidateQueries()} disabled={fetching > 0}
+            className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium hover:bg-[var(--bg)] disabled:opacity-60">
+            <RefreshCw size={15} className={fetching > 0 ? 'animate-spin' : ''} /> {fetching > 0 ? 'Refreshing…' : 'Refresh'}
+          </button>
         </div>
       </div>
 
@@ -153,7 +176,7 @@ export default function Analytics() {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:col-span-3">
           <Card>
-            <Head title="Created vs Resolved" right={<span className="text-xs text-[var(--muted)]">Last 7 days</span>} />
+            <Head title="Created vs Resolved" right={<span className="text-xs text-[var(--muted)]">Last {days} days</span>} />
             <div className="px-4 pb-2 pt-3">
               <div className="mb-1 flex gap-4 text-xs text-[var(--muted)]">
                 <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[#3b82f6]" /> Created</span>
@@ -163,10 +186,10 @@ export default function Analytics() {
             </div>
           </Card>
           <Card>
-            <Head title="Resolved per Day" hint right={<span className="text-xs text-[var(--muted)]">Last 7 days</span>} />
+            <Head title="Resolved per Day" hint right={<span className="text-xs text-[var(--muted)]">Last {days} days</span>} />
             <div className="px-4 pb-2 pt-3">
               <div className="text-2xl font-semibold">{resolvedSeries.reduce((a, b) => a + b, 0)}</div>
-              <div className="mb-2 text-xs text-[var(--muted)]">tickets resolved this week</div>
+              <div className="mb-2 text-xs text-[var(--muted)]">tickets resolved in this range</div>
               {trendRows.length > 0 ? <BarChart values={resolvedSeries} labels={trendLabels} color="#22c55e" height={170} /> : <div className="py-10 text-center text-sm text-[var(--muted)]">No data.</div>}
             </div>
           </Card>

@@ -3,6 +3,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { QueryProvider } from '@/components/QueryProvider';
 import { UserMenu } from '@/components/UserMenu';
 import { TimerProvider, TimerWidget } from '@/components/TimerProvider';
+import { NotificationsBell } from '@/components/NotificationsBell';
 import {
   LayoutDashboard, Ticket, Plug, Bell, User, BarChart3, Activity, ListChecks, ShieldCheck,
   SlidersHorizontal, FileText, Search, HelpCircle, HardDrive, ChevronLeft,
@@ -97,10 +98,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
             <TimerWidget />
-            <button aria-label="Notifications" className="relative rounded-lg p-2 text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--fg)]">
-              <Bell size={18} />
-              <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold text-brand-fg">4</span>
-            </button>
+            <NotificationsBell />
             <a href="/user-guide.pdf" target="_blank" rel="noopener noreferrer" className="hidden items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--fg)] sm:inline-flex">
               <HelpCircle size={17} /> Help
             </a>
