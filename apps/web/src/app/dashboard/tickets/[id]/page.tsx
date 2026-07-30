@@ -185,7 +185,9 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 </div>
               </div>
               {statusMut.isError && (
-                <p className="mt-2 text-right text-xs text-red-600 dark:text-red-400">Couldn&apos;t change status — the PSA rejected it or the connection is unreachable.</p>
+                <p className="mt-2 text-right text-xs text-red-600 dark:text-red-400">
+                  Couldn&apos;t change status: {statusMut.error instanceof Error ? statusMut.error.message : 'the connection is unreachable.'}
+                </p>
               )}
               <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-[var(--border)] pt-4 text-sm sm:grid-cols-3 lg:grid-cols-6">
                 <Meta label="Reference" value={ticket.externalTicketId ?? '—'} />

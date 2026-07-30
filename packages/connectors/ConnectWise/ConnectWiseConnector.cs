@@ -108,12 +108,13 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
 
     public async Task<UpdateTicketResult> UpdateTicketAsync(string ticketId, UnifiedTicketUpdate update, CancellationToken ct = default)
     {
-        _ = await GetOneAsync<CwTicket>($"service/tickets/{ticketId}", ct)
+        var ticket = await GetOneAsync<CwTicket>($"service/tickets/{ticketId}", ct)
             ?? throw new ConnectorException(ConnectorFailureKind.NotFound, $"Ticket {ticketId} not found.");
 
         // ConnectWise updates are JSON-Patch operations replacing whole reference objects.
         var ops = new List<object>();
-        if (update.Status is not null) ops.Add(new { op = "replace", path = "status", value = Ref(update.Status) });
+        if (update.Status is not null)
+            ops.Add(new { op = "replace", path = "status", value = await ResolveBoardStatusAsync(ticket.Board?.Id, update.Status, ct) });
         if (update.Priority is not null) ops.Add(new { op = "replace", path = "priority", value = Ref(update.Priority) });
         if (update.QueueOrBoard is not null) ops.Add(new { op = "replace", path = "board", value = Ref(update.QueueOrBoard) });
         if (update.AssignedTechnicianExternalId is not null)
@@ -286,6 +287,45 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
     /// <summary>A CW reference: numeric value → {id}, otherwise {name}. Mapping supplies ids in production.</summary>
     private static object Ref(string value) =>
         long.TryParse(value, out var id) ? new { id } : new { name = value };
+
+    private static readonly string[] ClosedFamily = ["closed", "resolved", "completed", "done", "finished"];
+
+    /// <summary>
+    /// Statuses in ConnectWise are BOARD-scoped: each service board defines its own set, so a status
+    /// name (or an id from another board) is invalid on this ticket's board. Resolve the desired
+    /// value against the ticket's own board with normalized matching (exact → prefix → contains) so
+    /// portal-neutral values like IN_PROGRESS find "In Progress (plan of action)". Fails with the
+    /// board's actual options so the caller can correct the mapping.
+    /// </summary>
+    private async Task<object> ResolveBoardStatusAsync(long? boardId, string desired, CancellationToken ct)
+    {
+        if (boardId is null) return Ref(desired); // no board on the ticket — let CW validate
+
+        var statuses = await GetListAsync<CwRef>($"service/boards/{boardId}/statuses", new() { ["pageSize"] = "1000" }, ct);
+        if (long.TryParse(desired, out var id))
+        {
+            if (statuses.Any(s => s.Id == id)) return new { id };
+            // An id from a different board — fall through to name matching below is pointless; report clearly.
+            throw new ConnectorException(ConnectorFailureKind.InvalidRequest,
+                $"Status id {id} does not exist on this ticket's board. Available: {string.Join(", ", statuses.Select(s => s.Name))}.");
+        }
+
+        static string Norm(string s) => new([.. s.ToLowerInvariant().Where(char.IsLetterOrDigit)]);
+        var want = Norm(desired);
+        var match = statuses.FirstOrDefault(s => Norm(s.Name ?? "") == want)
+                 ?? statuses.FirstOrDefault(s => Norm(s.Name ?? "").StartsWith(want))
+                 ?? statuses.FirstOrDefault(s => Norm(s.Name ?? "").Contains(want));
+
+        // Boards name their terminal state differently ("Completed", "Closed (resolved)", "Done").
+        // For closed-family requests, fall back to closed-family synonyms before giving up.
+        if (match is null && ClosedFamily.Contains(want))
+            match = statuses.FirstOrDefault(s => ClosedFamily.Any(syn => Norm(s.Name ?? "").StartsWith(syn)));
+
+        if (match is null)
+            throw new ConnectorException(ConnectorFailureKind.InvalidRequest,
+                $"No status matching '{desired}' on this ticket's board. Available: {string.Join(", ", statuses.Select(s => s.Name))}.");
+        return new { id = match.Id };
+    }
 
     private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max];
 

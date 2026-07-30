@@ -20,6 +20,12 @@ public sealed class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<Ex
         {
             await WriteProblem(context, ex.StatusCode, ex.ErrorCode, ex.Message);
         }
+        catch (Desk.PsaCore.Contracts.ConnectorException ex)
+        {
+            // A provider rejected or failed the call. The message is provider-facing and safe
+            // (no credentials); surfacing it lets admins fix mappings/permissions without log-diving.
+            await WriteProblem(context, 502, "psa_error", ex.Message);
+        }
         catch (Exception ex)
         {
             var correlationId = context.Items[CorrelationIdMiddleware.HeaderName]?.ToString();

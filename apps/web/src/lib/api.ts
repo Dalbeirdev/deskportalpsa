@@ -25,7 +25,16 @@ async function request<T>(path: string, schema: z.ZodType<T>, init?: RequestInit
     cache: 'no-store',
   });
   if (res.status === 401) throw new ApiError(401, 'Not authenticated');
-  if (!res.ok) throw new ApiError(res.status, `${init?.method ?? 'GET'} ${path} → ${res.status}`);
+  if (!res.ok) {
+    // Surface the API's problem-details message when present so users see the real reason
+    // (e.g. which statuses the PSA's board actually allows), not just a status code.
+    let detail: string | null = null;
+    try {
+      const body = await res.json();
+      detail = body?.detail ?? body?.title ?? null;
+    } catch { /* non-JSON body */ }
+    throw new ApiError(res.status, detail ?? `${init?.method ?? 'GET'} ${path} → ${res.status}`);
+  }
   if (res.status === 204 || res.headers.get('content-length') === '0') return undefined as T;
   return schema.parse(await res.json());
 }

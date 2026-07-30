@@ -1,5 +1,4 @@
 using Desk.Api.Auth;
-using Desk.Application.Admin;
 using Desk.Application.Common;
 using Desk.Application.Connectors;
 using Desk.Application.Mapping;
@@ -21,8 +20,7 @@ namespace Desk.Api.Controllers;
 public sealed class TicketStatusController(
     DeskDbContext db,
     IConnectorResolver connectors,
-    IMappingEngine mapping,
-    IConnectionAdminService admin) : ControllerBase
+    IMappingEngine mapping) : ControllerBase
 {
     [HttpPost("{id:guid}/status")]
     [RequirePermission(Permissions.TicketsUpdate)]
@@ -41,17 +39,14 @@ public sealed class TicketStatusController(
             .Where(m => m.Provider == ticket.Provider && m.IsActive).ToListAsync(ct);
         var ctx = new MappingContext { Provider = ticket.Provider, PsaConnectionId = ticket.PsaConnectionId, QueueOrBoardKey = ticket.QueueOrBoard };
 
-        // Portal → PSA value (name). Fall back to the raw portal value when no rule matches.
+        // Portal → PSA value (name). Fall back to the raw portal value when no rule matches. The
+        // connector resolves the name against the ticket's own context (e.g. CW statuses are
+        // board-scoped, so a globally-discovered id could be invalid for this ticket).
         var mappedName = mapping.MapToProvider(rules, ctx, "status", portalStatus).Value ?? portalStatus;
-
-        // Prefer the PSA status id (more reliable than name on board-scoped statuses): resolve the
-        // discovered option whose label matches the mapped name.
-        var fields = await admin.GetFieldsAsync(ticket.PsaConnectionId, ct);
-        var external = fields.Statuses.FirstOrDefault(s => string.Equals(s.Label, mappedName, StringComparison.OrdinalIgnoreCase))?.Value ?? mappedName;
 
         var connector = await connectors.ResolveAsync(ticket.PsaConnectionId, ct);
         var result = await connector.UpdateTicketAsync(ticket.ExternalTicketId,
-            new UnifiedTicketUpdate { Status = external, IdempotencyKey = Guid.NewGuid().ToString("N") }, ct);
+            new UnifiedTicketUpdate { Status = mappedName, IdempotencyKey = Guid.NewGuid().ToString("N") }, ct);
         if (!result.Success)
             throw new ValidationFailedException(result.Error ?? "The PSA rejected the status change.");
 
