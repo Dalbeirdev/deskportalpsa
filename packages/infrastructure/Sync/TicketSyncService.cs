@@ -29,7 +29,7 @@ public sealed class TicketSyncService(
         var connection = await db.PsaConnections.FirstOrDefaultAsync(c => c.Id == psaConnectionId, ct)
             ?? throw new NotFoundException("PSA connection");
 
-        var company = await EnsureCompanyAsync(connection, incoming.RequesterExternalId, ct);
+        var company = await EnsureCompanyAsync(connection, incoming.RequesterExternalId, incoming.CompanyName, ct);
         var ctx = new MappingContext
         {
             Provider = connection.Provider,
@@ -109,19 +109,29 @@ public sealed class TicketSyncService(
     }
 
     /// <summary>Company sync: find the client company for this external id, creating a stub if new.</summary>
-    private async Task<ClientCompany> EnsureCompanyAsync(PsaConnection connection, string? externalCompanyId, CancellationToken ct)
+    private async Task<ClientCompany> EnsureCompanyAsync(PsaConnection connection, string? externalCompanyId, string? companyName, CancellationToken ct)
     {
         var extId = string.IsNullOrEmpty(externalCompanyId) ? "unknown" : externalCompanyId;
         var company = await db.ClientCompanies.FirstOrDefaultAsync(
             c => c.PsaConnectionId == connection.Id && c.ExternalCompanyId == extId, ct);
-        if (company is not null) return company;
+        if (company is not null)
+        {
+            // Upgrade a placeholder (or stale) name when the provider sends the real one inline.
+            if (!string.IsNullOrWhiteSpace(companyName) && company.Name != companyName)
+            {
+                company.Name = companyName;
+                await db.SaveChangesAsync(ct);
+            }
+            return company;
+        }
 
         company = new ClientCompany
         {
             MspOrganizationId = connection.MspOrganizationId,
             PsaConnectionId = connection.Id,
             ExternalCompanyId = extId,
-            Name = $"Company {extId}", // real name is filled by the company-sync job
+            // Prefer the provider-supplied name; placeholder until a company sync fills it otherwise.
+            Name = string.IsNullOrWhiteSpace(companyName) ? $"Company {extId}" : companyName,
         };
         db.ClientCompanies.Add(company);
         await db.SaveChangesAsync(ct);

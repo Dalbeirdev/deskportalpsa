@@ -381,6 +381,7 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         QueueOrBoard = t.Board?.Name,          // Service Board → portal Queue
         AssignedTechnicianExternalId = t.Owner?.Id.ToString(),
         RequesterExternalId = t.Company?.Id.ToString(),
+        CompanyName = t.Company?.Name,
         ModifiedAt = t.LastUpdated,
         ResolvedAt = t.DateResolved,
     };

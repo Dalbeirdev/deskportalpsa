@@ -10,6 +10,8 @@ export const TicketListItemSchema = z.object({
   queueOrBoard: z.string().nullable(),
   createdAt: z.string(),
   lastSyncedAt: z.string().nullable(),
+  customerName: z.string().nullable().optional(),
+  connectionName: z.string().nullable().optional(),
 });
 export type TicketListItem = z.infer<typeof TicketListItemSchema>;
 
@@ -46,6 +48,7 @@ export const TicketDetailSchema = z.object({
   attachments: z.array(AttachmentSchema),
   customerName: z.string().nullable(),
   updatedAt: z.string(),
+  connectionName: z.string().nullable().optional(),
 });
 export type TicketDetail = z.infer<typeof TicketDetailSchema>;
 

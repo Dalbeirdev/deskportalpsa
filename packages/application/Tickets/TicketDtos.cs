@@ -14,7 +14,9 @@ public sealed record TicketListItem(
     string PortalPriority,
     string? QueueOrBoard,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? LastSyncedAt);
+    DateTimeOffset? LastSyncedAt,
+    string? CustomerName,
+    string? ConnectionName);
 
 public sealed record TicketNoteDto(
     Guid Id,
@@ -42,7 +44,8 @@ public sealed record TicketDetailDto(
     IReadOnlyList<TicketNoteDto> Conversation,
     IReadOnlyList<AttachmentDto> Attachments,
     string? CustomerName,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string? ConnectionName);
 
 public sealed record AttachmentDto(
     Guid Id,

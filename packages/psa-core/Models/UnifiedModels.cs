@@ -33,6 +33,8 @@ public record UnifiedTicket
     public string? QueueOrBoard { get; init; }
     public string? AssignedTechnicianExternalId { get; init; }
     public string? RequesterExternalId { get; init; }
+    /// <summary>Display name of the owning company, when the provider sends it inline (CW does).</summary>
+    public string? CompanyName { get; init; }
     public string? RequesterName { get; init; }
     public string? RequesterEmail { get; init; }
     public DateTimeOffset? SlaDueAt { get; init; }

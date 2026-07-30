@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Inbox } from 'lucide-react';
 import { api } from '@/lib/api';
-import { StatusBadge, PriorityBadge } from '@/components/badges';
+import { StatusBadge, PriorityBadge, SourceBadge } from '@/components/badges';
 
 export default function TicketsPage() {
   const { data, isLoading, isError } = useQuery({ queryKey: ['tickets'], queryFn: api.listTickets });
@@ -43,6 +43,8 @@ export default function TicketsPage() {
             <thead className="text-left text-xs uppercase tracking-wide text-[var(--muted)]">
               <tr className="border-b border-[var(--border)]">
                 <th className="px-4 py-3 font-medium">Title</th>
+                <th className="px-4 py-3 font-medium">Company</th>
+                <th className="px-4 py-3 font-medium">Source</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Priority</th>
                 <th className="px-4 py-3 font-medium">Queue</th>
@@ -60,6 +62,8 @@ export default function TicketsPage() {
                       <span className="ml-2 text-xs text-[var(--muted)]">#{t.externalTicketId}</span>
                     )}
                   </td>
+                  <td className="px-4 py-3">{t.customerName ?? '—'}</td>
+                  <td className="px-4 py-3"><SourceBadge provider={t.provider} connectionName={t.connectionName} /></td>
                   <td className="px-4 py-3"><StatusBadge status={t.portalStatus} /></td>
                   <td className="px-4 py-3"><PriorityBadge priority={t.portalPriority} /></td>
                   <td className="px-4 py-3 text-[var(--muted)]">{t.queueOrBoard ?? '—'}</td>

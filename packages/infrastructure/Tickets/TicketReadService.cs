@@ -21,9 +21,13 @@ public sealed class TicketReadService(DeskDbContext db) : ITicketReadService
         => await Visible(access)
             .AsNoTracking()
             .OrderByDescending(t => t.CreatedAt)
+            // Company + connection names let users tell tickets apart when an MSP runs multiple
+            // PSA connections (even several tenants of the same provider).
             .Select(t => new TicketListItem(
                 t.Id, t.ExternalTicketId, t.Provider, t.Title, t.PortalStatus, t.PortalPriority,
-                t.QueueOrBoard, t.CreatedAt, t.LastSyncedAt))
+                t.QueueOrBoard, t.CreatedAt, t.LastSyncedAt,
+                db.ClientCompanies.Where(c => c.Id == t.ClientCompanyId).Select(c => c.Name).FirstOrDefault(),
+                db.PsaConnections.Where(p => p.Id == t.PsaConnectionId).Select(p => p.Name).FirstOrDefault()))
             .ToListAsync(ct);
 
     public async Task<TicketDetailDto?> GetDetailAsync(ClientAccess access, Guid ticketId, CancellationToken ct = default)
@@ -40,6 +44,11 @@ public sealed class TicketReadService(DeskDbContext db) : ITicketReadService
             .Where(c => c.Id == ticket.ClientCompanyId)
             .Select(c => c.Name)
             .FirstOrDefaultAsync(ct);
+        var connectionName = await db.PsaConnections
+            .AsNoTracking()
+            .Where(p => p.Id == ticket.PsaConnectionId)
+            .Select(p => p.Name)
+            .FirstOrDefaultAsync(ct);
 
         return new TicketDetailDto(
             ticket.Id, ticket.ExternalTicketId, ticket.Provider, ticket.Title, ticket.Description,
@@ -55,7 +64,8 @@ public sealed class TicketReadService(DeskDbContext db) : ITicketReadService
                 .Select(a => new AttachmentDto(a.Id, a.OriginalFileName, a.ContentType, a.SizeBytes, a.ScanStatus, a.UploadedAt))
                 .ToList(),
             CustomerName: customerName,
-            UpdatedAt: ticket.UpdatedAt);
+            UpdatedAt: ticket.UpdatedAt,
+            ConnectionName: connectionName);
     }
 
     public async Task<IReadOnlyList<NotificationDto>> RecentActivityAsync(ClientAccess access, int take = 10, CancellationToken ct = default)

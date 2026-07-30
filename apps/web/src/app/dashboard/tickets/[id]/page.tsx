@@ -189,6 +189,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
               )}
               <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-[var(--border)] pt-4 text-sm sm:grid-cols-3 lg:grid-cols-6">
                 <Meta label="Reference" value={ticket.externalTicketId ?? '—'} />
+                <Meta label="Source" value={ticket.connectionName ?? '—'} />
                 <Meta label="Queue / Board" value={ticket.queueOrBoard ?? '—'} />
                 <Meta label="Category" value={ticket.portalCategory ?? '—'} />
                 <Meta label="Customer" value={ticket.customerName ?? '—'} />
