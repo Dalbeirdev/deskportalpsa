@@ -33,7 +33,11 @@ public static class DependencyInjection
         var localMode = config.GetValue("LocalMode:Enabled", false);
         if (localMode)
         {
-            services.AddDbContext<DeskDbContext>(o => o.UseInMemoryDatabase("desk-local"));
+            // Persist local-demo data to a SQLite file so connections, tickets and mappings survive
+            // restarts. Schema is created via EnsureCreated (no migrations) — delete the file if the
+            // entity model changes. Path is configurable; defaults to desk-local.db in the run dir.
+            var sqlitePath = config.GetValue<string>("LocalMode:SqlitePath") ?? "desk-local.db";
+            services.AddDbContext<DeskDbContext>(o => o.UseSqlite($"Data Source={sqlitePath}"));
         }
         else
         {
