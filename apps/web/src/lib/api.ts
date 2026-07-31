@@ -141,7 +141,57 @@ export const api = {
   reprocessJob: (id: string) =>
     request(`/api/admin/jobs/${id}/reprocess`, z.unknown(), { method: 'POST' }),
   audit: () => request('/api/admin/audit', z.array(AuditEntrySchema)) as Promise<AuditEntry[]>,
+
+  // Client control panel (CP-1)
+  cpCapabilities: () => request('/api/control-panel/capabilities', CapabilitiesSchema) as Promise<Capabilities>,
+  cpInstructions: () => request('/api/control-panel/instructions', InstructionsViewSchema) as Promise<InstructionsView>,
+  cpSaveInstruction: (clientCompanyId: string | null, body: string) =>
+    request('/api/control-panel/instructions', InstructionSchema,
+      { method: 'PUT', body: JSON.stringify({ clientCompanyId, body }) }) as Promise<Instruction>,
+  cpUsers: () => request('/api/control-panel/users', z.array(ClientUserSchema)) as Promise<ClientUser[]>,
+  cpInviteUser: (body: { email: string; displayName: string; isCompanyAdministrator: boolean }) =>
+    request('/api/control-panel/users', ClientUserSchema, { method: 'POST', body: JSON.stringify(body) }) as Promise<ClientUser>,
+  cpSetUserActive: (id: string, active: boolean) =>
+    request(`/api/control-panel/users/${id}/active`, z.unknown(), { method: 'POST', body: JSON.stringify({ active }) }),
+  cpSetUserAccess: (id: string, body: { isCompanyAdministrator: boolean; grants: { section: string; clientCompanyId: string | null }[] }) =>
+    request(`/api/control-panel/users/${id}/access`, ClientUserSchema, { method: 'PUT', body: JSON.stringify(body) }) as Promise<ClientUser>,
 };
+
+// ---- Control panel schemas ----
+const CapabilitiesSchema = z.object({
+  isCompanyAdministrator: z.boolean(),
+  clientCompanyId: z.string(),
+  companyName: z.string(),
+  sections: z.array(z.string()),
+});
+export type Capabilities = z.infer<typeof CapabilitiesSchema>;
+
+const InstructionSchema = z.object({
+  clientCompanyId: z.string().nullable(),
+  scope: z.string(),
+  accountName: z.string(),
+  body: z.string(),
+  lastEditedBy: z.string().nullable(),
+  updatedAt: z.string().nullable(),
+});
+export type Instruction = z.infer<typeof InstructionSchema>;
+
+const InstructionsViewSchema = z.object({
+  global: InstructionSchema,
+  accounts: z.array(InstructionSchema),
+});
+export type InstructionsView = z.infer<typeof InstructionsViewSchema>;
+
+const AccessGrantSchema = z.object({ section: z.string(), clientCompanyId: z.string().nullable() });
+const ClientUserSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  displayName: z.string(),
+  isCompanyAdministrator: z.boolean(),
+  isActive: z.boolean(),
+  grants: z.array(AccessGrantSchema),
+});
+export type ClientUser = z.infer<typeof ClientUserSchema>;
 
 const TimeEntrySchema = z.object({
   externalId: z.string(),

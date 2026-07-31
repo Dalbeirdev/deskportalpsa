@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 using Desk.Application.Abstractions;
 using Desk.Domain.Audit;
 using Desk.Domain.Common;
+using Desk.Domain.ControlPanel;
 using Desk.Domain.Identity;
 using Desk.Domain.Mapping;
 using Desk.Domain.Sync;
@@ -39,6 +40,8 @@ public class DeskDbContext(DbContextOptions<DeskDbContext> options, ITenantConte
     public DbSet<SyncEvent> SyncEvents => Set<SyncEvent>();
     public DbSet<BackgroundJob> BackgroundJobs => Set<BackgroundJob>();
     public DbSet<AuditLogEntry> AuditLog => Set<AuditLogEntry>();
+    public DbSet<TicketInstruction> TicketInstructions => Set<TicketInstruction>();
+    public DbSet<ClientAccessGrant> ClientAccessGrants => Set<ClientAccessGrant>();
 
     // Read by the compiled query filter below. Guid.Empty can never match a real row, so an
     // unresolved (null) tenant that is not platform scope yields zero rows — fail closed.

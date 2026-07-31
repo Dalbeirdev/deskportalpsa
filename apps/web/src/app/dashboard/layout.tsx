@@ -6,7 +6,7 @@ import { TimerProvider, TimerWidget } from '@/components/TimerProvider';
 import { NotificationsBell } from '@/components/NotificationsBell';
 import {
   LayoutDashboard, Ticket, Plug, Bell, User, BarChart3, Activity, ListChecks, ShieldCheck,
-  SlidersHorizontal, FileText, Search, HelpCircle, HardDrive, ChevronLeft,
+  SlidersHorizontal, FileText, Search, HelpCircle, HardDrive, ChevronLeft, Rocket,
 } from 'lucide-react';
 
 const navGroups = [
@@ -33,6 +33,12 @@ const navGroups = [
       { href: '/dashboard/audit', label: 'Audit Log', icon: ShieldCheck },
       { href: '/dashboard/notifications', label: 'Notifications', icon: Bell },
       { href: '/dashboard/profile', label: 'Profile', icon: User },
+    ],
+  },
+  {
+    label: 'Client-facing',
+    items: [
+      { href: '/control-panel', label: 'Control Panel', icon: Rocket },
     ],
   },
 ];

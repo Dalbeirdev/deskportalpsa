@@ -45,7 +45,11 @@ public sealed record TicketDetailDto(
     IReadOnlyList<AttachmentDto> Attachments,
     string? CustomerName,
     DateTimeOffset UpdatedAt,
-    string? ConnectionName);
+    string? ConnectionName,
+    // Ticket service instructions the client set for technicians to follow (account override
+    // if present, otherwise the organization-wide default). Trailing + optional so existing
+    // construction sites and tests are unaffected.
+    string? ServiceInstructions = null);
 
 public sealed record AttachmentDto(
     Guid Id,

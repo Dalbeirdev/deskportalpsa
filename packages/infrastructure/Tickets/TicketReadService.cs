@@ -50,6 +50,17 @@ public sealed class TicketReadService(DeskDbContext db) : ITicketReadService
             .Select(p => p.Name)
             .FirstOrDefaultAsync(ct);
 
+        // Ticket service instructions the client configured: the account-specific override if set,
+        // otherwise the organization-wide default. Surfaced so technicians see them on the ticket.
+        var instructions = await db.TicketInstructions
+            .AsNoTracking()
+            .Where(i => i.ClientCompanyId == ticket.ClientCompanyId || i.ClientCompanyId == null)
+            .ToListAsync(ct);
+        var serviceInstructions = instructions.FirstOrDefault(i => i.ClientCompanyId == ticket.ClientCompanyId)?.Body;
+        if (string.IsNullOrWhiteSpace(serviceInstructions))
+            serviceInstructions = instructions.FirstOrDefault(i => i.ClientCompanyId == null)?.Body;
+        serviceInstructions = string.IsNullOrWhiteSpace(serviceInstructions) ? null : serviceInstructions;
+
         return new TicketDetailDto(
             ticket.Id, ticket.ExternalTicketId, ticket.Provider, ticket.Title, ticket.Description,
             ticket.PortalStatus, ticket.PortalPriority, ticket.PortalCategory, ticket.QueueOrBoard,
@@ -65,7 +76,8 @@ public sealed class TicketReadService(DeskDbContext db) : ITicketReadService
                 .ToList(),
             CustomerName: customerName,
             UpdatedAt: ticket.UpdatedAt,
-            ConnectionName: connectionName);
+            ConnectionName: connectionName,
+            ServiceInstructions: serviceInstructions);
     }
 
     public async Task<IReadOnlyList<NotificationDto>> RecentActivityAsync(ClientAccess access, int take = 10, CancellationToken ct = default)

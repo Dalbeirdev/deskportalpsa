@@ -49,6 +49,7 @@ export const TicketDetailSchema = z.object({
   customerName: z.string().nullable(),
   updatedAt: z.string(),
   connectionName: z.string().nullable().optional(),
+  serviceInstructions: z.string().nullable().optional(),
 });
 export type TicketDetail = z.infer<typeof TicketDetailSchema>;
 

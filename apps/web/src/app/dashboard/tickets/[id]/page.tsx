@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Pencil, MoreHorizontal, Paperclip,
   Send, Bold, Smile, Link2, ArrowUpDown, Lock, Monitor, Wifi, Mail, KeyRound, Cpu, Ticket,
-  Copy, RefreshCw, Download, Clock, Trash2, Check, X,
+  Copy, RefreshCw, Download, Clock, Trash2, Check, X, ClipboardList,
 } from 'lucide-react';
 import { useTimer } from '@/components/TimerProvider';
 import { api } from '@/lib/api';
@@ -199,6 +199,17 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 <Meta label="Updated" value={fmt(ticket.updatedAt)} />
               </dl>
             </div>
+
+            {/* Service instructions the client set for technicians (from the Control Panel). */}
+            {ticket.serviceInstructions && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-900/60 dark:bg-amber-950/30">
+                <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                  <ClipboardList size={14} /> Service Instructions
+                </h2>
+                <p className="whitespace-pre-wrap font-mono text-sm leading-relaxed text-amber-900 dark:text-amber-100">{ticket.serviceInstructions}</p>
+                <p className="mt-2 text-xs text-amber-700/70 dark:text-amber-300/60">Set by the customer in their Control Panel — follow these when working this ticket.</p>
+              </div>
+            )}
 
             {/* Log time */}
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">

@@ -1,4 +1,5 @@
 using Desk.Domain.Audit;
+using Desk.Domain.ControlPanel;
 using Desk.Domain.Identity;
 using Desk.Domain.Mapping;
 using Desk.Domain.Sync;
@@ -212,6 +213,36 @@ public sealed class BackgroundJobConfig : IEntityTypeConfiguration<BackgroundJob
         b.Property(x => x.JobType).HasMaxLength(100).IsRequired();
         b.Property(x => x.PayloadJson).IsRequired();
         b.HasIndex(x => new { x.Status, x.NextAttemptAt });
+    }
+}
+
+public sealed class TicketInstructionConfig : IEntityTypeConfiguration<TicketInstruction>
+{
+    public void Configure(EntityTypeBuilder<TicketInstruction> b)
+    {
+        b.ToTable("ticket_instructions");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Body).IsRequired();
+        b.Property(x => x.LastEditedBy).HasMaxLength(200);
+        // Exactly one instruction row per scope: the org-wide default (null company) and one per account.
+        // A filtered unique index would be ideal, but SQLite (local mode) and the org-default NULL make a
+        // plain composite index the portable choice; upsert logic enforces single-row semantics.
+        b.HasIndex(x => new { x.MspOrganizationId, x.ClientCompanyId }).IsUnique();
+        b.HasOne(x => x.ClientCompany).WithMany()
+            .HasForeignKey(x => x.ClientCompanyId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class ClientAccessGrantConfig : IEntityTypeConfiguration<ClientAccessGrant>
+{
+    public void Configure(EntityTypeBuilder<ClientAccessGrant> b)
+    {
+        b.ToTable("client_access_grants");
+        b.HasKey(x => x.Id);
+        // One grant per (user, section, account-scope). Null company = all accounts.
+        b.HasIndex(x => new { x.ClientUserId, x.Section, x.ClientCompanyId }).IsUnique();
+        b.HasOne(x => x.ClientUser).WithMany()
+            .HasForeignKey(x => x.ClientUserId).OnDelete(DeleteBehavior.Cascade);
     }
 }
 
