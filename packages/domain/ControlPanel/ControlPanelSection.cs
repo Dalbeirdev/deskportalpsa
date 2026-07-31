@@ -25,4 +25,6 @@ public enum ControlPanelSection
     Announcements = 7,
     /// <summary>Reports (CP-3).</summary>
     Reports = 8,
+    /// <summary>Portal branding — display name, logo, accent color (CP-3).</summary>
+    Branding = 9,
 }

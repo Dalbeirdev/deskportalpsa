@@ -9,7 +9,7 @@ import { UserMenu } from '@/components/UserMenu';
 import { api } from '@/lib/api';
 import {
   Rocket, FileText, Users, Server, UserCheck, ArrowUpCircle, Clock, CalendarDays,
-  Megaphone, BarChart3, LayoutDashboard, Lock,
+  Megaphone, BarChart3, LayoutDashboard, Lock, Palette,
 } from 'lucide-react';
 
 type Section = {
@@ -25,11 +25,12 @@ const MANAGEMENT: Section[] = [
   { key: 'escalation', href: '/control-panel/escalation', label: 'Escalation Procedures', icon: ArrowUpCircle, live: true },
   { key: 'businessHours', href: '/control-panel/business-hours', label: 'Business Hours', icon: Clock, live: true },
   { key: 'holidays', href: '/control-panel/holidays', label: 'Holidays', icon: CalendarDays, live: true },
-  { key: 'announcements', href: '#', label: 'Announcements', icon: Megaphone, live: false },
+  { key: 'announcements', href: '/control-panel/announcements', label: 'Announcements', icon: Megaphone, live: true },
 ];
 const ACCOUNTS: Section[] = [
   { key: 'accounts', href: '/control-panel/accounts', label: 'Accounts & Devices', icon: Server, live: true },
-  { key: 'reports', href: '#', label: 'Reports', icon: BarChart3, live: false },
+  { key: 'reports', href: '/control-panel/reports', label: 'Reports', icon: BarChart3, live: true },
+  { key: 'branding', href: '/control-panel/branding', label: 'Branding', icon: Palette, live: true },
 ];
 
 export default function ControlPanelLayout({ children }: { children: React.ReactNode }) {

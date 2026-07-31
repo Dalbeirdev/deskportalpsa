@@ -8,17 +8,17 @@ import {
 } from 'lucide-react';
 import { api, type Capabilities, type ClientUser } from '@/lib/api';
 
-// Delegable sections. Only Ticket Instructions is functional in CP-1; the rest are placeholders so
-// admins can see the delegation model, but they cannot be granted until those sections ship.
+// Delegable sections a company administrator can grant to a user (Users management stays admin-only).
 const SECTIONS: { key: string; label: string; live: boolean }[] = [
   { key: 'ticketInstructions', label: 'Ticket Instructions', live: true },
-  { key: 'approvers', label: 'Approvers', live: false },
-  { key: 'escalation', label: 'Escalation Procedures', live: false },
-  { key: 'businessHours', label: 'Business Hours', live: false },
-  { key: 'holidays', label: 'Holidays', live: false },
-  { key: 'announcements', label: 'Announcements', live: false },
-  { key: 'accounts', label: 'Accounts & Devices', live: false },
-  { key: 'reports', label: 'Reports', live: false },
+  { key: 'approvers', label: 'Approvers', live: true },
+  { key: 'escalation', label: 'Escalation Procedures', live: true },
+  { key: 'businessHours', label: 'Business Hours', live: true },
+  { key: 'holidays', label: 'Holidays', live: true },
+  { key: 'accounts', label: 'Accounts & Devices', live: true },
+  { key: 'announcements', label: 'Announcements', live: true },
+  { key: 'reports', label: 'Reports', live: true },
+  { key: 'branding', label: 'Branding', live: true },
 ];
 
 export default function UsersPage() {

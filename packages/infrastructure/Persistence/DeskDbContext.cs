@@ -47,6 +47,8 @@ public class DeskDbContext(DbContextOptions<DeskDbContext> options, ITenantConte
     public DbSet<Holiday> Holidays => Set<Holiday>();
     public DbSet<Device> Devices => Set<Device>();
     public DbSet<BusinessHours> BusinessHours => Set<BusinessHours>();
+    public DbSet<Announcement> Announcements => Set<Announcement>();
+    public DbSet<ClientBranding> ClientBrandings => Set<ClientBranding>();
 
     // Read by the compiled query filter below. Guid.Empty can never match a real row, so an
     // unresolved (null) tenant that is not platform scope yields zero rows — fail closed.

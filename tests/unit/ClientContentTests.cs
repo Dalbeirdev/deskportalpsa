@@ -1,0 +1,121 @@
+using Desk.Application.Common;
+using Desk.Application.ControlPanel;
+using Desk.Application.Tickets;
+using Desk.Domain.ControlPanel;
+using Desk.Domain.Enums;
+using Desk.Domain.Tenancy;
+using Desk.Domain.Tickets;
+using Desk.Infrastructure.Admin;
+using Desk.Infrastructure.ControlPanel;
+using FluentAssertions;
+using Xunit;
+
+namespace Desk.Tests.Unit;
+
+public class ClientContentTests
+{
+    private static readonly Guid Org = Guid.NewGuid();
+    private static readonly Guid Conn = Guid.NewGuid();
+    private static readonly Guid CompanyA = Guid.NewGuid();
+    private static readonly Guid AdminUser = Guid.NewGuid();
+    private static readonly Guid RegularUser = Guid.NewGuid();
+
+    private static ClientAccess AdminAccess => new(Org, CompanyA, AdminUser, true);
+    private static ClientAccess UserAccess => new(Org, CompanyA, RegularUser, false);
+
+    private static (ClientContentService svc, AdminHarness h) Build()
+    {
+        var h = AdminHarness.Create(Org);
+        h.Db.PsaConnections.Add(new PsaConnection { Id = Conn, MspOrganizationId = Org, Name = "CW", Provider = ProviderType.ConnectWisePsa, ApiEndpoint = "https://x", CredentialSecretRef = "mem://x" });
+        h.Db.ClientCompanies.Add(new ClientCompany { Id = CompanyA, MspOrganizationId = Org, PsaConnectionId = Conn, Name = "Acme Dental", ExternalCompanyId = "42" });
+        h.Db.ClientUsers.Add(new ClientUser { Id = AdminUser, MspOrganizationId = Org, ClientCompanyId = CompanyA, Email = "admin@a.test", DisplayName = "Admin A", IdpSubject = "sub-admin", IsCompanyAdministrator = true });
+        h.Db.ClientUsers.Add(new ClientUser { Id = RegularUser, MspOrganizationId = Org, ClientCompanyId = CompanyA, Email = "user@a.test", DisplayName = "User A", IdpSubject = "sub-user" });
+        h.Db.SaveChanges();
+        return (new ClientContentService(h.Db, new AuditWriter(h.Db, h.User, h.Tenant, h.Clock), h.Clock), h);
+    }
+
+    private static Ticket Ticket(string status, decimal worked, decimal billable) => new()
+    {
+        MspOrganizationId = Org, PsaConnectionId = Conn, Provider = ProviderType.ConnectWisePsa,
+        ExternalTicketId = Guid.NewGuid().ToString()[..8], ClientCompanyId = CompanyA, RequesterUserId = AdminUser,
+        RequesterName = "R", RequesterEmail = "r@test", Title = "T " + status, PortalStatus = status, PortalPriority = "NORMAL",
+        TimeWorkedHours = worked, BillableHours = billable,
+    };
+
+    [Fact]
+    public async Task Announcement_publish_stamps_published_at_and_sorts_pinned_first()
+    {
+        var (svc, _) = Build();
+        var draft = await svc.SaveAnnouncementAsync(AdminAccess, new AnnouncementInput(null, "Draft notice", "body", false, false));
+        draft.PublishedAt.Should().BeNull();
+
+        var published = await svc.SaveAnnouncementAsync(AdminAccess, new AnnouncementInput(null, "Live notice", "body", true, true));
+        published.PublishedAt.Should().NotBeNull();
+
+        var list = await svc.ListAnnouncementsAsync(AdminAccess);
+        list.Should().HaveCount(2);
+        list[0].Title.Should().Be("Live notice"); // pinned + published sorts first
+        list[0].AuthorName.Should().Be("Admin A");
+    }
+
+    [Fact]
+    public async Task Announcement_requires_a_title_and_delete_works()
+    {
+        var (svc, _) = Build();
+        await Assert.ThrowsAsync<ValidationFailedException>(() => svc.SaveAnnouncementAsync(AdminAccess, new AnnouncementInput(null, "  ", null, false, true)));
+        var a = await svc.SaveAnnouncementAsync(AdminAccess, new AnnouncementInput(null, "X", null, false, true));
+        await svc.DeleteAnnouncementAsync(AdminAccess, a.Id);
+        (await svc.ListAnnouncementsAsync(AdminAccess)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Branding_upserts_a_single_row()
+    {
+        var (svc, h) = Build();
+        await svc.SaveBrandingAsync(AdminAccess, new BrandingInput("Acme", "https://x/logo.png", "#123456"));
+        await svc.SaveBrandingAsync(AdminAccess, new BrandingInput("Acme Portal", null, "#654321"));
+        h.Db.ClientBrandings.Count(b => b.ClientCompanyId == CompanyA).Should().Be(1);
+        var b = await svc.GetBrandingAsync(AdminAccess);
+        b.DisplayName.Should().Be("Acme Portal");
+        b.AccentColor.Should().Be("#654321");
+        b.LogoUrl.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Report_counts_by_status_and_sums_hours()
+    {
+        var (svc, h) = Build();
+        h.Db.Tickets.AddRange(
+            Ticket("NEW", 1.0m, 1.0m), Ticket("NEW", 0.5m, 0m),
+            Ticket("IN_PROGRESS", 2.0m, 2.0m), Ticket("CLOSED", 3.0m, 1.5m));
+        await h.Db.SaveChangesAsync();
+
+        var r = await svc.GetReportAsync(AdminAccess);
+        r.TotalTickets.Should().Be(4);
+        r.OpenTickets.Should().Be(3); // NEW x2 + IN_PROGRESS (CLOSED is not open)
+        r.HoursLogged.Should().Be(6.5m);
+        r.BillableHours.Should().Be(4.5m);
+        r.ByStatus.First().Status.Should().Be("NEW"); // most common first
+        r.Recent.Should().HaveCount(4);
+    }
+
+    [Fact]
+    public async Task Non_admin_without_grant_is_forbidden_on_each_section()
+    {
+        var (svc, _) = Build();
+        await Assert.ThrowsAsync<ForbiddenException>(() => svc.ListAnnouncementsAsync(UserAccess));
+        await Assert.ThrowsAsync<ForbiddenException>(() => svc.GetBrandingAsync(UserAccess));
+        await Assert.ThrowsAsync<ForbiddenException>(() => svc.GetReportAsync(UserAccess));
+    }
+
+    [Fact]
+    public async Task A_reports_grant_opens_only_reports()
+    {
+        var (svc, h) = Build();
+        h.Db.ClientAccessGrants.Add(new ClientAccessGrant { ClientUserId = RegularUser, Section = ControlPanelSection.Reports, MspOrganizationId = Org });
+        await h.Db.SaveChangesAsync();
+
+        (await svc.GetReportAsync(UserAccess)).TotalTickets.Should().Be(0); // allowed
+        await Assert.ThrowsAsync<ForbiddenException>(() => svc.ListAnnouncementsAsync(UserAccess)); // still closed
+    }
+}

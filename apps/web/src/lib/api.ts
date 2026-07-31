@@ -172,7 +172,36 @@ export const api = {
   cpDeleteDevice: (id: string) => request(`/api/control-panel/devices/${id}`, z.unknown(), { method: 'DELETE' }),
   cpBusinessHours: () => request('/api/control-panel/business-hours', BusinessHoursSchema) as Promise<BusinessHours>,
   cpSaveBusinessHours: (body: BusinessHours) => request('/api/control-panel/business-hours', BusinessHoursSchema, { method: 'PUT', body: JSON.stringify(body) }) as Promise<BusinessHours>,
+
+  // Control panel — CP-3 content
+  cpAnnouncements: () => request('/api/control-panel/announcements', z.array(AnnouncementSchema)) as Promise<Announcement[]>,
+  cpSaveAnnouncement: (body: AnnouncementInput) => request('/api/control-panel/announcements', AnnouncementSchema, { method: 'PUT', body: JSON.stringify(body) }) as Promise<Announcement>,
+  cpDeleteAnnouncement: (id: string) => request(`/api/control-panel/announcements/${id}`, z.unknown(), { method: 'DELETE' }),
+  cpBranding: () => request('/api/control-panel/branding', BrandingSchema) as Promise<Branding>,
+  cpSaveBranding: (body: Branding) => request('/api/control-panel/branding', BrandingSchema, { method: 'PUT', body: JSON.stringify(body) }) as Promise<Branding>,
+  cpReport: () => request('/api/control-panel/report', ReportSchema) as Promise<AccountReport>,
 };
+
+// ---- CP-3 schemas ----
+const AnnouncementSchema = z.object({
+  id: z.string(), title: z.string(), body: z.string(), isPinned: z.boolean(), isPublished: z.boolean(),
+  publishedAt: z.string().nullable(), authorName: z.string().nullable(),
+});
+export type Announcement = z.infer<typeof AnnouncementSchema>;
+export type AnnouncementInput = { id?: string; title: string; body?: string; isPinned: boolean; isPublished: boolean };
+
+const BrandingSchema = z.object({ displayName: z.string().nullable(), logoUrl: z.string().nullable(), accentColor: z.string().nullable() });
+export type Branding = z.infer<typeof BrandingSchema>;
+
+const ReportSchema = z.object({
+  totalTickets: z.number(),
+  openTickets: z.number(),
+  byStatus: z.array(z.object({ status: z.string(), count: z.number() })),
+  hoursLogged: z.number(),
+  billableHours: z.number(),
+  recent: z.array(z.object({ id: z.string(), externalTicketId: z.string().nullable(), title: z.string(), portalStatus: z.string(), createdAt: z.string() })),
+});
+export type AccountReport = z.infer<typeof ReportSchema>;
 
 // ---- Control panel account-settings schemas (CP-2) ----
 const AccountSchema = z.object({ id: z.string(), name: z.string(), externalCompanyId: z.string(), connectionName: z.string().nullable(), isActive: z.boolean() });

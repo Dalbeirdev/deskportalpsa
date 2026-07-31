@@ -323,6 +323,37 @@ public sealed class BusinessHoursConfig : IEntityTypeConfiguration<BusinessHours
     }
 }
 
+public sealed class AnnouncementConfig : IEntityTypeConfiguration<Announcement>
+{
+    public void Configure(EntityTypeBuilder<Announcement> b)
+    {
+        b.ToTable("announcements");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Title).HasMaxLength(300).IsRequired();
+        b.Property(x => x.Body).IsRequired();
+        b.Property(x => x.AuthorName).HasMaxLength(200);
+        b.HasIndex(x => x.ClientCompanyId);
+        b.HasOne(x => x.ClientCompany).WithMany()
+            .HasForeignKey(x => x.ClientCompanyId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class ClientBrandingConfig : IEntityTypeConfiguration<ClientBranding>
+{
+    public void Configure(EntityTypeBuilder<ClientBranding> b)
+    {
+        b.ToTable("client_branding");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.DisplayName).HasMaxLength(200);
+        b.Property(x => x.LogoUrl).HasMaxLength(1000);
+        b.Property(x => x.AccentColor).HasMaxLength(20);
+        // One branding row per account.
+        b.HasIndex(x => x.ClientCompanyId).IsUnique();
+        b.HasOne(x => x.ClientCompany).WithMany()
+            .HasForeignKey(x => x.ClientCompanyId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 public sealed class AuditLogEntryConfig : IEntityTypeConfiguration<AuditLogEntry>
 {
     public void Configure(EntityTypeBuilder<AuditLogEntry> b)
