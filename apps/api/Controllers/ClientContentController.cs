@@ -43,6 +43,40 @@ public sealed class ClientContentController(
     public async Task<IActionResult> Report(CancellationToken ct)
         => Ok(await svc.GetReportAsync(await AccessAsync(ct), ct));
 
+    [HttpGet("report/export")]
+    public async Task<IActionResult> ExportReport(CancellationToken ct)
+    {
+        var export = await svc.ExportReportAsync(await AccessAsync(ct), ct);
+        return File(System.Text.Encoding.UTF8.GetBytes(export.Csv), "text/csv", export.FileName);
+    }
+
+    [HttpGet("report/schedules")]
+    public async Task<IActionResult> ListSchedules(CancellationToken ct)
+        => Ok(await svc.ListSchedulesAsync(await AccessAsync(ct), ct));
+
+    [HttpPut("report/schedules")]
+    public async Task<IActionResult> SaveSchedule([FromBody] ReportScheduleInput input, CancellationToken ct)
+        => Ok(await svc.SaveScheduleAsync(await AccessAsync(ct), input, ct));
+
+    [HttpDelete("report/schedules/{id:guid}")]
+    public async Task<IActionResult> DeleteSchedule(Guid id, CancellationToken ct)
+    { await svc.DeleteScheduleAsync(await AccessAsync(ct), id, ct); return NoContent(); }
+
+    [HttpPost("report/schedules/{id:guid}/run")]
+    public async Task<IActionResult> RunSchedule(Guid id, CancellationToken ct)
+        => Ok(await svc.RunScheduleNowAsync(await AccessAsync(ct), id, ct));
+
+    [HttpGet("report/runs")]
+    public async Task<IActionResult> ListRuns(CancellationToken ct)
+        => Ok(await svc.ListRunsAsync(await AccessAsync(ct), ct));
+
+    [HttpGet("report/runs/{id:guid}/download")]
+    public async Task<IActionResult> DownloadRun(Guid id, CancellationToken ct)
+    {
+        var export = await svc.DownloadRunAsync(await AccessAsync(ct), id, ct);
+        return File(System.Text.Encoding.UTF8.GetBytes(export.Csv), "text/csv", export.FileName);
+    }
+
     [HttpGet("faq")]
     public async Task<IActionResult> ListFaq(CancellationToken ct)
         => Ok(await svc.ListFaqAsync(await AccessAsync(ct), ct));

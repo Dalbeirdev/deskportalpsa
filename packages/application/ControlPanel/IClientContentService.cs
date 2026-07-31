@@ -20,4 +20,16 @@ public interface IClientContentService
     Task<IReadOnlyList<FaqArticleDto>> ListFaqAsync(ClientAccess access, CancellationToken ct = default);
     Task<FaqArticleDto> SaveFaqAsync(ClientAccess access, FaqArticleInput input, CancellationToken ct = default);
     Task DeleteFaqAsync(ClientAccess access, Guid id, CancellationToken ct = default);
+
+    // Reports — export + scheduling (Reports section).
+    Task<ReportExportDto> ExportReportAsync(ClientAccess access, CancellationToken ct = default);
+
+    Task<IReadOnlyList<ReportScheduleDto>> ListSchedulesAsync(ClientAccess access, CancellationToken ct = default);
+    Task<ReportScheduleDto> SaveScheduleAsync(ClientAccess access, ReportScheduleInput input, CancellationToken ct = default);
+    Task DeleteScheduleAsync(ClientAccess access, Guid id, CancellationToken ct = default);
+    /// <summary>Generate a report for the schedule right now (also runs the delivery pipeline).</summary>
+    Task<ReportRunDto> RunScheduleNowAsync(ClientAccess access, Guid id, CancellationToken ct = default);
+
+    Task<IReadOnlyList<ReportRunDto>> ListRunsAsync(ClientAccess access, CancellationToken ct = default);
+    Task<ReportExportDto> DownloadRunAsync(ClientAccess access, Guid runId, CancellationToken ct = default);
 }

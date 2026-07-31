@@ -20,6 +20,7 @@ builder.Services.AddScoped<IJobHandler, InboundEventJobHandler>();
 // Hosted services
 builder.Services.AddHostedService<BackgroundJobPollingService>();
 builder.Services.AddHostedService<PollingSyncService>();
+builder.Services.AddHostedService<ScheduledReportService>();
 
 var host = builder.Build();
 host.Run();

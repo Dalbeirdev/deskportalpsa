@@ -31,7 +31,13 @@ public class ClientContentTests
         h.Db.ClientUsers.Add(new ClientUser { Id = AdminUser, MspOrganizationId = Org, ClientCompanyId = CompanyA, Email = "admin@a.test", DisplayName = "Admin A", IdpSubject = "sub-admin", IsCompanyAdministrator = true });
         h.Db.ClientUsers.Add(new ClientUser { Id = RegularUser, MspOrganizationId = Org, ClientCompanyId = CompanyA, Email = "user@a.test", DisplayName = "User A", IdpSubject = "sub-user" });
         h.Db.SaveChanges();
-        return (new ClientContentService(h.Db, new AuditWriter(h.Db, h.User, h.Tenant, h.Clock), h.Clock), h);
+        return (new ClientContentService(h.Db, new AuditWriter(h.Db, h.User, h.Tenant, h.Clock), h.Clock, new FakeDelivery()), h);
+    }
+
+    private sealed class FakeDelivery : IReportDelivery
+    {
+        public Task<ReportDeliveryResult> DeliverAsync(string? recipients, string subject, string fileName, string csv, CancellationToken ct = default)
+            => Task.FromResult(new ReportDeliveryResult(false, "test"));
     }
 
     private static Ticket Ticket(string status, decimal worked, decimal billable) => new()
@@ -135,6 +141,62 @@ public class ClientContentTests
     public async Task Faq_requires_a_question()
         => await Assert.ThrowsAsync<ValidationFailedException>(() =>
             Build().svc.SaveFaqAsync(AdminAccess, new FaqArticleInput(null, "   ", "a", null, true, 0)));
+
+    [Fact]
+    public async Task Export_renders_csv_with_the_report_numbers()
+    {
+        var (svc, h) = Build();
+        h.Db.Tickets.AddRange(Ticket("NEW", 1.0m, 1.0m), Ticket("CLOSED", 2.5m, 0m));
+        await h.Db.SaveChangesAsync();
+
+        var export = await svc.ExportReportAsync(AdminAccess);
+        export.FileName.Should().EndWith(".csv");
+        export.Csv.Should().Contain("Total tickets,2");
+        export.Csv.Should().Contain("Hours logged,3.50");
+        export.Csv.Should().Contain("Tickets by status");
+    }
+
+    [Fact]
+    public async Task Schedule_save_sets_a_future_next_run_and_run_now_produces_a_downloadable_run()
+    {
+        var (svc, h) = Build();
+        h.Db.Tickets.Add(Ticket("NEW", 1m, 1m));
+        await h.Db.SaveChangesAsync();
+
+        var sched = await svc.SaveScheduleAsync(AdminAccess, new ReportScheduleInput(null, "Weekly summary", "weekly", "ops@acme.test", true));
+        sched.Frequency.Should().Be("weekly");
+        sched.NextRunAt.Should().BeAfter(h.Clock.GetUtcNow());
+
+        var run = await svc.RunScheduleNowAsync(AdminAccess, sched.Id);
+        run.Summary.Should().Contain("1 tickets");
+        run.Delivered.Should().BeFalse(); // no email provider in tests
+        run.DeliveryNote.Should().Be("test");
+
+        var runs = await svc.ListRunsAsync(AdminAccess);
+        runs.Should().ContainSingle();
+        var dl = await svc.DownloadRunAsync(AdminAccess, run.Id);
+        dl.Csv.Should().Contain("Total tickets,1");
+    }
+
+    [Fact]
+    public async Task Scheduled_runner_generates_due_schedules_and_advances_next_run()
+    {
+        var (_, h) = Build();
+        h.Db.Tickets.Add(Ticket("NEW", 1m, 1m));
+        // A schedule already due (NextRunAt in the past).
+        var past = h.Clock.GetUtcNow().AddMinutes(-1);
+        h.Db.ReportSchedules.Add(new ReportSchedule { MspOrganizationId = Org, ClientCompanyId = CompanyA, Name = "Due", Frequency = ReportFrequency.Daily, IsEnabled = true, NextRunAt = past });
+        await h.Db.SaveChangesAsync();
+
+        var runner = new ScheduledReportRunner(h.Db, h.Clock, new FakeDelivery(), Microsoft.Extensions.Logging.Abstractions.NullLogger<ScheduledReportRunner>.Instance);
+        var count = await runner.RunDueAsync();
+        count.Should().Be(1);
+
+        h.Db.ReportRuns.Count(r => r.ClientCompanyId == CompanyA).Should().Be(1);
+        var sched = h.Db.ReportSchedules.Single();
+        sched.LastRunAt.Should().NotBeNull();
+        sched.NextRunAt.Should().BeAfter(h.Clock.GetUtcNow()); // advanced into the future
+    }
 
     [Fact]
     public async Task A_knowledge_base_grant_opens_only_faq()

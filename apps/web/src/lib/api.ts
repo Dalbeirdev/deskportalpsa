@@ -183,7 +183,30 @@ export const api = {
   cpFaq: () => request('/api/control-panel/faq', z.array(FaqSchema)) as Promise<FaqArticle[]>,
   cpSaveFaq: (body: FaqInput) => request('/api/control-panel/faq', FaqSchema, { method: 'PUT', body: JSON.stringify(body) }) as Promise<FaqArticle>,
   cpDeleteFaq: (id: string) => request(`/api/control-panel/faq/${id}`, z.unknown(), { method: 'DELETE' }),
+
+  // Reports — export + scheduling
+  cpReportSchedules: () => request('/api/control-panel/report/schedules', z.array(ReportScheduleSchema)) as Promise<ReportSchedule[]>,
+  cpSaveReportSchedule: (body: ReportScheduleInput) => request('/api/control-panel/report/schedules', ReportScheduleSchema, { method: 'PUT', body: JSON.stringify(body) }) as Promise<ReportSchedule>,
+  cpDeleteReportSchedule: (id: string) => request(`/api/control-panel/report/schedules/${id}`, z.unknown(), { method: 'DELETE' }),
+  cpRunReportSchedule: (id: string) => request(`/api/control-panel/report/schedules/${id}/run`, ReportRunSchema, { method: 'POST' }) as Promise<ReportRun>,
+  cpReportRuns: () => request('/api/control-panel/report/runs', z.array(ReportRunSchema)) as Promise<ReportRun[]>,
+  // CSV downloads stream a file, so they go through the BFF directly (see downloadCsv in the page).
+  cpReportExportPath: `${BFF_BASE}/api/control-panel/report/export`,
+  cpReportRunDownloadPath: (id: string) => `${BFF_BASE}/api/control-panel/report/runs/${id}/download`,
 };
+
+const ReportScheduleSchema = z.object({
+  id: z.string(), name: z.string(), frequency: z.string(), recipients: z.string().nullable(),
+  isEnabled: z.boolean(), lastRunAt: z.string().nullable(), nextRunAt: z.string(),
+});
+export type ReportSchedule = z.infer<typeof ReportScheduleSchema>;
+export type ReportScheduleInput = { id?: string; name: string; frequency: string; recipients?: string | null; isEnabled: boolean };
+
+const ReportRunSchema = z.object({
+  id: z.string(), reportScheduleId: z.string().nullable(), generatedAt: z.string(), format: z.string(),
+  summary: z.string(), delivered: z.boolean(), deliveryNote: z.string().nullable(),
+});
+export type ReportRun = z.infer<typeof ReportRunSchema>;
 
 const FaqSchema = z.object({
   id: z.string(), question: z.string(), answer: z.string(), category: z.string().nullable(),

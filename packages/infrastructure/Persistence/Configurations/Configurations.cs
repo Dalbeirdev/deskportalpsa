@@ -353,6 +353,36 @@ public sealed class FaqArticleConfig : IEntityTypeConfiguration<FaqArticle>
     }
 }
 
+public sealed class ReportScheduleConfig : IEntityTypeConfiguration<ReportSchedule>
+{
+    public void Configure(EntityTypeBuilder<ReportSchedule> b)
+    {
+        b.ToTable("report_schedules");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+        b.Property(x => x.Recipients).HasMaxLength(2000);
+        b.HasIndex(x => x.ClientCompanyId);
+        // The worker scans for due, enabled schedules.
+        b.HasIndex(x => new { x.IsEnabled, x.NextRunAt });
+        b.HasOne(x => x.ClientCompany).WithMany()
+            .HasForeignKey(x => x.ClientCompanyId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class ReportRunConfig : IEntityTypeConfiguration<ReportRun>
+{
+    public void Configure(EntityTypeBuilder<ReportRun> b)
+    {
+        b.ToTable("report_runs");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Format).HasMaxLength(20).IsRequired();
+        b.Property(x => x.Summary).HasMaxLength(500);
+        b.Property(x => x.Content).IsRequired();
+        b.Property(x => x.DeliveryNote).HasMaxLength(500);
+        b.HasIndex(x => new { x.ClientCompanyId, x.GeneratedAt });
+    }
+}
+
 public sealed class ClientBrandingConfig : IEntityTypeConfiguration<ClientBranding>
 {
     public void Configure(EntityTypeBuilder<ClientBranding> b)

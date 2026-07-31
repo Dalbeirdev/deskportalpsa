@@ -50,6 +50,8 @@ public class DeskDbContext(DbContextOptions<DeskDbContext> options, ITenantConte
     public DbSet<Announcement> Announcements => Set<Announcement>();
     public DbSet<ClientBranding> ClientBrandings => Set<ClientBranding>();
     public DbSet<FaqArticle> FaqArticles => Set<FaqArticle>();
+    public DbSet<ReportSchedule> ReportSchedules => Set<ReportSchedule>();
+    public DbSet<ReportRun> ReportRuns => Set<ReportRun>();
 
     // Read by the compiled query filter below. Guid.Empty can never match a real row, so an
     // unresolved (null) tenant that is not platform scope yields zero rows — fail closed.

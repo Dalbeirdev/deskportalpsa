@@ -13,6 +13,19 @@ public sealed record BrandingInput(string? DisplayName, string? LogoUrl, string?
 public sealed record FaqArticleDto(Guid Id, string Question, string Answer, string? Category, bool IsPublished, int SortOrder);
 public sealed record FaqArticleInput(Guid? Id, string Question, string? Answer, string? Category, bool IsPublished, int SortOrder);
 
+/// <summary>A rendered report ready to download (file name + CSV text).</summary>
+public sealed record ReportExportDto(string FileName, string Csv);
+
+public sealed record ReportScheduleDto(
+    Guid Id, string Name, string Frequency, string? Recipients, bool IsEnabled,
+    DateTimeOffset? LastRunAt, DateTimeOffset NextRunAt);
+
+public sealed record ReportScheduleInput(Guid? Id, string Name, string Frequency, string? Recipients, bool IsEnabled);
+
+public sealed record ReportRunDto(
+    Guid Id, Guid? ReportScheduleId, DateTimeOffset GeneratedAt, string Format,
+    string Summary, bool Delivered, string? DeliveryNote);
+
 public sealed record StatusCount(string Status, int Count);
 
 public sealed record ReportTicket(Guid Id, string? ExternalTicketId, string Title, string PortalStatus, DateTimeOffset CreatedAt);
