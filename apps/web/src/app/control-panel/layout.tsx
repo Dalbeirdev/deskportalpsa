@@ -21,14 +21,14 @@ type Section = {
 const MANAGEMENT: Section[] = [
   { key: 'ticketInstructions', href: '/control-panel/instructions', label: 'Ticket Instructions', icon: FileText, live: true },
   { key: 'users', href: '/control-panel/users', label: 'Users', icon: Users, live: true },
-  { key: 'approvers', href: '#', label: 'Approvers', icon: UserCheck, live: false },
-  { key: 'escalation', href: '#', label: 'Escalation Procedures', icon: ArrowUpCircle, live: false },
-  { key: 'businessHours', href: '#', label: 'Business Hours', icon: Clock, live: false },
-  { key: 'holidays', href: '#', label: 'Holidays', icon: CalendarDays, live: false },
+  { key: 'approvers', href: '/control-panel/approvers', label: 'Approvers', icon: UserCheck, live: true },
+  { key: 'escalation', href: '/control-panel/escalation', label: 'Escalation Procedures', icon: ArrowUpCircle, live: true },
+  { key: 'businessHours', href: '/control-panel/business-hours', label: 'Business Hours', icon: Clock, live: true },
+  { key: 'holidays', href: '/control-panel/holidays', label: 'Holidays', icon: CalendarDays, live: true },
   { key: 'announcements', href: '#', label: 'Announcements', icon: Megaphone, live: false },
 ];
 const ACCOUNTS: Section[] = [
-  { key: 'accounts', href: '#', label: 'Accounts & Devices', icon: Server, live: false },
+  { key: 'accounts', href: '/control-panel/accounts', label: 'Accounts & Devices', icon: Server, live: true },
   { key: 'reports', href: '#', label: 'Reports', icon: BarChart3, live: false },
 ];
 

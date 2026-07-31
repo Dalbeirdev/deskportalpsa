@@ -95,8 +95,9 @@ public static class DependencyInjection
         services.AddScoped<ITicketReadService, TicketReadService>();
         services.AddScoped<ITicketCommandService, TicketCommandService>();
 
-        // Client control panel (CP-1)
+        // Client control panel (CP-1 + CP-2)
         services.AddScoped<Desk.Application.ControlPanel.IControlPanelService, Desk.Infrastructure.ControlPanel.ControlPanelService>();
+        services.AddScoped<Desk.Application.ControlPanel.IAccountSettingsService, Desk.Infrastructure.ControlPanel.AccountSettingsService>();
 
         // Analytics (Phase 7)
         services.AddSingleton<IProductivityScorer, ProductivityScorer>();

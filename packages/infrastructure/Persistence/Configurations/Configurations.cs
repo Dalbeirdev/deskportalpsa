@@ -246,6 +246,83 @@ public sealed class ClientAccessGrantConfig : IEntityTypeConfiguration<ClientAcc
     }
 }
 
+public sealed class ApproverConfig : IEntityTypeConfiguration<Approver>
+{
+    public void Configure(EntityTypeBuilder<Approver> b)
+    {
+        b.ToTable("approvers");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+        b.Property(x => x.Email).HasMaxLength(320);
+        b.Property(x => x.Phone).HasMaxLength(50);
+        b.Property(x => x.Scope).HasMaxLength(500);
+        b.HasIndex(x => x.ClientCompanyId);
+        b.HasOne(x => x.ClientCompany).WithMany()
+            .HasForeignKey(x => x.ClientCompanyId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class EscalationLevelConfig : IEntityTypeConfiguration<EscalationLevel>
+{
+    public void Configure(EntityTypeBuilder<EscalationLevel> b)
+    {
+        b.ToTable("escalation_levels");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+        b.Property(x => x.Contact).HasMaxLength(300);
+        b.Property(x => x.Condition).HasMaxLength(500);
+        b.HasIndex(x => x.ClientCompanyId);
+        b.HasOne(x => x.ClientCompany).WithMany()
+            .HasForeignKey(x => x.ClientCompanyId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class HolidayConfig : IEntityTypeConfiguration<Holiday>
+{
+    public void Configure(EntityTypeBuilder<Holiday> b)
+    {
+        b.ToTable("holidays");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Date).HasMaxLength(10).IsRequired();
+        b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+        b.HasIndex(x => x.ClientCompanyId);
+        b.HasOne(x => x.ClientCompany).WithMany()
+            .HasForeignKey(x => x.ClientCompanyId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class DeviceConfig : IEntityTypeConfiguration<Device>
+{
+    public void Configure(EntityTypeBuilder<Device> b)
+    {
+        b.ToTable("devices");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+        b.Property(x => x.Type).HasMaxLength(100);
+        b.Property(x => x.Identifier).HasMaxLength(200);
+        b.Property(x => x.Notes).HasMaxLength(1000);
+        b.HasIndex(x => x.ClientCompanyId);
+        b.HasOne(x => x.ClientCompany).WithMany()
+            .HasForeignKey(x => x.ClientCompanyId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class BusinessHoursConfig : IEntityTypeConfiguration<BusinessHours>
+{
+    public void Configure(EntityTypeBuilder<BusinessHours> b)
+    {
+        b.ToTable("business_hours");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.TimeZone).HasMaxLength(100);
+        b.Property(x => x.ScheduleJson).IsRequired();
+        b.Property(x => x.Notes).HasMaxLength(1000);
+        // One business-hours row per account.
+        b.HasIndex(x => x.ClientCompanyId).IsUnique();
+        b.HasOne(x => x.ClientCompany).WithMany()
+            .HasForeignKey(x => x.ClientCompanyId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 public sealed class AuditLogEntryConfig : IEntityTypeConfiguration<AuditLogEntry>
 {
     public void Configure(EntityTypeBuilder<AuditLogEntry> b)
