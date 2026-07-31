@@ -129,6 +129,57 @@ public sealed class ClientContentService(DeskDbContext db, IAuditWriter audit, T
             Math.Round(hours, 2), Math.Round(billable, 2), recent);
     }
 
+    // ---- Knowledge base / FAQ ----
+
+    public async Task<IReadOnlyList<FaqArticleDto>> ListFaqAsync(ClientAccess access, CancellationToken ct = default)
+    {
+        await EnsureSectionAsync(access, ControlPanelSection.KnowledgeBase, ct);
+        return await db.FaqArticles.AsNoTracking()
+            .Where(f => f.ClientCompanyId == access.ClientCompanyId)
+            .OrderBy(f => f.Category).ThenBy(f => f.SortOrder).ThenBy(f => f.Question)
+            .Select(f => new FaqArticleDto(f.Id, f.Question, f.Answer, f.Category, f.IsPublished, f.SortOrder))
+            .ToListAsync(ct);
+    }
+
+    public async Task<FaqArticleDto> SaveFaqAsync(ClientAccess access, FaqArticleInput input, CancellationToken ct = default)
+    {
+        await EnsureSectionAsync(access, ControlPanelSection.KnowledgeBase, ct);
+        var question = (input.Question ?? "").Trim();
+        if (question.Length == 0) throw new ValidationFailedException("Question is required.");
+
+        FaqArticle row;
+        if (input.Id is { } id)
+        {
+            row = await db.FaqArticles.FirstOrDefaultAsync(f => f.Id == id && f.ClientCompanyId == access.ClientCompanyId, ct)
+                  ?? throw new NotFoundException("FAQ article");
+        }
+        else
+        {
+            row = new FaqArticle { ClientCompanyId = access.ClientCompanyId, Question = question };
+            db.FaqArticles.Add(row);
+        }
+
+        row.Question = question;
+        row.Answer = input.Answer ?? "";
+        row.Category = Trim(input.Category);
+        row.IsPublished = input.IsPublished;
+        row.SortOrder = input.SortOrder;
+        await db.SaveChangesAsync(ct);
+
+        await audit.WriteAsync("control_panel.faq.save", nameof(FaqArticle), row.Id.ToString(), new { row.IsPublished }, ct);
+        return new FaqArticleDto(row.Id, row.Question, row.Answer, row.Category, row.IsPublished, row.SortOrder);
+    }
+
+    public async Task DeleteFaqAsync(ClientAccess access, Guid id, CancellationToken ct = default)
+    {
+        await EnsureSectionAsync(access, ControlPanelSection.KnowledgeBase, ct);
+        var row = await db.FaqArticles.FirstOrDefaultAsync(f => f.Id == id && f.ClientCompanyId == access.ClientCompanyId, ct)
+                  ?? throw new NotFoundException("FAQ article");
+        db.FaqArticles.Remove(row);
+        await db.SaveChangesAsync(ct);
+        await audit.WriteAsync("control_panel.faq.delete", nameof(FaqArticle), id.ToString(), null, ct);
+    }
+
     // ---- Helpers ----
 
     private async Task EnsureSectionAsync(ClientAccess access, ControlPanelSection section, CancellationToken ct)

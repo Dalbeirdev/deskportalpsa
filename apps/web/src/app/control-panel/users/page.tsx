@@ -17,6 +17,7 @@ const SECTIONS: { key: string; label: string; live: boolean }[] = [
   { key: 'holidays', label: 'Holidays', live: true },
   { key: 'accounts', label: 'Accounts & Devices', live: true },
   { key: 'announcements', label: 'Announcements', live: true },
+  { key: 'knowledgeBase', label: 'Knowledge Base', live: true },
   { key: 'reports', label: 'Reports', live: true },
   { key: 'branding', label: 'Branding', live: true },
 ];

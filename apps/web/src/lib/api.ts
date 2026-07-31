@@ -180,7 +180,17 @@ export const api = {
   cpBranding: () => request('/api/control-panel/branding', BrandingSchema) as Promise<Branding>,
   cpSaveBranding: (body: Branding) => request('/api/control-panel/branding', BrandingSchema, { method: 'PUT', body: JSON.stringify(body) }) as Promise<Branding>,
   cpReport: () => request('/api/control-panel/report', ReportSchema) as Promise<AccountReport>,
+  cpFaq: () => request('/api/control-panel/faq', z.array(FaqSchema)) as Promise<FaqArticle[]>,
+  cpSaveFaq: (body: FaqInput) => request('/api/control-panel/faq', FaqSchema, { method: 'PUT', body: JSON.stringify(body) }) as Promise<FaqArticle>,
+  cpDeleteFaq: (id: string) => request(`/api/control-panel/faq/${id}`, z.unknown(), { method: 'DELETE' }),
 };
+
+const FaqSchema = z.object({
+  id: z.string(), question: z.string(), answer: z.string(), category: z.string().nullable(),
+  isPublished: z.boolean(), sortOrder: z.number(),
+});
+export type FaqArticle = z.infer<typeof FaqSchema>;
+export type FaqInput = { id?: string; question: string; answer?: string; category?: string | null; isPublished: boolean; sortOrder: number };
 
 // ---- CP-3 schemas ----
 const AnnouncementSchema = z.object({

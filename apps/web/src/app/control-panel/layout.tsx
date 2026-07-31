@@ -9,7 +9,7 @@ import { UserMenu } from '@/components/UserMenu';
 import { api } from '@/lib/api';
 import {
   Rocket, FileText, Users, Server, UserCheck, ArrowUpCircle, Clock, CalendarDays,
-  Megaphone, BarChart3, LayoutDashboard, Lock, Palette,
+  Megaphone, BarChart3, LayoutDashboard, Lock, Palette, BookOpen,
 } from 'lucide-react';
 
 type Section = {
@@ -26,6 +26,7 @@ const MANAGEMENT: Section[] = [
   { key: 'businessHours', href: '/control-panel/business-hours', label: 'Business Hours', icon: Clock, live: true },
   { key: 'holidays', href: '/control-panel/holidays', label: 'Holidays', icon: CalendarDays, live: true },
   { key: 'announcements', href: '/control-panel/announcements', label: 'Announcements', icon: Megaphone, live: true },
+  { key: 'knowledgeBase', href: '/control-panel/knowledge-base', label: 'Knowledge Base', icon: BookOpen, live: true },
 ];
 const ACCOUNTS: Section[] = [
   { key: 'accounts', href: '/control-panel/accounts', label: 'Accounts & Devices', icon: Server, live: true },

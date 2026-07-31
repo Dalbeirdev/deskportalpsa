@@ -106,6 +106,45 @@ public class ClientContentTests
         await Assert.ThrowsAsync<ForbiddenException>(() => svc.ListAnnouncementsAsync(UserAccess));
         await Assert.ThrowsAsync<ForbiddenException>(() => svc.GetBrandingAsync(UserAccess));
         await Assert.ThrowsAsync<ForbiddenException>(() => svc.GetReportAsync(UserAccess));
+        await Assert.ThrowsAsync<ForbiddenException>(() => svc.ListFaqAsync(UserAccess));
+    }
+
+    [Fact]
+    public async Task Faq_saves_updates_groups_by_category_and_deletes()
+    {
+        var (svc, _) = Build();
+        await svc.SaveFaqAsync(AdminAccess, new FaqArticleInput(null, "Reset password?", "Use the portal link.", "Access", true, 1));
+        var draft = await svc.SaveFaqAsync(AdminAccess, new FaqArticleInput(null, "Order more licenses?", "Contact billing.", "Billing", false, 1));
+
+        var list = await svc.ListFaqAsync(AdminAccess);
+        list.Should().HaveCount(2);
+        list.Select(f => f.Category).Should().Contain(new[] { "Access", "Billing" });
+        list.Single(f => f.Question == "Order more licenses?").IsPublished.Should().BeFalse();
+
+        // Update in place (same row, edited answer + published).
+        var updated = await svc.SaveFaqAsync(AdminAccess, new FaqArticleInput(draft.Id, "Order more licenses?", "Email billing@acme.", "Billing", true, 1));
+        updated.Id.Should().Be(draft.Id);
+        updated.IsPublished.Should().BeTrue();
+        (await svc.ListFaqAsync(AdminAccess)).Should().HaveCount(2);
+
+        await svc.DeleteFaqAsync(AdminAccess, draft.Id);
+        (await svc.ListFaqAsync(AdminAccess)).Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task Faq_requires_a_question()
+        => await Assert.ThrowsAsync<ValidationFailedException>(() =>
+            Build().svc.SaveFaqAsync(AdminAccess, new FaqArticleInput(null, "   ", "a", null, true, 0)));
+
+    [Fact]
+    public async Task A_knowledge_base_grant_opens_only_faq()
+    {
+        var (svc, h) = Build();
+        h.Db.ClientAccessGrants.Add(new ClientAccessGrant { ClientUserId = RegularUser, Section = ControlPanelSection.KnowledgeBase, MspOrganizationId = Org });
+        await h.Db.SaveChangesAsync();
+
+        (await svc.ListFaqAsync(UserAccess)).Should().BeEmpty(); // allowed
+        await Assert.ThrowsAsync<ForbiddenException>(() => svc.ListAnnouncementsAsync(UserAccess)); // still closed
     }
 
     [Fact]

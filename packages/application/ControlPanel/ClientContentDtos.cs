@@ -10,6 +10,9 @@ public sealed record AnnouncementInput(
 public sealed record BrandingDto(string? DisplayName, string? LogoUrl, string? AccentColor);
 public sealed record BrandingInput(string? DisplayName, string? LogoUrl, string? AccentColor);
 
+public sealed record FaqArticleDto(Guid Id, string Question, string Answer, string? Category, bool IsPublished, int SortOrder);
+public sealed record FaqArticleInput(Guid? Id, string Question, string? Answer, string? Category, bool IsPublished, int SortOrder);
+
 public sealed record StatusCount(string Status, int Count);
 
 public sealed record ReportTicket(Guid Id, string? ExternalTicketId, string Title, string PortalStatus, DateTimeOffset CreatedAt);

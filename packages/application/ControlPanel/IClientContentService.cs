@@ -16,4 +16,8 @@ public interface IClientContentService
     Task<BrandingDto> SaveBrandingAsync(ClientAccess access, BrandingInput input, CancellationToken ct = default);
 
     Task<AccountReportDto> GetReportAsync(ClientAccess access, CancellationToken ct = default);
+
+    Task<IReadOnlyList<FaqArticleDto>> ListFaqAsync(ClientAccess access, CancellationToken ct = default);
+    Task<FaqArticleDto> SaveFaqAsync(ClientAccess access, FaqArticleInput input, CancellationToken ct = default);
+    Task DeleteFaqAsync(ClientAccess access, Guid id, CancellationToken ct = default);
 }

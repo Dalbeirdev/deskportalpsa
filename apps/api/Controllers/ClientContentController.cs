@@ -43,6 +43,18 @@ public sealed class ClientContentController(
     public async Task<IActionResult> Report(CancellationToken ct)
         => Ok(await svc.GetReportAsync(await AccessAsync(ct), ct));
 
+    [HttpGet("faq")]
+    public async Task<IActionResult> ListFaq(CancellationToken ct)
+        => Ok(await svc.ListFaqAsync(await AccessAsync(ct), ct));
+
+    [HttpPut("faq")]
+    public async Task<IActionResult> SaveFaq([FromBody] FaqArticleInput input, CancellationToken ct)
+        => Ok(await svc.SaveFaqAsync(await AccessAsync(ct), input, ct));
+
+    [HttpDelete("faq/{id:guid}")]
+    public async Task<IActionResult> DeleteFaq(Guid id, CancellationToken ct)
+    { await svc.DeleteFaqAsync(await AccessAsync(ct), id, ct); return NoContent(); }
+
     private async Task<ClientAccess> AccessAsync(CancellationToken ct)
         => await accessResolver.ResolveAsync(user.Subject ?? "", ct)
            ?? throw new ForbiddenException("The control panel is for client portal users.");

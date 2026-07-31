@@ -338,6 +338,21 @@ public sealed class AnnouncementConfig : IEntityTypeConfiguration<Announcement>
     }
 }
 
+public sealed class FaqArticleConfig : IEntityTypeConfiguration<FaqArticle>
+{
+    public void Configure(EntityTypeBuilder<FaqArticle> b)
+    {
+        b.ToTable("faq_articles");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Question).HasMaxLength(500).IsRequired();
+        b.Property(x => x.Answer).IsRequired();
+        b.Property(x => x.Category).HasMaxLength(100);
+        b.HasIndex(x => x.ClientCompanyId);
+        b.HasOne(x => x.ClientCompany).WithMany()
+            .HasForeignKey(x => x.ClientCompanyId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 public sealed class ClientBrandingConfig : IEntityTypeConfiguration<ClientBranding>
 {
     public void Configure(EntityTypeBuilder<ClientBranding> b)
