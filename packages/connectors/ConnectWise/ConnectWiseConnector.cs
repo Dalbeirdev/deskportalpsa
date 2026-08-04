@@ -159,7 +159,8 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         var notes = await GetListAsync<CwTicketNote>($"service/tickets/{ticketId}/notes", new() { ["pageSize"] = "1000" }, ct);
         return notes.Where(n => !n.InternalAnalysisFlag)
             .Select(n => new UnifiedTicketNote(
-                n.Id.ToString(), n.Member?.Name ?? "ConnectWise", n.Text ?? "", IsPublic: true, n.DateCreated ?? clock.GetUtcNow()))
+                // Empty author = provider-generated note; the sync layer treats that as a system note.
+                n.Id.ToString(), n.Member?.Name ?? n.Contact?.Name ?? "", n.Text ?? "", IsPublic: true, n.DateCreated ?? clock.GetUtcNow()))
             .ToList();
     }
 

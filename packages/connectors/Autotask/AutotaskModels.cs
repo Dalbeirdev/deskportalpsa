@@ -93,6 +93,10 @@ internal sealed class AtTicketNote
     [JsonPropertyName("description")] public string? Description { get; set; }
     [JsonPropertyName("publish")] public int Publish { get; set; }
     [JsonPropertyName("createDateTime")] public DateTimeOffset? CreateDateTime { get; set; }
+    // Autotask names the note author "creatorResourceID" (Tickets use "creatorResourceID" too);
+    // "createdByContactID" is set instead when the author was a customer contact.
+    [JsonPropertyName("creatorResourceID")] public long? CreatorResourceId { get; set; }
+    [JsonPropertyName("createdByContactID")] public long? CreatedByContactId { get; set; }
 }
 
 internal sealed class AtFieldInfoResult

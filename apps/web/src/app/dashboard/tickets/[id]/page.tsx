@@ -168,7 +168,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--bg)] text-[var(--muted)]"><Icon size={22} /></span>
                   <div>
                     <h1 className="text-xl font-semibold">{ticket.title}</h1>
-                    <p className="text-sm text-[var(--muted)]">{ticket.description ?? 'No description provided.'}</p>
+                    <p className="whitespace-pre-line text-sm text-[var(--muted)]">{ticket.description ?? 'No description provided.'}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -355,7 +355,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                         </span>
                         <span className="shrink-0 text-xs text-[var(--faint)]">{fmt(n.createdAt, true)}</span>
                       </div>
-                      <p className="mt-1 text-sm">{n.body}</p>
+                      <p className="mt-1 whitespace-pre-line text-sm">{n.body}</p>
                     </div>
                   </div>
                 ))}

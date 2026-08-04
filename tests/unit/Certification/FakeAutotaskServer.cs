@@ -55,8 +55,12 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
             return Json(CreateTicket(body));
         if (path.EndsWith("V1.0/Tickets", StringComparison.OrdinalIgnoreCase) && request.Method == HttpMethod.Patch)
             return UpdateTicket(body);
+        // Notes are a CHILD collection: creates go to the parent ticket's /Notes route. Posting to
+        // the top-level TicketNotes entity 404s, exactly as the live API does.
+        if (path.EndsWith("/Notes", StringComparison.OrdinalIgnoreCase) && request.Method == HttpMethod.Post)
+            return CreateNote(body);
         if (path.EndsWith("V1.0/TicketNotes", StringComparison.OrdinalIgnoreCase) && request.Method == HttpMethod.Post)
-            return Json(CreateNote(body));
+            return Resp(HttpStatusCode.NotFound, "{\"errors\":[\"entity not found\"]}");
         if (path.EndsWith("V1.0/TicketAttachments", StringComparison.OrdinalIgnoreCase) && request.Method == HttpMethod.Post)
             return Json($"{{\"itemId\":{++_seq}}}");
 
@@ -104,19 +108,26 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
         return Json($"{{\"itemId\":{id}}}");
     }
 
-    private string CreateNote(string body)
+    private HttpResponseMessage CreateNote(string body)
     {
         var input = Parse(body);
+        // The live API rejects a note without a title; keep that contract so the connector's
+        // title derivation stays covered.
+        if (string.IsNullOrWhiteSpace(input.GetValueOrDefault("title")?.ToString()))
+            return Resp(HttpStatusCode.BadRequest, "{\"errors\":[\"Missing Required Field: title\"]}");
+
         var note = new Dictionary<string, object?>
         {
             ["id"] = ++_seq,
             ["ticketID"] = Convert.ToInt64(input["ticketID"]),
+            ["title"] = input.GetValueOrDefault("title"),
             ["description"] = input.GetValueOrDefault("description"),
             ["publish"] = Convert.ToInt32(input.GetValueOrDefault("publish") ?? 1),
             ["createDateTime"] = clock.GetUtcNow().ToString("o"),
+            ["creatorResourceID"] = 20L, // the integration user, as Autotask stamps it
         };
         _notes.Add(note);
-        return $"{{\"itemId\":{note["id"]}}}";
+        return Json($"{{\"itemId\":{note["id"]}}}");
     }
 
     private sealed record FilterClause(string Field, string Op, long? Number, string? Text);

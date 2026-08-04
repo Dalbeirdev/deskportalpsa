@@ -121,6 +121,9 @@ public abstract class ConnectorCertificationSuite
         var notes = await c.GetPublicNotesAsync(t.ExternalId!);
         notes.Should().NotBeEmpty();
         notes.Should().OnlyContain(n => n.IsPublic);
+        // Every connector must attribute a human-written note, so the portal thread never shows a
+        // reply bylined with the provider's name instead of its actual author.
+        notes.Should().OnlyContain(n => !string.IsNullOrWhiteSpace(n.AuthorName));
     }
 
     // ---- field discovery ----

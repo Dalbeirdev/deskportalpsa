@@ -114,6 +114,8 @@ public sealed class FakeConnectWiseServer(TimeProvider clock) : HttpMessageHandl
             ["detailDescriptionFlag"] = true,
             ["customerUpdatedFlag"] = r.TryGetProperty("customerUpdatedFlag", out var c) && c.GetBoolean(),
             ["dateCreated"] = clock.GetUtcNow().ToString("o"),
+            // CW stamps the authenticated member on notes it accepts.
+            ["member"] = new Dictionary<string, object?> { ["id"] = 20L, ["name"] = "Tech One" },
         };
         _notes.Add(note);
         return Serialize(note);

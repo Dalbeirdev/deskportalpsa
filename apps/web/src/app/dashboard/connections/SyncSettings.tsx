@@ -79,10 +79,10 @@ export function SyncSettings({ connectionId, provider }: { connectionId: string;
             hint="Pull provider-side changes back into the portal. Off = portal → PSA writes only." />
           <Toggle label="Auto-import new tickets" checked={form.autoImportNewTickets} onChange={(v) => set('autoImportNewTickets', v)}
             hint="Create brand-new provider tickets here on each sync. Off = only tickets already known are updated." />
-          <Toggle label="Import notes" notYet checked={form.importNotes} onChange={(v) => set('importNotes', v)}
-            hint="Will mirror provider notes into the portal thread. Inbound note sync is not built yet, so this has no effect." />
-          <Toggle label="Import system notes" notYet checked={form.importSystemNotes} onChange={(v) => set('importSystemNotes', v)}
-            hint="Will exclude machine-generated workflow/SLA notes. Depends on note import." />
+          <Toggle label="Import notes" checked={form.importNotes} onChange={(v) => set('importNotes', v)}
+            hint="Mirror the provider's public notes into the portal thread. Internal/private notes are never imported." />
+          <Toggle label="Import system notes" checked={form.importSystemNotes} onChange={(v) => set('importSystemNotes', v)}
+            hint="Also import notes with no human author (workflow/SLA automation). Depends on note import." />
           <Toggle label="Sync attachments" notYet checked={form.syncAttachments} onChange={(v) => set('syncAttachments', v)}
             hint="Will mirror attachments both ways. Portal-side upload works today; provider sync is not built yet." />
         </div>

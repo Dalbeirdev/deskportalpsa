@@ -141,8 +141,49 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
     {
         var items = await QueryAsync<AtTicketNote>("TicketNotes",
             [Filter("ticketID", "eq", long.Parse(ticketId)), Filter("publish", "eq", config.PublicPublishValue)], 500, ct);
+
+        // Resolve the real author. Autotask puts only an id on the note — a resource (technician) or,
+        // when a customer contact wrote it, a contact — so translate both to display names. A thread
+        // that attributes every reply to "Autotask" is useless to a reader. Each lookup is a single
+        // extra request, made only when a note in this batch actually needs it.
+        var names = new Dictionary<long, string>();
+        if (items.Any(n => n.CreatorResourceId is > 0))
+            await SafeFillAsync(names, async () =>
+                (await GetTechniciansAsync(ct)).Select(r => (r.ExternalId, r.DisplayName)));
+
+        var contactNames = new Dictionary<long, string>();
+        var contactIds = items.Where(n => n.CreatedByContactId is > 0).Select(n => n.CreatedByContactId!.Value).Distinct().ToList();
+        if (contactIds.Count > 0)
+            await SafeFillAsync(contactNames, async () =>
+                (await QueryAsync<AtContact>("Contacts", [Filter("id", "in", contactIds.ToArray())], 500, ct))
+                    .Select(c => (c.Id.ToString(), $"{c.FirstName} {c.LastName}".Trim())));
+
         return items.Select(n => new UnifiedTicketNote(
-            n.Id.ToString(), "Autotask", n.Description ?? "", IsPublic: true, n.CreateDateTime ?? clock.GetUtcNow())).ToList();
+            n.Id.ToString(),
+            AuthorOf(n, names, contactNames),
+            n.Description ?? "", IsPublic: true, n.CreateDateTime ?? clock.GetUtcNow())).ToList();
+    }
+
+    private static string AuthorOf(AtTicketNote note, IReadOnlyDictionary<long, string> resources, IReadOnlyDictionary<long, string> contacts)
+    {
+        if (note.CreatedByContactId is { } cid && contacts.TryGetValue(cid, out var contact) && !string.IsNullOrWhiteSpace(contact))
+            return contact;
+        if (note.CreatorResourceId is { } rid && resources.TryGetValue(rid, out var resource) && !string.IsNullOrWhiteSpace(resource))
+            return resource;
+        // No resolvable author: a workflow rule, an SLA event, or a deleted resource. An empty author
+        // is the contract's marker for a system-generated note — the sync layer filters on it.
+        return "";
+    }
+
+    /// <summary>Best-effort name lookup: an author-name lookup must never fail the note read itself.</summary>
+    private static async Task SafeFillAsync(Dictionary<long, string> target, Func<Task<IEnumerable<(string Id, string Name)>>> load)
+    {
+        try
+        {
+            foreach (var (id, name) in await load())
+                if (long.TryParse(id, out var parsed)) target[parsed] = name;
+        }
+        catch (ConnectorException) { /* callers fall back to the neutral provider label */ }
     }
 
     public async Task<CreateNoteResult> AddPublicNoteAsync(string ticketId, UnifiedTicketNoteCreateRequest note, CancellationToken ct = default)
@@ -150,11 +191,18 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
         var body = new Dictionary<string, object?>
         {
             ["ticketID"] = long.Parse(ticketId),
+            // Autotask requires a note title. The unified model has no separate title (portals and
+            // most PSAs treat a reply as body-only), so derive a readable one from the first line
+            // rather than inventing a tag — nothing is added to the body the customer sees.
+            ["title"] = NoteTitle(note.Body),
             ["description"] = note.Body,
             ["noteType"] = 1,
             ["publish"] = note.IsPublic ? config.PublicPublishValue : config.InternalPublishValue,
         };
-        var result = await SendAsync<AtCreateResult>(HttpMethod.Post, "V1.0/TicketNotes", body, ct);
+        // TicketNotes is a CHILD collection in Autotask: creates go to the parent ticket's /Notes
+        // route. Posting to the top-level /V1.0/TicketNotes returns 404 ("entity not found").
+        // Querying still uses the top-level TicketNotes entity (see GetPublicNotesAsync).
+        var result = await SendAsync<AtCreateResult>(HttpMethod.Post, $"V1.0/Tickets/{long.Parse(ticketId)}/Notes", body, ct);
         return new CreateNoteResult(true, result!.ItemId.ToString(), null);
     }
 
@@ -239,6 +287,15 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
         var field = info?.Fields.FirstOrDefault(f => string.Equals(f.Name, fieldName, StringComparison.OrdinalIgnoreCase));
         return (field?.PicklistValues ?? [])
             .Select(p => new ExternalFieldOption(p.Value ?? "", p.Label ?? p.Value ?? "", p.IsActive)).ToList();
+    }
+
+    /// <summary>Autotask note titles are mandatory and capped; use the first meaningful line.</summary>
+    private static string NoteTitle(string body)
+    {
+        var line = (body ?? string.Empty)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault(l => l.Length > 0) ?? "Portal reply";
+        return line.Length <= 250 ? line : line[..250];
     }
 
     private static object Filter(string field, string op, object value) => new { op, field, value };

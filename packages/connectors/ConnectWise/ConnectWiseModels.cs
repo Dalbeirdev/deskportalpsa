@@ -71,6 +71,8 @@ internal sealed class CwTicketNote
     [JsonPropertyName("customerUpdatedFlag")] public bool CustomerUpdatedFlag { get; set; }
     [JsonPropertyName("dateCreated")] public DateTimeOffset? DateCreated { get; set; }
     [JsonPropertyName("member")] public CwRef? Member { get; set; }
+    // Set instead of "member" when a customer contact wrote the note (portal/email replies).
+    [JsonPropertyName("contact")] public CwRef? Contact { get; set; }
 }
 
 internal sealed class CwTimeEntry

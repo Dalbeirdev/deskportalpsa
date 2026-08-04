@@ -3,6 +3,8 @@ using Desk.Application.Connectors;
 using Desk.Application.Sync;
 using Desk.Domain.Enums;
 using Desk.Domain.Tenancy;
+using Desk.Domain.Tickets;
+using Desk.PsaCore.Contracts;
 using Desk.Infrastructure.Persistence;
 using Desk.PsaCore.Models;
 using Microsoft.EntityFrameworkCore;
@@ -38,7 +40,7 @@ public sealed class ConnectionSyncRunner(
             .Where(m => m.Provider == connection.Provider && m.IsActive)
             .ToListAsync(ct);
 
-        int fetched = 0, created = 0, updated = 0, skipped = 0, pages = 0;
+        int fetched = 0, created = 0, updated = 0, skipped = 0, pages = 0, notes = 0;
         string? cursor = null;
         try
         {
@@ -72,6 +74,9 @@ public sealed class ConnectionSyncRunner(
                         case TicketSyncOutcome.Updated: updated++; break;
                         default: skipped++; break;
                     }
+
+                    if (connection.ImportNotes)
+                        notes += await ImportNotesAsync(connection, connector, ticket.ExternalId, ct);
                 }
                 cursor = page.NextCursor;
                 if (!page.HasMore) break;
@@ -92,7 +97,57 @@ public sealed class ConnectionSyncRunner(
             throw;
         }
 
-        return new SyncRunResult(fetched, created, updated, skipped, pages);
+        return new SyncRunResult(fetched, created, updated, skipped, pages, notes);
+    }
+
+    /// <summary>
+    /// Mirrors the provider's PUBLIC notes into the portal thread. Deduplication is by the provider's
+    /// own note id, which doubles as echo suppression: a reply written in the portal already stored
+    /// that id when the provider accepted it, so it is recognised rather than duplicated.
+    /// Internal notes never reach here — the connector's GetPublicNotesAsync filters them out, so a
+    /// private note cannot leak into a customer-visible thread.
+    /// </summary>
+    private async Task<int> ImportNotesAsync(PsaConnection connection, IServiceManagementConnector connector, string externalTicketId, CancellationToken ct)
+    {
+        var ticket = await db.Tickets.FirstOrDefaultAsync(
+            t => t.PsaConnectionId == connection.Id && t.ExternalTicketId == externalTicketId, ct);
+        if (ticket is null) return 0;
+
+        IReadOnlyList<UnifiedTicketNote> incoming;
+        try { incoming = await connector.GetPublicNotesAsync(externalTicketId, ct); }
+        catch (ConnectorException) { return 0; } // one ticket's notes must not fail the whole run
+
+        var existing = await db.TicketNotes
+            .Where(n => n.TicketId == ticket.Id && n.ExternalNoteId != null)
+            .Select(n => n.ExternalNoteId!)
+            .ToListAsync(ct);
+        var known = new HashSet<string>(existing);
+
+        var added = 0;
+        foreach (var n in incoming)
+        {
+            if (string.IsNullOrEmpty(n.ExternalId) || known.Contains(n.ExternalId)) continue;
+            // Machine-generated notes have no human author; skip unless explicitly wanted.
+            if (!connection.ImportSystemNotes && string.IsNullOrWhiteSpace(n.AuthorName)) continue;
+
+            db.TicketNotes.Add(new TicketNote
+            {
+                MspOrganizationId = ticket.MspOrganizationId,
+                TicketId = ticket.Id,
+                ExternalNoteId = n.ExternalId,
+                // An empty author means the provider generated the note itself (workflow/SLA); name it
+                // after the provider rather than leaving a blank byline in the thread.
+                AuthorName = string.IsNullOrWhiteSpace(n.AuthorName) ? $"{connection.Provider} automation" : n.AuthorName,
+                AuthoredByClient = false,
+                Body = n.Body,
+                IsPublic = true,
+                NoteCreatedAt = n.CreatedAt,
+            });
+            known.Add(n.ExternalId);
+            added++;
+        }
+        if (added > 0) await db.SaveChangesAsync(ct);
+        return added;
     }
 
     private static IReadOnlyList<string> Csv(string? raw)
