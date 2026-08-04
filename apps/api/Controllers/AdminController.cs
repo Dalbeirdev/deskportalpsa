@@ -41,12 +41,15 @@ public sealed class AdminConnectionsController(
     public async Task<IActionResult> Test(Guid id, CancellationToken ct)
         => Ok(await svc.TestAsync(id, ct));
 
-    /// <summary>Pull tickets from the provider into the portal (manual "sync now").</summary>
+    /// <summary>
+    /// Pull tickets from the provider into the portal. Incremental by default; pass full=true to
+    /// re-pull everything (e.g. after changing field mappings, so existing tickets are re-translated).
+    /// </summary>
     [HttpPost("{id:guid}/sync")]
     [RequirePermission(Permissions.ConnectionsManage)]
-    public async Task<IActionResult> Sync(Guid id, CancellationToken ct)
+    public async Task<IActionResult> Sync(Guid id, [FromQuery] bool full, CancellationToken ct)
     {
-        var result = await syncRunner.RunAsync(id, ct);
+        var result = await syncRunner.RunAsync(id, full, ct);
         await EnsureLocalClientIdentityAsync(id, ct);
         return Ok(result);
     }

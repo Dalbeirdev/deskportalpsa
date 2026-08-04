@@ -145,6 +145,22 @@ public class AdminTests
     }
 
     [Fact]
+    public async Task Mapping_upsert_without_id_updates_the_matching_rule_instead_of_duplicating()
+    {
+        var (svc, h) = Mappings();
+        UpsertMappingInput Input(string external) => new(
+            null, ProviderType.AutotaskPsa, MappingScope.ProviderDefault, null,
+            "status", "IN_PROGRESS", "status", external, MappingDirection.Bidirectional, false, null);
+
+        await svc.UpsertAsync(Input("In Progress"), "first");
+        await svc.UpsertAsync(Input("Working"), "repeat");
+
+        // Same provider/scope/field/portal-value/direction → one rule, updated in place.
+        (await h.Db.FieldMappings.CountAsync()).Should().Be(1);
+        (await h.Db.FieldMappings.Select(m => m.ExternalValue).SingleAsync()).Should().Be("Working");
+    }
+
+    [Fact]
     public async Task Mapping_rollback_restores_a_previous_version()
     {
         var (svc, h) = Mappings();

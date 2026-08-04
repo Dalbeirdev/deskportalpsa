@@ -38,8 +38,27 @@ public sealed class MappingAdminService(
         }
         else
         {
-            rule = new FieldMapping { Provider = input.Provider, PortalField = input.PortalField, ExternalField = input.ExternalField };
-            db.FieldMappings.Add(rule);
+            // Upsert semantics: without an id, match an existing rule for the same
+            // provider/scope/connection/field/portal-value/direction and update it. Otherwise a
+            // repeated save (API retry, re-running a setup script) silently creates duplicate rules,
+            // which then make resolution ambiguous.
+            var existing = await db.FieldMappings.FirstOrDefaultAsync(m =>
+                m.Provider == input.Provider
+                && m.Scope == input.Scope
+                && m.PsaConnectionId == input.PsaConnectionId
+                && m.PortalField == input.PortalField
+                && m.PortalValue == input.PortalValue
+                && m.Direction == input.Direction, ct);
+            if (existing is not null)
+            {
+                rule = existing;
+                rule.Version++;
+            }
+            else
+            {
+                rule = new FieldMapping { Provider = input.Provider, PortalField = input.PortalField, ExternalField = input.ExternalField };
+                db.FieldMappings.Add(rule);
+            }
         }
 
         rule.Provider = input.Provider;

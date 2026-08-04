@@ -22,7 +22,7 @@ public sealed class ConnectionSyncRunner(
 {
     private const int MaxPages = 50; // safety cap so a runaway cursor can't loop forever
 
-    public async Task<SyncRunResult> RunAsync(Guid psaConnectionId, CancellationToken ct = default)
+    public async Task<SyncRunResult> RunAsync(Guid psaConnectionId, bool full = false, CancellationToken ct = default)
     {
         var connection = await db.PsaConnections.FirstOrDefaultAsync(c => c.Id == psaConnectionId, ct)
             ?? throw new NotFoundException("PSA connection");
@@ -39,7 +39,7 @@ public sealed class ConnectionSyncRunner(
             do
             {
                 var page = await connector.GetTicketsAsync(
-                    new TicketFilter { ModifiedSince = connection.LastSuccessfulSyncAt, PageSize = 100, Cursor = cursor }, ct);
+                    new TicketFilter { ModifiedSince = full ? null : connection.LastSuccessfulSyncAt, PageSize = 100, Cursor = cursor }, ct);
                 pages++;
                 foreach (var ticket in page.Items)
                 {

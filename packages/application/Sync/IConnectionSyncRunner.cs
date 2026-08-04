@@ -10,5 +10,10 @@ public sealed record SyncRunResult(int Fetched, int Created, int Updated, int Sk
 /// </summary>
 public interface IConnectionSyncRunner
 {
-    Task<SyncRunResult> RunAsync(Guid psaConnectionId, CancellationToken ct = default);
+    /// <param name="full">
+    /// Ignore the incremental cursor and re-pull every ticket. Use after changing field mappings so
+    /// existing tickets are re-translated with the new rules (an incremental run would skip them,
+    /// since nothing changed on the provider side).
+    /// </param>
+    Task<SyncRunResult> RunAsync(Guid psaConnectionId, bool full = false, CancellationToken ct = default);
 }

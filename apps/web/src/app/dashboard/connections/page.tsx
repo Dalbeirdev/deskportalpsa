@@ -74,14 +74,15 @@ export default function ConnectionsPage() {
   });
 
   const sync = useMutation({
-    mutationFn: (id: string) => api.syncConnection(id),
-    onSuccess: (r, id) => {
-      setResults((m) => ({ ...m, [id]: { ok: true, msg: `Synced · ${r.created} new, ${r.updated} updated (${r.fetched} fetched)` } }));
+    mutationFn: (v: { id: string; full: boolean }) => api.syncConnection(v.id, v.full),
+    onSuccess: (r, v) => {
+      const id = v.id;
+      setResults((m) => ({ ...m, [id]: { ok: true, msg: `${v.full ? 'Re-synced all' : 'Synced'} · ${r.created} new, ${r.updated} updated (${r.fetched} fetched)` } }));
       // Refresh every page that reads synced data.
       ['connections', 'tickets', 'team', 'trend', 'health', 'notifications', 'audit', 'jobs'].forEach((k) =>
         qc.invalidateQueries({ queryKey: [k] }));
     },
-    onError: (e, id) => setResults((m) => ({ ...m, [id]: { ok: false, msg: e instanceof Error ? `Sync failed: ${e.message}` : 'Sync failed' } })),
+    onError: (e, v) => setResults((m) => ({ ...m, [v.id]: { ok: false, msg: e instanceof Error ? `Sync failed: ${e.message}` : 'Sync failed' } })),
   });
 
   const refreshFields = useMutation({
@@ -200,8 +201,9 @@ export default function ConnectionsPage() {
                   fields={fieldsById[c.id]}
                   onTest={() => test.mutate(c.id)}
                   testing={test.isPending && test.variables === c.id}
-                  onSync={() => sync.mutate(c.id)}
-                  syncing={sync.isPending && sync.variables === c.id}
+                  onSync={() => sync.mutate({ id: c.id, full: false })}
+                  onResyncAll={() => sync.mutate({ id: c.id, full: true })}
+                  syncing={sync.isPending && sync.variables?.id === c.id}
                   onRefreshFields={() => refreshFields.mutate(c.id)}
                   refreshingFields={refreshFields.isPending && refreshFields.variables === c.id}
                   onEdit={() => openEdit(c)}
@@ -217,7 +219,7 @@ export default function ConnectionsPage() {
 }
 
 function FragmentRow({
-  c, result, expanded, fields, onTest, testing, onSync, syncing, onRefreshFields, refreshingFields, onEdit, onToggleFields,
+  c, result, expanded, fields, onTest, testing, onSync, onResyncAll, syncing, onRefreshFields, refreshingFields, onEdit, onToggleFields,
 }: {
   c: ConnectionSummary;
   result?: { ok: boolean; msg: string };
@@ -226,6 +228,7 @@ function FragmentRow({
   onTest: () => void;
   testing: boolean;
   onSync: () => void;
+  onResyncAll: () => void;
   syncing: boolean;
   onRefreshFields: () => void;
   refreshingFields: boolean;
@@ -253,6 +256,7 @@ function FragmentRow({
             <ActionButton onClick={onEdit}>Edit</ActionButton>
             <ActionButton onClick={onTest} disabled={testing}>{testing ? 'Testing…' : 'Test'}</ActionButton>
             <ActionButton onClick={onSync} disabled={syncing}>{syncing ? 'Syncing…' : 'Sync now'}</ActionButton>
+            <ActionButton onClick={onResyncAll} disabled={syncing}>Re-sync all</ActionButton>
           </div>
         </td>
       </tr>
