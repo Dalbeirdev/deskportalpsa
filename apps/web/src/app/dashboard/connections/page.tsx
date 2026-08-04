@@ -152,8 +152,13 @@ export default function ConnectionsPage() {
                 {PROVIDERS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
             </label>
-            <Input label="API endpoint" value={form.apiEndpoint} onChange={(v) => setForm({ ...form, apiEndpoint: v })} />
-            <Input label="Tenant identifier" value={form.tenantIdentifier} onChange={(v) => setForm({ ...form, tenantIdentifier: v })} />
+            <Input label="API endpoint" value={form.apiEndpoint} onChange={(v) => setForm({ ...form, apiEndpoint: v })}
+              placeholder={provider === 2 ? 'https://webservices31.autotask.net/ATServicesRest/' : 'https://api-na.myconnectwise.net/v4_6_release/apis/3.0/'}
+              hint={provider === 2
+                ? 'Your Autotask zone URL. The version segment is optional — /ATServicesRest/ and /ATServicesRest/v1.0/ both work.'
+                : 'Your ConnectWise API base, ending in /apis/3.0/.'} />
+            <Input label="Tenant identifier (optional)" value={form.tenantIdentifier} onChange={(v) => setForm({ ...form, tenantIdentifier: v })}
+              hint="A label for your own reference — not required, and not sent to the PSA." />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             {providerDef.creds.map((c) => (
@@ -312,7 +317,7 @@ function FieldList({ title, items }: { title: string; items: { value: string; la
   );
 }
 
-function Input({ label, value, onChange, type = 'text', placeholder }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string }) {
+function Input({ label, value, onChange, type = 'text', placeholder, hint }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string; hint?: string }) {
   return (
     <label className="block">
       <span className="mb-1.5 block text-sm font-medium">{label}</span>
@@ -323,6 +328,7 @@ function Input({ label, value, onChange, type = 'text', placeholder }: { label: 
         onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand"
       />
+      {hint && <span className="mt-1 block text-xs text-[var(--muted)]">{hint}</span>}
     </label>
   );
 }

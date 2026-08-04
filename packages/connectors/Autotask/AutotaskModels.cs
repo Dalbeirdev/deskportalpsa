@@ -75,12 +75,12 @@ internal sealed class AtTicket
     [JsonPropertyName("id")] public long Id { get; set; }
     [JsonPropertyName("title")] public string? Title { get; set; }
     [JsonPropertyName("description")] public string? Description { get; set; }
-    [JsonPropertyName("status")] public string? Status { get; set; }
-    [JsonPropertyName("priority")] public string? Priority { get; set; }
-    [JsonPropertyName("queueID")] public string? QueueId { get; set; }
-    [JsonPropertyName("ticketCategory")] public string? Category { get; set; }
+    [JsonPropertyName("status")] [JsonConverter(typeof(FlexibleStringConverter))] public string? Status { get; set; }
+    [JsonPropertyName("priority")] [JsonConverter(typeof(FlexibleStringConverter))] public string? Priority { get; set; }
+    [JsonPropertyName("queueID")] [JsonConverter(typeof(FlexibleStringConverter))] public string? QueueId { get; set; }
+    [JsonPropertyName("ticketCategory")] [JsonConverter(typeof(FlexibleStringConverter))] public string? Category { get; set; }
     [JsonPropertyName("companyID")] public long CompanyId { get; set; }
-    [JsonPropertyName("assignedResourceID")] public string? AssignedResourceId { get; set; }
+    [JsonPropertyName("assignedResourceID")] [JsonConverter(typeof(FlexibleStringConverter))] public string? AssignedResourceId { get; set; }
     [JsonPropertyName("createDate")] public DateTimeOffset? CreateDate { get; set; }
     [JsonPropertyName("lastActivityDate")] public DateTimeOffset? LastActivityDate { get; set; }
     [JsonPropertyName("resolvedDateTime")] public DateTimeOffset? ResolvedDateTime { get; set; }

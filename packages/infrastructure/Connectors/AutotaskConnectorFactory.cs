@@ -46,7 +46,20 @@ public sealed class AutotaskConnectorFactory(
         return new AutotaskConnector(http, config, clock);
     }
 
-    private static string EnsureTrailingSlash(string url) => url.EndsWith('/') ? url : url + "/";
+    /// <summary>
+    /// Normalizes the configured endpoint to the API root the connector expects
+    /// (…/ATServicesRest/). The connector appends the version itself ("V1.0/{entity}/query"), but
+    /// Autotask's own docs and the zone-lookup response show the URL WITH the version, so admins
+    /// commonly paste ".../ATServicesRest/v1.0/". Accept either form and strip a trailing version
+    /// segment — otherwise every call 404s on a doubled ".../v1.0/V1.0/...".
+    /// </summary>
+    private static string EnsureTrailingSlash(string url)
+    {
+        var normalized = url.TrimEnd('/');
+        if (normalized.EndsWith("/v1.0", StringComparison.OrdinalIgnoreCase))
+            normalized = normalized[..^"/v1.0".Length];
+        return normalized + "/";
+    }
 
     private static string Require(IReadOnlyDictionary<string, string> secret, string key)
         => secret.TryGetValue(key, out var v) && !string.IsNullOrEmpty(v)
