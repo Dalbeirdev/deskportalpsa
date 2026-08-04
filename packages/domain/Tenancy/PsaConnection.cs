@@ -61,6 +61,16 @@ public class PsaConnection : TenantEntity
     /// <summary>Only import tickets active within this many days. Null/0 = no age limit.</summary>
     public int? FilterActiveWithinDays { get; set; }
 
+    // ---- Ticket defaults: values sent when the portal creates a ticket in this PSA ----
+    // Providers mandate different fields (Autotask requires a queue; ConnectWise a board), and the
+    // portal's create form deliberately stays simple, so the connection supplies the rest.
+    // Stored as the provider's own external ids, chosen from live field discovery.
+
+    public string? DefaultQueueOrBoardId { get; set; }
+    public string? DefaultTicketType { get; set; }
+    public string? DefaultIssueType { get; set; }
+    public string? DefaultSubIssueType { get; set; }
+
     // Rate-limit + retry configuration (provider defaults may override).
     public int RateLimitPerMinute { get; set; } = 60;
     public int MaxRetries { get; set; } = 5;

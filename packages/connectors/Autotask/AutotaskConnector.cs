@@ -111,6 +111,11 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
             ["ticketCategory"] = ticket.Category,
             ["companyID"] = long.Parse(ticket.ExternalCompanyId),
         };
+        // Optional classification — Autotask tenants differ on which of these are mandatory, so
+        // only send what the connection actually configured.
+        if (ticket.TicketType is not null) body["ticketType"] = ticket.TicketType;
+        if (ticket.IssueType is not null) body["issueType"] = ticket.IssueType;
+        if (ticket.SubIssueType is not null) body["subIssueType"] = ticket.SubIssueType;
         var result = await SendAsync<AtCreateResult>(HttpMethod.Post, "V1.0/Tickets", body, ct);
         return new CreateTicketResult(true, result!.ItemId.ToString(), null);
     }

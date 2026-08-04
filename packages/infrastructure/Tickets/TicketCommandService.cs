@@ -55,7 +55,14 @@ public sealed class TicketCommandService(
             Status = MapOut(rules, ctx, "status", NewStatus),
             Priority = MapOut(rules, ctx, "priority", input.Priority),
             Category = MapOut(rules, ctx, "category", input.Category),
-            QueueOrBoard = MapOut(rules, ctx, "queue", input.QueueOrBoard),
+            // Queue: use the caller's choice when given, else the connection's configured default
+            // (already a provider id, so it bypasses mapping). Providers such as Autotask require one.
+            QueueOrBoard = input.QueueOrBoard is not null
+                ? MapOut(rules, ctx, "queue", input.QueueOrBoard)
+                : connection.DefaultQueueOrBoardId,
+            TicketType = connection.DefaultTicketType,
+            IssueType = connection.DefaultIssueType,
+            SubIssueType = connection.DefaultSubIssueType,
             ExternalCompanyId = company.ExternalCompanyId,
             RequesterExternalId = requester.ExternalContactId,
             RequesterEmail = requester.Email,

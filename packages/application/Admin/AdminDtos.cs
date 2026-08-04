@@ -112,4 +112,5 @@ public sealed record ConnectionFieldsDto(
 public sealed record ConnectionSettingsDto(
     bool TwoWaySync, bool AutoImportNewTickets, bool ImportNotes, bool ImportSystemNotes, bool SyncAttachments,
     bool ImportOpenTickets, bool ImportClosedTickets,
-    string? FilterCompanyIds, string? FilterQueueIds, string? FilterResourceIds, int? FilterActiveWithinDays);
+    string? FilterCompanyIds, string? FilterQueueIds, string? FilterResourceIds, int? FilterActiveWithinDays,
+    string? DefaultQueueOrBoardId, string? DefaultTicketType, string? DefaultIssueType, string? DefaultSubIssueType);

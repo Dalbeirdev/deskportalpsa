@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, Filter, Save, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Filter, Save, CheckCircle2, AlertTriangle, Settings2 } from 'lucide-react';
 import { api, type ConnectionSettings } from '@/lib/api';
 
 // Provider-neutral labels: ConnectWise calls a queue a "service board", Autotask calls it a queue.
@@ -44,6 +44,12 @@ export function SyncSettings({ connectionId, provider }: { connectionId: string;
   const { data, isLoading } = useQuery({
     queryKey: ['connection-settings', connectionId],
     queryFn: () => api.connectionSettings(connectionId),
+  });
+  // Defaults are picked from live discovery, so admins never transcribe numeric ids by hand.
+  const { data: fields } = useQuery({
+    queryKey: ['fields', connectionId],
+    queryFn: () => api.connectionFields(connectionId),
+    retry: false,
   });
   const [form, setForm] = useState<ConnectionSettings | null>(null);
   useEffect(() => { if (data) setForm(data); }, [data]);
@@ -95,6 +101,46 @@ export function SyncSettings({ connectionId, provider }: { connectionId: string;
               onChange={(e) => set('filterActiveWithinDays', e.target.value === '' ? null : Number(e.target.value))}
               className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
             <span className="mt-1 block text-xs text-[var(--muted)]">7 is a good start for a new connection.</span>
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="flex items-center gap-2 text-sm font-semibold"><Settings2 size={15} className="text-brand" /> Ticket defaults</h3>
+        <p className="text-xs text-[var(--muted)]">
+          Sent when the portal creates a ticket here. Providers mandate different fields — Autotask
+          requires a queue — and the portal&apos;s form stays simple, so the connection supplies the rest.
+        </p>
+        <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium">Default {provider === 1 ? 'board' : 'queue'}</span>
+            <select value={form.defaultQueueOrBoardId ?? ''} onChange={(e) => set('defaultQueueOrBoardId', e.target.value || null)}
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
+              <option value="">— none —</option>
+              {(fields?.queuesOrBoards ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            <span className="mt-1 block text-xs text-[var(--muted)]">Required by Autotask on create.</span>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium">Default {provider === 1 ? 'type' : 'ticket type'}</span>
+            <select value={form.defaultTicketType ?? ''} onChange={(e) => set('defaultTicketType', e.target.value || null)}
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
+              <option value="">— none —</option>
+              {(fields?.categories ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium">Default {provider === 1 ? 'sub-type' : 'issue type'}</span>
+            <input value={form.defaultIssueType ?? ''} onChange={(e) => set('defaultIssueType', e.target.value || null)}
+              placeholder="optional id"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
+            <span className="mt-1 block text-xs text-[var(--muted)]">Only if your tenant requires it.</span>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium">Default {provider === 1 ? 'item' : 'sub-issue type'}</span>
+            <input value={form.defaultSubIssueType ?? ''} onChange={(e) => set('defaultSubIssueType', e.target.value || null)}
+              placeholder="optional id"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
           </label>
         </div>
       </div>

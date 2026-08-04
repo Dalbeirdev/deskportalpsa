@@ -67,6 +67,10 @@ export const ConnectionSettingsSchema = z.object({
   filterQueueIds: z.string().nullable(),
   filterResourceIds: z.string().nullable(),
   filterActiveWithinDays: z.number().nullable(),
+  defaultQueueOrBoardId: z.string().nullable(),
+  defaultTicketType: z.string().nullable(),
+  defaultIssueType: z.string().nullable(),
+  defaultSubIssueType: z.string().nullable(),
 });
 export type ConnectionSettings = z.infer<typeof ConnectionSettingsSchema>;
 

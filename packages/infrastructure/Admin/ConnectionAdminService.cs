@@ -172,6 +172,10 @@ public sealed class ConnectionAdminService(
         c.FilterQueueIds = Clean(input.FilterQueueIds);
         c.FilterResourceIds = Clean(input.FilterResourceIds);
         c.FilterActiveWithinDays = input.FilterActiveWithinDays is > 0 ? input.FilterActiveWithinDays : null;
+        c.DefaultQueueOrBoardId = Clean(input.DefaultQueueOrBoardId);
+        c.DefaultTicketType = Clean(input.DefaultTicketType);
+        c.DefaultIssueType = Clean(input.DefaultIssueType);
+        c.DefaultSubIssueType = Clean(input.DefaultSubIssueType);
 
         await db.SaveChangesAsync(ct);
         await audit.WriteAsync("connection.settings.updated", "PsaConnection", connectionId.ToString(),
@@ -182,7 +186,8 @@ public sealed class ConnectionAdminService(
     private static ConnectionSettingsDto ToSettings(Desk.Domain.Tenancy.PsaConnection c) => new(
         c.TwoWaySync, c.AutoImportNewTickets, c.ImportNotes, c.ImportSystemNotes, c.SyncAttachments,
         c.ImportOpenTickets, c.ImportClosedTickets,
-        c.FilterCompanyIds, c.FilterQueueIds, c.FilterResourceIds, c.FilterActiveWithinDays);
+        c.FilterCompanyIds, c.FilterQueueIds, c.FilterResourceIds, c.FilterActiveWithinDays,
+        c.DefaultQueueOrBoardId, c.DefaultTicketType, c.DefaultIssueType, c.DefaultSubIssueType);
 
     /// <summary>Normalizes a comma-separated id list; empty becomes null (= no restriction).</summary>
     private static string? Clean(string? raw)

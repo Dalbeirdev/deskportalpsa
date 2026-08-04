@@ -58,6 +58,11 @@ public record UnifiedTicketCreateRequest
     public string? Priority { get; init; }
     public string? Category { get; init; }
     public string? QueueOrBoard { get; init; }
+    /// <summary>Provider classification fields, supplied from the connection's defaults.
+    /// Autotask: ticketType / issueType / subIssueType. ConnectWise: type / subType / item.</summary>
+    public string? TicketType { get; init; }
+    public string? IssueType { get; init; }
+    public string? SubIssueType { get; init; }
     public required string ExternalCompanyId { get; init; }
     public string? RequesterExternalId { get; init; }
     public string? RequesterEmail { get; init; }

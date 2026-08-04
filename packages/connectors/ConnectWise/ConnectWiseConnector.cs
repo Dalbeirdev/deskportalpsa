@@ -127,6 +127,10 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         if (ticket.QueueOrBoard is not null) body["board"] = Ref(ticket.QueueOrBoard);
         if (ticket.Status is not null) body["status"] = Ref(ticket.Status);
         if (ticket.Priority is not null) body["priority"] = Ref(ticket.Priority);
+        // CW's classification trio maps to the portal's ticket/issue/sub-issue types.
+        if (ticket.TicketType is not null) body["type"] = Ref(ticket.TicketType);
+        if (ticket.IssueType is not null) body["subType"] = Ref(ticket.IssueType);
+        if (ticket.SubIssueType is not null) body["item"] = Ref(ticket.SubIssueType);
 
         var created = await SendAsync<CwTicket>(HttpMethod.Post, "service/tickets", body, ct);
         return new CreateTicketResult(true, created!.Id.ToString(), null);
