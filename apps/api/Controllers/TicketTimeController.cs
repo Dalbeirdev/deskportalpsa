@@ -118,24 +118,54 @@ public sealed class TicketTimeController(DeskDbContext db, IConnectorResolver co
         db.TicketTimeEntries.Add(record);
         await db.SaveChangesAsync(ct);
 
+        if (!await PushAsync(record, ticket, connector, ct))
+            throw new ValidationFailedException(record.SyncError ?? "The PSA rejected the time entry.");
+
+        return Ok(await RecomputeAsync(ticket, connector, ct));
+    }
+
+    /// <summary>
+    /// Re-sends an entry the PSA previously rejected. Nothing about the entry is re-entered: the
+    /// original hours, work type and notes are pushed again, so fixing the connection is all it
+    /// takes to recover work that would otherwise have to be typed in a second time.
+    /// </summary>
+    [HttpPost("{id:guid}/time/{entryId:guid}/retry")]
+    [RequirePermission(Permissions.TicketsLogTime)]
+    public async Task<IActionResult> Retry(Guid id, Guid entryId, CancellationToken ct)
+    {
+        var (ticket, connector) = await LoadSyncedAsync(id, ct);
+        var record = await db.TicketTimeEntries.FirstOrDefaultAsync(t => t.Id == entryId && t.TicketId == id, ct)
+            ?? throw new NotFoundException("Time entry");
+        if (record.SyncStatus == TimeEntrySyncStatus.Synced)
+            throw new ValidationFailedException("This entry is already recorded in the PSA.");
+
+        if (!await PushAsync(record, ticket, connector, ct))
+            throw new ValidationFailedException(record.SyncError ?? "The PSA rejected the time entry again.");
+
+        return Ok(await RecomputeAsync(ticket, connector, ct));
+    }
+
+    /// <summary>Pushes a portal record to the PSA and stamps the outcome on it either way.</summary>
+    private async Task<bool> PushAsync(TicketTimeEntry record, Ticket ticket, IServiceManagementConnector connector, CancellationToken ct)
+    {
         var result = await connector.AddTimeEntryAsync(ticket.ExternalTicketId!,
-            new UnifiedTimeEntryCreateRequest(req.Hours,
-                Blank(req.WorkType), Blank(req.WorkRole), billable, req.Notes, MemberIdentifier: null), ct);
+            new UnifiedTimeEntryCreateRequest(record.Hours, record.WorkTypeId, record.WorkRoleId,
+                record.Billable ? BillableOption.Billable : BillableOption.DoNotBill,
+                record.Notes, MemberIdentifier: null), ct);
 
         if (!result.Success)
         {
             record.SyncStatus = TimeEntrySyncStatus.Failed;
             record.SyncError = result.Error;
             await db.SaveChangesAsync(ct);
-            throw new ValidationFailedException(result.Error ?? "The PSA rejected the time entry.");
+            return false;
         }
 
         record.ExternalEntryId = result.ExternalId;
         record.SyncStatus = TimeEntrySyncStatus.Synced;
         record.SyncError = null;
         await db.SaveChangesAsync(ct);
-
-        return Ok(await RecomputeAsync(ticket, connector, ct));
+        return true;
     }
 
     /// <summary>Resolves a work-type id to its label once, so the row stays readable later.</summary>
@@ -167,6 +197,21 @@ public sealed class TicketTimeController(DeskDbContext db, IConnectorResolver co
     public async Task<IActionResult> Delete(Guid id, string entryId, CancellationToken ct)
     {
         var (ticket, connector) = await LoadSyncedAsync(id, ct);
+
+        // A rejected entry has no provider counterpart — its id is the portal's own. Asking the PSA
+        // to delete it would fail, leaving the row stuck on screen with no way to clear it.
+        if (Guid.TryParse(entryId, out var localId))
+        {
+            var unsynced = await db.TicketTimeEntries
+                .FirstOrDefaultAsync(t => t.Id == localId && t.TicketId == id && t.ExternalEntryId == null, ct);
+            if (unsynced is not null)
+            {
+                db.TicketTimeEntries.Remove(unsynced);
+                await db.SaveChangesAsync(ct);
+                return Ok(await RecomputeAsync(ticket, connector, ct));
+            }
+        }
+
         var result = await connector.DeleteTimeEntryAsync(entryId, ct);
         if (!result.Success)
             throw new ValidationFailedException(result.Error ?? "The PSA rejected the deletion.");

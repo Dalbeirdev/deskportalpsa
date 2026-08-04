@@ -165,6 +165,10 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
     mutationFn: (status: string) => api.updateTicketStatus(id, status),
     onSuccess: () => { [['ticket', id], ['tickets'], ['team'], ['trend']].forEach((k) => qc.invalidateQueries({ queryKey: k })); },
   });
+  const retryEntry = useMutation({
+    mutationFn: (entryId: string) => api.retryTimeEntry(id, entryId),
+    onSuccess: refreshTime,
+  });
   const delEntry = useMutation({
     mutationFn: (entryId: string) => api.deleteTimeEntry(id, entryId),
     onSuccess: refreshTime,
@@ -429,20 +433,34 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                                 : <span className="font-medium text-red-600 dark:text-red-400">{e.syncStatus.toLowerCase()}</span>}
                             </span>
                             <span className="shrink-0 text-xs text-[var(--faint)]">{fmtDay(e.entryDate)}</span>
-                            {/* A rejected entry has nothing to edit or delete on the provider side. */}
-                            {e.syncStatus === 'Synced' && (
+                            {/* A rejected entry has no provider counterpart to edit. It can be sent
+                                again once the cause is fixed, or discarded — leaving it with no
+                                actions at all stranded the work on screen permanently. */}
+                            {e.syncStatus === 'Synced' ? (
                               <>
                                 <button onClick={() => setEditEntry({ id: e.externalId, hours: e.hours.toString(), notes: e.notes ?? '' })}
                                   aria-label="Edit" className="rounded-md p-1.5 text-[var(--muted)] hover:bg-[var(--bg)] hover:text-brand"><Pencil size={14} /></button>
                                 <button onClick={() => { if (window.confirm('Delete this time entry from the PSA?')) delEntry.mutate(e.externalId); }}
                                   disabled={delEntry.isPending} aria-label="Delete" className="rounded-md p-1.5 text-[var(--muted)] hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"><Trash2 size={14} /></button>
                               </>
+                            ) : (
+                              <>
+                                <button onClick={() => retryEntry.mutate(e.externalId)} disabled={retryEntry.isPending}
+                                  aria-label="Send to PSA again" title="Send to the PSA again"
+                                  className="rounded-md p-1.5 text-[var(--muted)] hover:bg-[var(--bg)] hover:text-brand disabled:opacity-50"><RefreshCw size={14} /></button>
+                                <button onClick={() => { if (window.confirm('Discard this entry? It was never recorded in the PSA.')) delEntry.mutate(e.externalId); }}
+                                  disabled={delEntry.isPending} aria-label="Discard" title="Discard"
+                                  className="rounded-md p-1.5 text-[var(--muted)] hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"><Trash2 size={14} /></button>
+                              </>
                             )}
                           </div>
                           {e.syncStatus !== 'Synced' && (
-                            <p className="mt-1 rounded-md bg-red-50 px-2 py-1 text-xs text-red-700 dark:bg-red-950/50 dark:text-red-300">
+                            <p className="mt-1 pl-24 text-xs text-red-600 dark:text-red-400">
                               Not recorded in {providerLabel(Number(ticket.provider))}
-                              {e.syncError ? `: ${e.syncError}` : '.'}
+                              {e.syncError ? `: ${e.syncError}` : '.'}{' '}
+                              {retryEntry.isError
+                                ? <span className="text-[var(--muted)]">Still rejected — fix the cause, then send again.</span>
+                                : <span className="text-[var(--muted)]">Fix the cause, then send again.</span>}
                             </p>
                           )}
                         </div>

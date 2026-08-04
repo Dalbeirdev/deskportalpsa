@@ -99,6 +99,8 @@ export const api = {
     request(`/api/tickets/${id}/time`, z.array(TimeEntrySchema)) as Promise<TimeEntry[]>,
   updateTimeEntry: (id: string, entryId: string, body: { hours?: number; billable?: string; notes?: string }) =>
     request(`/api/tickets/${id}/time/${entryId}`, TimeAggregateSchema, { method: 'PUT', body: JSON.stringify(body) }),
+  retryTimeEntry: (id: string, entryId: string) =>
+    request(`/api/tickets/${id}/time/${entryId}/retry`, TimeAggregateSchema, { method: 'POST' }),
   deleteTimeEntry: (id: string, entryId: string) =>
     request(`/api/tickets/${id}/time/${entryId}`, TimeAggregateSchema, { method: 'DELETE' }),
   uploadAttachment: async (ticketId: string, file: File, noteId?: string) => {

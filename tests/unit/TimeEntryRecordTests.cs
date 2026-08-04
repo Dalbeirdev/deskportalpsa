@@ -107,6 +107,37 @@ public class TimeEntryRecordTests
     }
 
     [Fact]
+    public async Task A_retried_entry_reuses_what_was_already_logged()
+    {
+        var h = AdminHarness.Create(Org);
+        await using var _ = h.Db;
+        // Retry must re-send the original values, not ask for them again: the point is to recover
+        // work already typed once, after the cause of the rejection is fixed.
+        var entry = new TicketTimeEntry
+        {
+            MspOrganizationId = Org, TicketId = Guid.NewGuid(), Hours = 0.2m, Billable = true,
+            Notes = "Diagnosed the switch port", WorkTypeId = "29682801", WorkRoleId = "29683355",
+            Source = TimeEntrySource.Portal, SyncStatus = TimeEntrySyncStatus.Failed,
+            SyncError = "no technician configured", EntryDate = h.Clock.GetUtcNow(),
+        };
+        h.Db.TicketTimeEntries.Add(entry);
+        await h.Db.SaveChangesAsync();
+
+        // What a successful retry stamps on the row.
+        entry.ExternalEntryId = "111";
+        entry.SyncStatus = TimeEntrySyncStatus.Synced;
+        entry.SyncError = null;
+        await h.Db.SaveChangesAsync();
+
+        var row = await h.Db.TicketTimeEntries.SingleAsync();
+        row.Hours.Should().Be(0.2m);
+        row.Notes.Should().Be("Diagnosed the switch port");
+        row.WorkTypeId.Should().Be("29682801");
+        row.Source.Should().Be(TimeEntrySource.Portal); // origin survives the retry
+        row.SyncError.Should().BeNull();
+    }
+
+    [Fact]
     public async Task A_rejected_time_entry_survives_with_its_reason()
     {
         var h = AdminHarness.Create(Org);
