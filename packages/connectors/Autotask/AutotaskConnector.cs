@@ -159,6 +159,10 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
         return new CreateAttachmentResult(true, result!.ItemId.ToString(), null);
     }
 
+    // Autotask installed-products sync isn't wired yet; report none rather than failing the panel.
+    public Task<IReadOnlyList<ExternalDevice>> GetDevicesAsync(string organizationId, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<ExternalDevice>>([]);
+
     public Task<IReadOnlyList<UnifiedTimeEntry>> GetTimeEntriesAsync(string ticketId, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<UnifiedTimeEntry>>([]);
 

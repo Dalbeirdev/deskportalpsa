@@ -5,7 +5,9 @@ using Desk.Domain.ControlPanel;
 using Desk.Domain.Enums;
 using Desk.Domain.Tenancy;
 using Desk.Infrastructure.Admin;
+using Desk.Connectors.Mock;
 using Desk.Infrastructure.ControlPanel;
+using Desk.PsaCore.Contracts;
 using FluentAssertions;
 using Xunit;
 
@@ -34,7 +36,8 @@ public class AccountSettingsTests
         h.Db.ClientUsers.Add(new ClientUser { Id = AdminUser, MspOrganizationId = Org, ClientCompanyId = CompanyA, Email = "admin@a.test", DisplayName = "Admin A", IdpSubject = "sub-admin", IsCompanyAdministrator = true });
         h.Db.ClientUsers.Add(new ClientUser { Id = RegularUser, MspOrganizationId = Org, ClientCompanyId = CompanyA, Email = "user@a.test", DisplayName = "User A", IdpSubject = "sub-user" });
         h.Db.SaveChanges();
-        return (new AccountSettingsService(h.Db, new AuditWriter(h.Db, h.User, h.Tenant, h.Clock)), h);
+        return (new AccountSettingsService(h.Db, new AuditWriter(h.Db, h.User, h.Tenant, h.Clock),
+            new FakeConnectorResolver(new MockConnector(new MockConnectorOptions(), h.Clock))), h);
     }
 
     [Fact]
@@ -132,5 +135,10 @@ public class AccountSettingsTests
     {
         var (svc, _) = Build();
         await Assert.ThrowsAsync<NotFoundException>(() => svc.DeleteApproverAsync(AdminAccess, Guid.NewGuid()));
+    }
+
+    private sealed class FakeConnectorResolver(IServiceManagementConnector c) : Desk.Application.Connectors.IConnectorResolver
+    {
+        public Task<IServiceManagementConnector> ResolveAsync(Guid psaConnectionId, CancellationToken ct = default) => Task.FromResult(c);
     }
 }

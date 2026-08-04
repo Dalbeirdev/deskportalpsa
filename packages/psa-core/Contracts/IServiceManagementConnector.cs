@@ -23,6 +23,9 @@ public interface IServiceManagementConnector
     Task<IReadOnlyList<ExternalContact>> GetContactsAsync(string organizationId, CancellationToken ct = default);
     Task<IReadOnlyList<ExternalTechnician>> GetTechniciansAsync(CancellationToken ct = default);
 
+    /// <summary>Managed devices/assets for a company. Empty when the provider has no asset registry.</summary>
+    Task<IReadOnlyList<ExternalDevice>> GetDevicesAsync(string organizationId, CancellationToken ct = default);
+
     // Tickets
     Task<PaginatedResult<UnifiedTicket>> GetTicketsAsync(TicketFilter filter, CancellationToken ct = default);
     Task<UnifiedTicket?> GetTicketAsync(string ticketId, CancellationToken ct = default);

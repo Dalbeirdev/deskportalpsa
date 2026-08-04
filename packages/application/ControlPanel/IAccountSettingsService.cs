@@ -29,4 +29,7 @@ public interface IAccountSettingsService
 
     Task<BusinessHoursDto> GetBusinessHoursAsync(ClientAccess access, CancellationToken ct = default);
     Task<BusinessHoursDto> SaveBusinessHoursAsync(ClientAccess access, BusinessHoursInput input, CancellationToken ct = default);
+
+    /// <summary>Pulls the account's contacts and devices from its PSA and upserts them locally.</summary>
+    Task<PsaImportResult> ImportFromPsaAsync(ClientAccess access, CancellationToken ct = default);
 }

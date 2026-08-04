@@ -82,3 +82,13 @@ internal sealed class CwTimeEntry
     [JsonPropertyName("timeStart")] public DateTimeOffset? TimeStart { get; set; }
     [JsonPropertyName("notes")] public string? Notes { get; set; }
 }
+
+internal sealed class CwConfiguration
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("type")] public CwRef? Type { get; set; }
+    [JsonPropertyName("status")] public CwRef? Status { get; set; }
+    [JsonPropertyName("serialNumber")] public string? SerialNumber { get; set; }
+    [JsonPropertyName("tagNumber")] public string? TagNumber { get; set; }
+}

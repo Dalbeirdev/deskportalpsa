@@ -9,6 +9,9 @@ public record ExternalContact(string ExternalId, string Email, string DisplayNam
 /// <summary>Normalized technician/resource/member/agent.</summary>
 public record ExternalTechnician(string ExternalId, string Email, string DisplayName, bool IsActive);
 
+/// <summary>A managed device/asset belonging to a company (CW "configuration", Autotask "installed product").</summary>
+public record ExternalDevice(string ExternalId, string Name, string? Type, string? Identifier, bool IsActive);
+
 /// <summary>A selectable option for a picklist field (status/priority/queue/category).</summary>
 public record ExternalFieldOption(string Value, string Label, bool IsActive = true);
 

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Server, Building2, Plus, Pencil, Trash2, Check, X, CheckCircle2, Info } from 'lucide-react';
+import { Server, Building2, Plus, Pencil, Trash2, Check, X, CheckCircle2, Info, DownloadCloud } from 'lucide-react';
 import { api, type Device, type DeviceInput } from '@/lib/api';
 import { CpHeader, AccessError, Field } from '../_ui';
 
@@ -20,10 +20,40 @@ export default function AccountsPage() {
     mutationFn: (id: string) => api.cpDeleteDevice(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['cp-devices'] }),
   });
+  // Pull the account's contacts + devices straight from the PSA so the panel reflects the
+  // provider's records rather than only what was entered by hand.
+  const importPsa = useMutation({
+    mutationFn: () => api.cpImportFromPsa(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cp-devices'] });
+      qc.invalidateQueries({ queryKey: ['cp-users'] });
+    },
+  });
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <CpHeader icon={Server} title="Accounts & Devices" subtitle="Your account details (synced from the PSA) and the devices you want your technicians to know about." />
+
+      {!error && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+          <p className="text-xs text-[var(--muted)]">
+            Import contacts and devices for this account directly from the connected PSA.
+            {importPsa.isSuccess && importPsa.data && (
+              <span className="ml-1 font-medium text-green-600 dark:text-green-400">
+                Imported {importPsa.data.usersCreated} new / {importPsa.data.usersUpdated} updated contacts,
+                {' '}{importPsa.data.devicesCreated} new / {importPsa.data.devicesUpdated} updated devices.
+              </span>
+            )}
+            {importPsa.isError && (
+              <span className="ml-1 text-red-600 dark:text-red-400">{(importPsa.error as Error)?.message ?? 'Import failed'}</span>
+            )}
+          </p>
+          <button onClick={() => importPsa.mutate()} disabled={importPsa.isPending}
+            className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--bg)] disabled:opacity-50">
+            <DownloadCloud size={15} /> {importPsa.isPending ? 'Importing…' : 'Import from PSA'}
+          </button>
+        </div>
+      )}
 
       {error ? <AccessError label="Accounts & Devices" /> : (
         <>

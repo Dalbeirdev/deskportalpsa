@@ -14,8 +14,84 @@ namespace Desk.Infrastructure.ControlPanel;
 /// constrained to the caller's account; each section enforces the caller's control-panel access
 /// (administrator, or a grant for that section) and audits mutations.
 /// </summary>
-public sealed class AccountSettingsService(DeskDbContext db, IAuditWriter audit) : IAccountSettingsService
+public sealed class AccountSettingsService(
+    DeskDbContext db,
+    IAuditWriter audit,
+    Desk.Application.Connectors.IConnectorResolver connectors) : IAccountSettingsService
 {
+    // ---- Import from the PSA (contacts → client users, devices/configurations → devices) ----
+
+    public async Task<PsaImportResult> ImportFromPsaAsync(ClientAccess access, CancellationToken ct = default)
+    {
+        await EnsureSectionAsync(access, ControlPanelSection.Accounts, ct);
+
+        var company = await db.ClientCompanies.FirstOrDefaultAsync(c => c.Id == access.ClientCompanyId, ct)
+            ?? throw new NotFoundException("Account");
+        var connector = await connectors.ResolveAsync(company.PsaConnectionId, ct);
+
+        int usersCreated = 0, usersUpdated = 0, devicesCreated = 0, devicesUpdated = 0;
+
+        // Contacts → ClientUsers, matched on the PSA contact id so re-imports update rather than duplicate.
+        var contacts = await connector.GetContactsAsync(company.ExternalCompanyId, ct);
+        var existingUsers = await db.ClientUsers.Where(u => u.ClientCompanyId == company.Id).ToListAsync(ct);
+        foreach (var c in contacts.Where(c => !string.IsNullOrWhiteSpace(c.Email)))
+        {
+            var row = existingUsers.FirstOrDefault(u => u.ExternalContactId == c.ExternalId)
+                   ?? existingUsers.FirstOrDefault(u => string.Equals(u.Email, c.Email, StringComparison.OrdinalIgnoreCase));
+            if (row is null)
+            {
+                db.ClientUsers.Add(new Desk.Domain.Tenancy.ClientUser
+                {
+                    MspOrganizationId = company.MspOrganizationId,
+                    ClientCompanyId = company.Id,
+                    Email = c.Email,
+                    DisplayName = string.IsNullOrWhiteSpace(c.DisplayName) ? c.Email : c.DisplayName,
+                    ExternalContactId = c.ExternalId,
+                    IsActive = c.IsActive,
+                });
+                usersCreated++;
+            }
+            else
+            {
+                // Never touch IdpSubject/administrator flags — those are portal-owned, not PSA-owned.
+                row.DisplayName = string.IsNullOrWhiteSpace(c.DisplayName) ? row.DisplayName : c.DisplayName;
+                row.ExternalContactId = c.ExternalId;
+                row.IsActive = c.IsActive;
+                usersUpdated++;
+            }
+        }
+
+        // Devices/configurations → Devices, matched on the PSA identifier.
+        var devices = await connector.GetDevicesAsync(company.ExternalCompanyId, ct);
+        var existingDevices = await db.Devices.Where(d => d.ClientCompanyId == company.Id).ToListAsync(ct);
+        foreach (var d in devices)
+        {
+            var row = existingDevices.FirstOrDefault(x => x.Identifier == d.Identifier && !string.IsNullOrWhiteSpace(d.Identifier))
+                   ?? existingDevices.FirstOrDefault(x => x.Name == d.Name);
+            if (row is null)
+            {
+                db.Devices.Add(new Device
+                {
+                    ClientCompanyId = company.Id,
+                    Name = d.Name,
+                    Type = d.Type,
+                    Identifier = d.Identifier,
+                });
+                devicesCreated++;
+            }
+            else
+            {
+                row.Name = d.Name; row.Type = d.Type ?? row.Type; row.Identifier = d.Identifier ?? row.Identifier;
+                devicesUpdated++;
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+        await audit.WriteAsync("control_panel.psa.import", "ClientCompany", company.Id.ToString(),
+            new { usersCreated, usersUpdated, devicesCreated, devicesUpdated }, ct);
+        return new PsaImportResult(usersCreated, usersUpdated, devicesCreated, devicesUpdated);
+    }
+
     // ---- Account (read-only projection of the client company) ----
 
     public async Task<AccountDto> GetAccountAsync(ClientAccess access, CancellationToken ct = default)

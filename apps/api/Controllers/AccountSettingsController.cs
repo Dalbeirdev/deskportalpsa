@@ -63,6 +63,11 @@ public sealed class AccountSettingsController(
     public async Task<IActionResult> DeleteHoliday(Guid id, CancellationToken ct)
     { await svc.DeleteHolidayAsync(await AccessAsync(ct), id, ct); return NoContent(); }
 
+    /// <summary>Import the account's contacts + devices from its PSA into the portal.</summary>
+    [HttpPost("import-from-psa")]
+    public async Task<IActionResult> ImportFromPsa(CancellationToken ct)
+        => Ok(await svc.ImportFromPsaAsync(await AccessAsync(ct), ct));
+
     // ---- Devices ----
     [HttpGet("devices")]
     public async Task<IActionResult> ListDevices(CancellationToken ct)

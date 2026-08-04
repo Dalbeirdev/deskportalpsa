@@ -21,3 +21,6 @@ public sealed record DeviceInput(Guid? Id, string Name, string? Type, string? Id
 
 public sealed record BusinessHoursDto(string? TimeZone, string ScheduleJson, string? Notes);
 public sealed record BusinessHoursInput(string? TimeZone, string ScheduleJson, string? Notes);
+
+/// <summary>Tally of a PSA import: how many contacts/devices were created vs updated.</summary>
+public sealed record PsaImportResult(int UsersCreated, int UsersUpdated, int DevicesCreated, int DevicesUpdated);

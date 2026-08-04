@@ -69,6 +69,19 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
             m.Id.ToString(), m.PrimaryEmail ?? "", $"{m.FirstName} {m.LastName}".Trim(), !m.InactiveFlag)).ToList();
     }
 
+    public async Task<IReadOnlyList<ExternalDevice>> GetDevicesAsync(string organizationId, CancellationToken ct = default)
+    {
+        // CW calls managed assets "configurations"; they carry a type object and a serial/tag.
+        var items = await GetListAsync<CwConfiguration>("company/configurations",
+            new() { ["conditions"] = $"company/id={organizationId}", ["pageSize"] = "1000" }, ct);
+        return items.Select(c => new ExternalDevice(
+            c.Id.ToString(),
+            c.Name ?? $"Configuration {c.Id}",
+            c.Type?.Name,
+            c.SerialNumber ?? c.TagNumber,
+            !string.Equals(c.Status?.Name, "Inactive", StringComparison.OrdinalIgnoreCase))).ToList();
+    }
+
     public async Task<PaginatedResult<UnifiedTicket>> GetTicketsAsync(TicketFilter filter, CancellationToken ct = default)
     {
         var query = new Dictionary<string, string> { ["pageSize"] = filter.PageSize.ToString() };

@@ -141,6 +141,9 @@ public sealed class MockConnector : IServiceManagementConnector
     public Task<CreateAttachmentResult> AddAttachmentAsync(string ticketId, SecureAttachment attachment, CancellationToken ct = default)
     { Guard(); return Task.FromResult(new CreateAttachmentResult(true, $"A-{Interlocked.Increment(ref _seq)}", null)); }
 
+    public Task<IReadOnlyList<ExternalDevice>> GetDevicesAsync(string organizationId, CancellationToken ct = default)
+    { Guard(); return Task.FromResult<IReadOnlyList<ExternalDevice>>([new ExternalDevice("D-1", "Mock Workstation", "Workstation", "SN-1", true)]); }
+
     public Task<IReadOnlyList<UnifiedTimeEntry>> GetTimeEntriesAsync(string ticketId, CancellationToken ct = default)
     { Guard(); return Task.FromResult<IReadOnlyList<UnifiedTimeEntry>>([]); }
 
