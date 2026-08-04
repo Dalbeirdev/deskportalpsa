@@ -46,3 +46,4 @@ Thumbs.db
 coverage/
 TestResults/
 *.trx
+desk-local-files/

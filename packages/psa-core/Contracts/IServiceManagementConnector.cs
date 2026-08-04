@@ -40,6 +40,19 @@ public interface IServiceManagementConnector
     Task<IReadOnlyList<UnifiedAttachment>> GetAttachmentsAsync(string ticketId, CancellationToken ct = default);
     Task<CreateAttachmentResult> AddAttachmentAsync(string ticketId, SecureAttachment attachment, CancellationToken ct = default);
 
+    /// <summary>
+    /// Every attachment added across the tenant since <paramref name="since"/> (all of them when
+    /// null). Needed because providers do not necessarily touch a ticket's modified timestamp when a
+    /// file is attached to it — Autotask does not — so a ticket-driven incremental sync would never
+    /// notice new files. Returns empty for providers that cannot query attachments by date.
+    /// </summary>
+    Task<IReadOnlyList<ProviderAttachmentRef>> GetRecentAttachmentsAsync(DateTimeOffset? since, CancellationToken ct = default);
+
+    /// <summary>Pulls an attachment's bytes back from the provider. Null when the provider cannot
+    /// serve the content (unsupported, deleted, or too large to inline). The parent ticket is
+    /// required because some providers only expose content on the ticket's child route.</summary>
+    Task<DownloadedAttachment?> DownloadAttachmentAsync(string ticketId, string attachmentId, CancellationToken ct = default);
+
     // Time
     Task<IReadOnlyList<UnifiedTimeEntry>> GetTimeEntriesAsync(string ticketId, CancellationToken ct = default);
     Task<CreateTimeEntryResult> AddTimeEntryAsync(string ticketId, UnifiedTimeEntryCreateRequest entry, CancellationToken ct = default);

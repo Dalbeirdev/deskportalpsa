@@ -98,7 +98,17 @@ public record UnifiedTimeEntry(
     decimal Hours,
     bool Billable,
     DateTimeOffset EntryDate,
-    string? Notes);
+    string? Notes)
+{
+    /// <summary>Display name of the technician, resolved by the connector. Null when unresolvable.</summary>
+    public string? TechnicianName { get; init; }
+
+    /// <summary>Work-type label as the provider names it (CW work type, Autotask billing code).</summary>
+    public string? WorkType { get; init; }
+
+    /// <summary>How the entry is charged — finer grained than <see cref="Billable"/>.</summary>
+    public BillableOption BillableOption { get; init; } = BillableOption.Billable;
+}
 
 /// <summary>How a time entry is charged. Maps to ConnectWise billableOption / Autotask billing flags.</summary>
 public enum BillableOption { Billable, DoNotBill, NoCharge }
@@ -123,14 +133,27 @@ public record UnifiedAttachment(
     string ExternalId,
     string FileName,
     string ContentType,
-    long SizeBytes);
+    long SizeBytes)
+{
+    public DateTimeOffset? CreatedAt { get; init; }
+
+    /// <summary>Who attached it provider-side. Empty means provider-generated, as with notes.</summary>
+    public string? AuthorName { get; init; }
+}
+
+/// <summary>An attachment paired with the ticket it hangs off, as returned by a tenant-wide sweep.</summary>
+public record ProviderAttachmentRef(string TicketExternalId, UnifiedAttachment Attachment);
+
+/// <summary>An attachment's bytes pulled back from a provider, ready to stage in object storage.</summary>
+public record DownloadedAttachment(string FileName, string ContentType, byte[] Content);
 
 /// <summary>An attachment already scanned + staged in object storage, ready to push to a PSA.</summary>
 public record SecureAttachment(
     string FileName,
     string ContentType,
     long SizeBytes,
-    string StorageObjectKey);
+    string StorageObjectKey,
+    byte[] Content);
 
 /// <summary>Cursor/offset filter for paginated reads.</summary>
 public record TicketFilter

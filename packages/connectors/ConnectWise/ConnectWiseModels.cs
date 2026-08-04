@@ -83,6 +83,7 @@ internal sealed class CwTimeEntry
     [JsonPropertyName("billableOption")] public string? BillableOption { get; set; }
     [JsonPropertyName("timeStart")] public DateTimeOffset? TimeStart { get; set; }
     [JsonPropertyName("notes")] public string? Notes { get; set; }
+    [JsonPropertyName("workType")] public CwRef? WorkType { get; set; }
 }
 
 internal sealed class CwConfiguration

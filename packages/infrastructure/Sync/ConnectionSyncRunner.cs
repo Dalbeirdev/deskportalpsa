@@ -1,3 +1,4 @@
+using Desk.Application.Attachments;
 using Desk.Application.Common;
 using Desk.Application.Connectors;
 using Desk.Application.Sync;
@@ -21,6 +22,8 @@ public sealed class ConnectionSyncRunner(
     DeskDbContext db,
     IConnectorResolver resolver,
     ITicketSyncService sync,
+    IObjectStorage storage,
+    IMalwareScanner scanner,
     TimeProvider clock) : IConnectionSyncRunner
 {
     private const int MaxPages = 50; // safety cap so a runaway cursor can't loop forever
@@ -36,11 +39,13 @@ public sealed class ConnectionSyncRunner(
             return new SyncRunResult(0, 0, 0, 0, 0);
 
         var connector = await resolver.ResolveAsync(psaConnectionId, ct);
+        // Asked once per run, not per ticket: it decides whether time aggregates are worth pulling.
+        var capabilities = await connector.GetCapabilitiesAsync(ct);
         var rules = await db.FieldMappings.AsNoTracking()
             .Where(m => m.Provider == connection.Provider && m.IsActive)
             .ToListAsync(ct);
 
-        int fetched = 0, created = 0, updated = 0, skipped = 0, pages = 0, notes = 0;
+        int fetched = 0, created = 0, updated = 0, skipped = 0, pages = 0, notes = 0, files = 0;
         string? cursor = null;
         try
         {
@@ -77,10 +82,27 @@ public sealed class ConnectionSyncRunner(
 
                     if (connection.ImportNotes)
                         notes += await ImportNotesAsync(connection, connector, ticket.ExternalId, ct);
+
+                    // Time logged provider-side never reaches the portal's stored totals otherwise:
+                    // they were only rewritten when time was logged from here, so a technician's own
+                    // entry left the dashboards under-reporting.
+                    //
+                    // Keyed off the ticket being fetched at all, NOT off the upsert outcome: adding a
+                    // time entry bumps the provider's activity date (so an incremental page returns
+                    // the ticket) but changes none of the fields in the update hash, so the upsert
+                    // reports "unchanged" and a stricter guard here skipped every refresh.
+                    if (capabilities.SupportsTimeEntries)
+                        await RefreshTimeTotalsAsync(psaConnectionId, connector, ticket.ExternalId, ct);
                 }
                 cursor = page.NextCursor;
                 if (!page.HasMore) break;
             } while (cursor is not null && pages < MaxPages);
+
+            // Attachments are swept separately, and deliberately outside the ticket loop: providers
+            // do not reliably touch a ticket's modified timestamp when a file is attached, so an
+            // incremental ticket page would miss them entirely. One dated query covers the tenant.
+            if (connection.SyncAttachments && capabilities.SupportsAttachmentDownload)
+                files = await ImportAttachmentsAsync(connection, connector, full ? null : connection.LastSuccessfulSyncAt, ct);
 
             connection.LastSuccessfulSyncAt = clock.GetUtcNow();
             connection.LastHealthCheckAt = clock.GetUtcNow();
@@ -97,7 +119,7 @@ public sealed class ConnectionSyncRunner(
             throw;
         }
 
-        return new SyncRunResult(fetched, created, updated, skipped, pages, notes);
+        return new SyncRunResult(fetched, created, updated, skipped, pages, notes, files);
     }
 
     /// <summary>
@@ -146,6 +168,104 @@ public sealed class ConnectionSyncRunner(
             known.Add(n.ExternalId);
             added++;
         }
+        if (added > 0) await db.SaveChangesAsync(ct);
+        return added;
+    }
+
+    /// <summary>Rewrites one ticket's worked/billable totals from the PSA, which owns the truth.</summary>
+    private async Task RefreshTimeTotalsAsync(Guid connectionId, IServiceManagementConnector connector, string externalTicketId, CancellationToken ct)
+    {
+        var ticket = await db.Tickets.FirstOrDefaultAsync(
+            t => t.PsaConnectionId == connectionId && t.ExternalTicketId == externalTicketId, ct);
+        if (ticket is null) return;
+
+        IReadOnlyList<UnifiedTimeEntry> entries;
+        try { entries = await connector.GetTimeEntriesAsync(externalTicketId, ct); }
+        catch (ConnectorException) { return; } // one ticket's time must not fail the whole run
+
+        ticket.TimeWorkedHours = entries.Sum(e => e.Hours);
+        ticket.BillableHours = entries.Where(e => e.Billable).Sum(e => e.Hours);
+        ticket.NonBillableHours = entries.Where(e => !e.Billable).Sum(e => e.Hours);
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Mirrors the provider's attachments into the portal, bytes included. Deduplication is by the
+    /// provider's own attachment id, which — exactly as with notes — also suppresses the echo of a
+    /// portal upload that was already pushed out and recorded with that id.
+    ///
+    /// Imported bytes are scanned before they are stored, on the same footing as a customer upload:
+    /// a PSA is not a trusted source, and a technician can attach anything to a ticket.
+    /// </summary>
+    private async Task<int> ImportAttachmentsAsync(PsaConnection connection, IServiceManagementConnector connector, DateTimeOffset? since, CancellationToken ct)
+    {
+        IReadOnlyList<ProviderAttachmentRef> incoming;
+        try { incoming = await connector.GetRecentAttachmentsAsync(since, ct); }
+        catch (ConnectorException) { return 0; } // files must not fail the whole run
+        if (incoming.Count == 0) return 0;
+
+        // Only tickets this connection already projects. A file on a ticket we do not import is not
+        // ours to store, and the sweep is deliberately tenant-wide.
+        var wanted = incoming.Select(r => r.TicketExternalId).Distinct().ToList();
+        var tickets = await db.Tickets
+            .Where(t => t.PsaConnectionId == connection.Id && t.ExternalTicketId != null && wanted.Contains(t.ExternalTicketId))
+            .Select(t => new { t.Id, t.ExternalTicketId, t.MspOrganizationId })
+            .ToListAsync(ct);
+        if (tickets.Count == 0) return 0;
+        var byExternalId = tickets.ToDictionary(t => t.ExternalTicketId!, t => t);
+
+        var ticketIds = tickets.Select(t => t.Id).ToList();
+        var known = new HashSet<string>(await db.TicketAttachments
+            .Where(a => ticketIds.Contains(a.TicketId) && a.ExternalAttachmentId != null)
+            .Select(a => a.ExternalAttachmentId!)
+            .ToListAsync(ct));
+
+        var added = 0;
+        foreach (var (externalTicketId, file) in incoming.Select(r => (r.TicketExternalId, r.Attachment)))
+        {
+            if (string.IsNullOrEmpty(file.ExternalId) || known.Contains(file.ExternalId)) continue;
+            if (!byExternalId.TryGetValue(externalTicketId, out var ticket)) continue;
+
+            DownloadedAttachment? payload;
+            try { payload = await connector.DownloadAttachmentAsync(externalTicketId, file.ExternalId, ct); }
+            catch (ConnectorException) { continue; }
+            // No bytes means the provider cannot serve this file. Recording metadata alone would put
+            // an undownloadable row in the customer's list, so skip it and retry on the next run.
+            if (payload is null || payload.Content.Length == 0) continue;
+
+            var scan = await scanner.ScanAsync(payload.Content, payload.FileName, ct);
+            var record = new TicketAttachment
+            {
+                MspOrganizationId = ticket.MspOrganizationId,
+                TicketId = ticket.Id,
+                ExternalAttachmentId = file.ExternalId,
+                OriginalFileName = payload.FileName,
+                ContentType = payload.ContentType,
+                SizeBytes = payload.Content.LongLength,
+                StorageObjectKey = string.Empty,
+                UploadedAt = file.CreatedAt ?? clock.GetUtcNow(),
+                AuthorName = string.IsNullOrWhiteSpace(file.AuthorName) ? $"{connection.Provider} automation" : file.AuthorName,
+                ImportedFromProvider = true,
+            };
+
+            if (scan.IsClean)
+            {
+                var key = $"att/{ticket.Id}/{Guid.NewGuid():N}{Path.GetExtension(payload.FileName)}";
+                await storage.PutAsync(key, payload.Content, payload.ContentType, ct);
+                record.StorageObjectKey = key;
+                record.ScanStatus = AttachmentScanStatus.Clean;
+            }
+            else
+            {
+                record.ScanStatus = AttachmentScanStatus.Quarantined;
+                record.ScanDetail = scan.Detail;
+            }
+
+            db.TicketAttachments.Add(record);
+            known.Add(file.ExternalId);
+            added++;
+        }
+
         if (added > 0) await db.SaveChangesAsync(ct);
         return added;
     }

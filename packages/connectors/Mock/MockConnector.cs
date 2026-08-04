@@ -25,6 +25,7 @@ public sealed class MockConnector : IServiceManagementConnector
     private readonly List<ExternalTechnician> _techs = [];
     private readonly ConcurrentDictionary<string, UnifiedTicket> _tickets = new();
     private readonly ConcurrentDictionary<string, List<UnifiedTicketNote>> _notes = new();
+    private readonly ConcurrentDictionary<string, List<(UnifiedAttachment Meta, byte[] Content)>> _attachments = new();
     private readonly ConcurrentDictionary<string, string> _idempotency = new(); // key -> externalId
     private int _seq = 1000;
 
@@ -41,7 +42,7 @@ public sealed class MockConnector : IServiceManagementConnector
         Task.FromResult(new ProviderCapabilities
         {
             SupportsTicketCreate = true, SupportsTicketUpdate = true, SupportsTicketDelete = false,
-            SupportsPublicNotes = true, SupportsPrivateNotes = true, SupportsAttachments = true,
+            SupportsPublicNotes = true, SupportsPrivateNotes = true, SupportsAttachments = true, SupportsAttachmentDownload = true,
             SupportsTimeEntries = true, SupportsAssets = false, SupportsContracts = false,
             SupportsSlaData = true, SupportsCustomFields = true, SupportsInboundWebhooks = true,
             SupportsOutboundWebhooks = false, SupportsIncrementalSync = true, SupportsBulkRead = true,
@@ -136,10 +137,46 @@ public sealed class MockConnector : IServiceManagementConnector
     }
 
     public Task<IReadOnlyList<UnifiedAttachment>> GetAttachmentsAsync(string ticketId, CancellationToken ct = default)
-    { Guard(); return Task.FromResult<IReadOnlyList<UnifiedAttachment>>([]); }
+    {
+        Guard();
+        var list = _attachments.GetValueOrDefault(ticketId, []).Select(a => a.Meta).ToList();
+        return Task.FromResult<IReadOnlyList<UnifiedAttachment>>(list);
+    }
+
+    public Task<IReadOnlyList<ProviderAttachmentRef>> GetRecentAttachmentsAsync(DateTimeOffset? since, CancellationToken ct = default)
+    {
+        Guard();
+        var refs = _attachments
+            .SelectMany(kv => kv.Value.Select(a => new ProviderAttachmentRef(kv.Key, a.Meta)))
+            .Where(r => since is null || r.Attachment.CreatedAt is null || r.Attachment.CreatedAt >= since)
+            .ToList();
+        return Task.FromResult<IReadOnlyList<ProviderAttachmentRef>>(refs);
+    }
+
+    public Task<DownloadedAttachment?> DownloadAttachmentAsync(string ticketId, string attachmentId, CancellationToken ct = default)
+    {
+        Guard();
+        var hit = _attachments.GetValueOrDefault(ticketId, []).FirstOrDefault(a => a.Meta.ExternalId == attachmentId);
+        return Task.FromResult(hit.Meta is null
+            ? null
+            : new DownloadedAttachment(hit.Meta.FileName, hit.Meta.ContentType, hit.Content));
+    }
 
     public Task<CreateAttachmentResult> AddAttachmentAsync(string ticketId, SecureAttachment attachment, CancellationToken ct = default)
-    { Guard(); return Task.FromResult(new CreateAttachmentResult(true, $"A-{Interlocked.Increment(ref _seq)}", null)); }
+    {
+        Guard();
+        if (!_tickets.ContainsKey(ticketId))
+            throw new ConnectorException(ConnectorFailureKind.NotFound, $"Ticket {ticketId} not found.");
+        var id = $"A-{Interlocked.Increment(ref _seq)}";
+        // Keep the bytes, so a connector round trip proves content survives rather than just metadata.
+        var meta = new UnifiedAttachment(id, attachment.FileName, attachment.ContentType, attachment.SizeBytes)
+        {
+            CreatedAt = _clock.GetUtcNow(),
+            AuthorName = "Portal",
+        };
+        _attachments.GetOrAdd(ticketId, _ => []).Add((meta, attachment.Content));
+        return Task.FromResult(new CreateAttachmentResult(true, id, null));
+    }
 
     public Task<IReadOnlyList<ExternalDevice>> GetDevicesAsync(string organizationId, CancellationToken ct = default)
     { Guard(); return Task.FromResult<IReadOnlyList<ExternalDevice>>([new ExternalDevice("D-1", "Mock Workstation", "Workstation", "SN-1", true)]); }

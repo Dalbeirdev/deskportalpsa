@@ -2,8 +2,9 @@ namespace Desk.Application.Sync;
 
 /// <summary>Tally of one inbound sync run.</summary>
 /// <summary>Outcome of one inbound run. <paramref name="Notes"/> counts conversation entries
-/// mirrored from the provider, so an admin can see note import actually doing something.</summary>
-public sealed record SyncRunResult(int Fetched, int Created, int Updated, int Skipped, int Pages, int Notes = 0);
+/// mirrored from the provider, and <paramref name="Attachments"/> the files pulled down with
+/// them, so an admin can see import actually doing something.</summary>
+public sealed record SyncRunResult(int Fetched, int Created, int Updated, int Skipped, int Pages, int Notes = 0, int Attachments = 0);
 
 /// <summary>
 /// Runs a full inbound sync for one PSA connection: pages tickets from the provider connector,

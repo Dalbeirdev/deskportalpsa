@@ -30,6 +30,8 @@ export const AttachmentSchema = z.object({
   sizeBytes: z.number(),
   scanStatus: z.union([z.string(), z.number()]),
   uploadedAt: z.string(),
+  authorName: z.string().nullable().default(null),
+  fromProvider: z.boolean().default(false),
 });
 
 export const TicketDetailSchema = z.object({
@@ -152,6 +154,7 @@ export const ConnectionFieldsSchema = z.object({
   categories: z.array(FieldOptionSchema),
   workTypes: z.array(FieldOptionSchema).default([]),
   workRoles: z.array(FieldOptionSchema).default([]),
+  technicians: z.array(FieldOptionSchema).default([]),
 });
 export type ConnectionFields = z.infer<typeof ConnectionFieldsSchema>;
 

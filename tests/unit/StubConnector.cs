@@ -22,6 +22,43 @@ public sealed class StubConnector(ProviderType provider = ProviderType.AutotaskP
     /// <summary>When set, note reads fail with it, to prove one bad ticket cannot fail the run.</summary>
     public ConnectorException? NoteReadFailure { get; set; }
 
+    /// <summary>Attachments per external ticket id, with their bytes.</summary>
+    public Dictionary<string, List<(UnifiedAttachment Meta, byte[] Content)>> Attachments { get; } = [];
+
+    /// <summary>Attachments pushed out by the portal, in call order.</summary>
+    public List<(string TicketId, SecureAttachment Attachment)> Uploaded { get; } = [];
+
+    public Task<IReadOnlyList<UnifiedAttachment>> GetAttachmentsAsync(string ticketId, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<UnifiedAttachment>>(
+            Attachments.GetValueOrDefault(ticketId, []).Select(a => a.Meta).ToList());
+
+    public Task<IReadOnlyList<ProviderAttachmentRef>> GetRecentAttachmentsAsync(DateTimeOffset? since, CancellationToken ct = default)
+    {
+        AttachmentSweeps++;
+        var refs = Attachments
+            .SelectMany(kv => kv.Value.Select(a => new ProviderAttachmentRef(kv.Key, a.Meta)))
+            .Where(r => since is null || r.Attachment.CreatedAt is null || r.Attachment.CreatedAt >= since)
+            .ToList();
+        return Task.FromResult<IReadOnlyList<ProviderAttachmentRef>>(refs);
+    }
+
+    /// <summary>How many times the runner swept for attachments.</summary>
+    public int AttachmentSweeps { get; private set; }
+
+    public Task<DownloadedAttachment?> DownloadAttachmentAsync(string ticketId, string attachmentId, CancellationToken ct = default)
+    {
+        var hit = Attachments.GetValueOrDefault(ticketId, []).FirstOrDefault(a => a.Meta.ExternalId == attachmentId);
+        return Task.FromResult(hit.Meta is null
+            ? null
+            : new DownloadedAttachment(hit.Meta.FileName, hit.Meta.ContentType, hit.Content));
+    }
+
+    public Task<CreateAttachmentResult> AddAttachmentAsync(string ticketId, SecureAttachment attachment, CancellationToken ct = default)
+    {
+        Uploaded.Add((ticketId, attachment));
+        return Task.FromResult(new CreateAttachmentResult(true, $"ext-{Uploaded.Count}", null));
+    }
+
     public ProviderType Provider => provider;
 
     public Task<PaginatedResult<UnifiedTicket>> GetTicketsAsync(TicketFilter filter, CancellationToken ct = default)
@@ -37,7 +74,19 @@ public sealed class StubConnector(ProviderType provider = ProviderType.AutotaskP
     private static Task<T> No<T>([System.Runtime.CompilerServices.CallerMemberName] string member = "")
         => throw new NotSupportedException($"{member} is not part of this stub; add it to the test that needs it.");
 
-    public Task<ProviderCapabilities> GetCapabilitiesAsync(CancellationToken ct = default) => No<ProviderCapabilities>();
+    /// <summary>Time support is off by default so tests opt in rather than pay for the extra call.</summary>
+    public bool SupportsTimeEntries { get; set; }
+
+    /// <summary>On by default: most attachment tests need a provider that can serve bytes back.</summary>
+    public bool SupportsAttachmentDownload { get; set; } = true;
+
+    public Task<ProviderCapabilities> GetCapabilitiesAsync(CancellationToken ct = default)
+        => Task.FromResult(new ProviderCapabilities
+        {
+            SupportsTimeEntries = SupportsTimeEntries,
+            SupportsAttachments = true,
+            SupportsAttachmentDownload = SupportsAttachmentDownload,
+        });
     public Task<ConnectionTestResult> TestConnectionAsync(CancellationToken ct = default) => No<ConnectionTestResult>();
     public Task<IReadOnlyList<ExternalOrganization>> GetOrganizationsAsync(CancellationToken ct = default) => No<IReadOnlyList<ExternalOrganization>>();
     public Task<IReadOnlyList<ExternalContact>> GetContactsAsync(string organizationId, CancellationToken ct = default) => No<IReadOnlyList<ExternalContact>>();
@@ -47,9 +96,17 @@ public sealed class StubConnector(ProviderType provider = ProviderType.AutotaskP
     public Task<CreateTicketResult> CreateTicketAsync(UnifiedTicketCreateRequest ticket, CancellationToken ct = default) => No<CreateTicketResult>();
     public Task<UpdateTicketResult> UpdateTicketAsync(string ticketId, UnifiedTicketUpdate update, CancellationToken ct = default) => No<UpdateTicketResult>();
     public Task<CreateNoteResult> AddPublicNoteAsync(string ticketId, UnifiedTicketNoteCreateRequest note, CancellationToken ct = default) => No<CreateNoteResult>();
-    public Task<IReadOnlyList<UnifiedAttachment>> GetAttachmentsAsync(string ticketId, CancellationToken ct = default) => No<IReadOnlyList<UnifiedAttachment>>();
-    public Task<CreateAttachmentResult> AddAttachmentAsync(string ticketId, SecureAttachment attachment, CancellationToken ct = default) => No<CreateAttachmentResult>();
-    public Task<IReadOnlyList<UnifiedTimeEntry>> GetTimeEntriesAsync(string ticketId, CancellationToken ct = default) => No<IReadOnlyList<UnifiedTimeEntry>>();
+    /// <summary>Time entries per external ticket id.</summary>
+    public Dictionary<string, List<UnifiedTimeEntry>> TimeEntries { get; } = [];
+
+    /// <summary>How many times the runner asked for time — proves it does not ask needlessly.</summary>
+    public int TimeReads { get; private set; }
+
+    public Task<IReadOnlyList<UnifiedTimeEntry>> GetTimeEntriesAsync(string ticketId, CancellationToken ct = default)
+    {
+        TimeReads++;
+        return Task.FromResult<IReadOnlyList<UnifiedTimeEntry>>(TimeEntries.GetValueOrDefault(ticketId, []));
+    }
     public Task<CreateTimeEntryResult> AddTimeEntryAsync(string ticketId, UnifiedTimeEntryCreateRequest entry, CancellationToken ct = default) => No<CreateTimeEntryResult>();
     public Task<UpdateTimeEntryResult> UpdateTimeEntryAsync(string entryId, UnifiedTimeEntryUpdate update, CancellationToken ct = default) => No<UpdateTimeEntryResult>();
     public Task<UpdateTimeEntryResult> DeleteTimeEntryAsync(string entryId, CancellationToken ct = default) => No<UpdateTimeEntryResult>();

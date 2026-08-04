@@ -71,6 +71,8 @@ export const ConnectionSettingsSchema = z.object({
   defaultTicketType: z.string().nullable(),
   defaultIssueType: z.string().nullable(),
   defaultSubIssueType: z.string().nullable(),
+  defaultTimeEntryResourceId: z.string().nullable(),
+  defaultTimeEntryRoleId: z.string().nullable(),
 });
 export type ConnectionSettings = z.infer<typeof ConnectionSettingsSchema>;
 
@@ -332,6 +334,9 @@ const TimeEntrySchema = z.object({
   entryDate: z.string(),
   notes: z.string().nullable(),
   technician: z.string(),
+  technicianName: z.string().nullable().default(null),
+  workType: z.string().nullable().default(null),
+  billableOption: z.string().default('Billable'),
 });
 export type TimeEntry = z.infer<typeof TimeEntrySchema>;
 

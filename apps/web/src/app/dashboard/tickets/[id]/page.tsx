@@ -45,6 +45,28 @@ function fmt(iso: string, seconds = false): string {
 }
 const initials = (name: string) => name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
 
+// PSAs record the day time was worked, not the moment. Rendering a clock time turns a midnight
+// placeholder into a claim the technician worked at 5:30am.
+const fmtDay = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+// Sub-kilobyte files round to "0 KB", which reads as an empty upload.
+function fmtSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// PSAs distinguish "do not bill" from "no charge"; the boolean alone flattens that away.
+function billableLabel(option: string, billable: boolean) {
+  if (option === 'NoCharge') return 'No charge';
+  if (option === 'DoNotBill') return 'Do not bill';
+  return billable ? 'Billable' : 'No charge';
+}
+
+// ProviderType: 1 = ConnectWise, 2 = Autotask.
+const providerLabel = (provider: number) => (provider === 1 ? 'ConnectWise' : provider === 2 ? 'Autotask' : 'the PSA');
+
 export default function TicketDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const qc = useQueryClient();
@@ -313,9 +335,11 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                       ) : (
                         <div className="flex items-center gap-3">
                           <span className="w-14 shrink-0 font-semibold tabular-nums">{e.hours.toFixed(2)}h</span>
-                          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium ${e.billable ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{e.billable ? 'Billable' : 'No charge'}</span>
+                          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium ${e.billable ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{billableLabel(e.billableOption, e.billable)}</span>
+                          {e.workType && <span className="hidden shrink-0 rounded bg-[var(--bg)] px-1.5 py-0.5 text-[11px] text-[var(--muted)] sm:inline">{e.workType}</span>}
                           <span className="min-w-0 flex-1 truncate text-sm text-[var(--muted)]">{e.notes || '—'}</span>
-                          <span className="shrink-0 text-xs text-[var(--faint)]">{fmt(e.entryDate)}</span>
+                          {e.technicianName && <span className="hidden shrink-0 text-xs text-[var(--muted)] md:inline">{e.technicianName}</span>}
+                          <span className="shrink-0 text-xs text-[var(--faint)]">{fmtDay(e.entryDate)}</span>
                           <button onClick={() => setEditEntry({ id: e.externalId, hours: e.hours.toString(), notes: e.notes ?? '' })}
                             aria-label="Edit" className="rounded-md p-1.5 text-[var(--muted)] hover:bg-[var(--bg)] hover:text-brand"><Pencil size={14} /></button>
                           <button onClick={() => { if (window.confirm('Delete this time entry from the PSA?')) delEntry.mutate(e.externalId); }}
@@ -397,12 +421,19 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 <ul className="mb-3 space-y-2">
                   {ticket.attachments.map((a) => {
                     const clean = String(a.scanStatus) === '1' || String(a.scanStatus) === 'Clean';
+                    const sourceLabel = providerLabel(Number(ticket.provider));
                     return (
                       <li key={a.id} className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm">
                         <Paperclip size={15} className="text-[var(--muted)]" />
                         <span className="truncate">{a.fileName}</span>
+                        {a.fromProvider && (
+                          <span title={a.authorName ? `Attached by ${a.authorName}` : undefined}
+                            className="shrink-0 rounded bg-[var(--bg)] px-1.5 py-0.5 text-[11px] text-[var(--muted)]">
+                            From {sourceLabel}
+                          </span>
+                        )}
                         {!clean && <span className="rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950 dark:text-red-300">Quarantined</span>}
-                        <span className="ml-auto text-xs text-[var(--muted)]">{Math.round(a.sizeBytes / 1024)} KB</span>
+                        <span className="ml-auto text-xs text-[var(--muted)]">{fmtSize(a.sizeBytes)}</span>
                         {clean && <button onClick={() => download(a.id)} className="rounded p-1 text-[var(--muted)] hover:text-brand"><Download size={15} /></button>}
                       </li>
                     );

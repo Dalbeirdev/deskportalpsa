@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, Filter, Save, CheckCircle2, AlertTriangle, Settings2 } from 'lucide-react';
+import { RefreshCw, Filter, Save, CheckCircle2, AlertTriangle, Settings2, Clock } from 'lucide-react';
 import { api, type ConnectionSettings } from '@/lib/api';
 
 // Provider-neutral labels: ConnectWise calls a queue a "service board", Autotask calls it a queue.
@@ -83,8 +83,8 @@ export function SyncSettings({ connectionId, provider }: { connectionId: string;
             hint="Mirror the provider's public notes into the portal thread. Internal/private notes are never imported." />
           <Toggle label="Import system notes" checked={form.importSystemNotes} onChange={(v) => set('importSystemNotes', v)}
             hint="Also import notes with no human author (workflow/SLA automation). Depends on note import." />
-          <Toggle label="Sync attachments" notYet checked={form.syncAttachments} onChange={(v) => set('syncAttachments', v)}
-            hint="Will mirror attachments both ways. Portal-side upload works today; provider sync is not built yet." />
+          <Toggle label="Sync attachments" checked={form.syncAttachments} onChange={(v) => set('syncAttachments', v)}
+            hint="Mirror files both ways. Uploads here are pushed to the PSA; provider files are pulled in and virus-scanned." />
         </div>
       </div>
 
@@ -145,6 +145,36 @@ export function SyncSettings({ connectionId, provider }: { connectionId: string;
             <input value={form.defaultSubIssueType ?? ''} onChange={(e) => set('defaultSubIssueType', e.target.value || null)}
               placeholder="optional id"
               className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="flex items-center gap-2 text-sm font-semibold"><Clock size={15} className="text-brand" /> Time entry defaults</h3>
+        <p className="text-xs text-[var(--muted)]">
+          Who portal-logged time belongs to in the PSA.{' '}
+          {provider === 2 && <>Autotask requires a technician and a work role on every ticket time entry, and rejects
+          its own API user — so time logging stays disabled until a technician is chosen here.</>}
+        </p>
+        <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium">Time entry {provider === 1 ? 'member' : 'technician'}</span>
+            <select value={form.defaultTimeEntryResourceId ?? ''} onChange={(e) => set('defaultTimeEntryResourceId', e.target.value || null)}
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
+              <option value="">— none —</option>
+              {(fields?.technicians ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            {provider === 2 && !form.defaultTimeEntryResourceId &&
+              <span className="mt-1 block text-xs text-amber-600 dark:text-amber-400">Required before time can be logged.</span>}
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium">Default work role</span>
+            <select value={form.defaultTimeEntryRoleId ?? ''} onChange={(e) => set('defaultTimeEntryRoleId', e.target.value || null)}
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
+              <option value="">— the technician&apos;s own role —</option>
+              {(fields?.workRoles ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            <span className="mt-1 block text-xs text-[var(--muted)]">Leave unset to use whichever role the technician holds.</span>
           </label>
         </div>
       </div>

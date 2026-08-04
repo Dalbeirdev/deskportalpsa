@@ -1,10 +1,13 @@
 using Desk.Application.Admin;
 using Desk.Application.Attachments;
+using Desk.Application.Connectors;
 using Desk.Application.Common;
 using Desk.Application.Tickets;
 using Desk.Domain.Enums;
 using Desk.Domain.Tickets;
 using Desk.Infrastructure.Persistence;
+using Desk.PsaCore.Contracts;
+using Desk.PsaCore.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace Desk.Infrastructure.Attachments;
@@ -19,6 +22,7 @@ public sealed class AttachmentService(
     DeskDbContext db,
     IObjectStorage storage,
     IMalwareScanner scanner,
+    IConnectorResolver connectors,
     IAuditWriter audit,
     AttachmentPolicy policy,
     TimeProvider clock) : IAttachmentService
@@ -70,7 +74,48 @@ public sealed class AttachmentService(
             "TicketAttachment", attachment.Id.ToString(),
             new { attachment.OriginalFileName, attachment.ContentType, attachment.SizeBytes, scan.Detail }, ct);
 
+        if (scan.IsClean)
+            await PushToProviderAsync(ticket, attachment, input.Content, ct);
+
         return Dto(attachment);
+    }
+
+    /// <summary>
+    /// Mirrors a clean upload to the PSA so the technician sees the file on their own ticket.
+    /// Deliberately non-fatal: the file is already stored and recorded here, so a provider outage
+    /// must not fail the customer's upload. The failure is audited and the row stays unpushed.
+    /// Infected uploads never reach this path.
+    /// </summary>
+    private async Task PushToProviderAsync(Ticket ticket, TicketAttachment attachment, byte[] content, CancellationToken ct)
+    {
+        var connection = await db.PsaConnections.FirstOrDefaultAsync(c => c.Id == ticket.PsaConnectionId, ct);
+        if (connection is null || !connection.SyncAttachments || string.IsNullOrEmpty(ticket.ExternalTicketId)) return;
+
+        try
+        {
+            var connector = await connectors.ResolveAsync(ticket.PsaConnectionId, ct);
+            var result = await connector.AddAttachmentAsync(ticket.ExternalTicketId,
+                new SecureAttachment(attachment.OriginalFileName, attachment.ContentType,
+                    attachment.SizeBytes, attachment.StorageObjectKey, content), ct);
+
+            if (!result.Success)
+            {
+                await audit.WriteAsync("attachment.push_failed", "TicketAttachment", attachment.Id.ToString(),
+                    new { attachment.OriginalFileName, Error = result.Error }, ct);
+                return;
+            }
+
+            attachment.ExternalAttachmentId = result.ExternalId;
+            attachment.PushedToProviderAt = clock.GetUtcNow();
+            await db.SaveChangesAsync(ct);
+            await audit.WriteAsync("attachment.pushed", "TicketAttachment", attachment.Id.ToString(),
+                new { attachment.OriginalFileName, result.ExternalId }, ct);
+        }
+        catch (ConnectorException ex)
+        {
+            await audit.WriteAsync("attachment.push_failed", "TicketAttachment", attachment.Id.ToString(),
+                new { attachment.OriginalFileName, Error = ex.Message }, ct);
+        }
     }
 
     public async Task<string?> GetDownloadUrlAsync(Guid attachmentId, CancellationToken ct = default)
@@ -88,5 +133,6 @@ public sealed class AttachmentService(
     }
 
     private static AttachmentDto Dto(TicketAttachment a) =>
-        new(a.Id, a.OriginalFileName, a.ContentType, a.SizeBytes, a.ScanStatus, a.UploadedAt);
+        new(a.Id, a.OriginalFileName, a.ContentType, a.SizeBytes, a.ScanStatus, a.UploadedAt)
+        { AuthorName = a.AuthorName, FromProvider = a.ImportedFromProvider };
 }

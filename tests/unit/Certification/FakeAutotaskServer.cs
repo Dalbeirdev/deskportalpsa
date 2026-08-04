@@ -24,6 +24,7 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
         [new() { ["id"] = 20L, ["email"] = "tech@msp.test", ["firstName"] = "Tech", ["lastName"] = "One", ["isActive"] = true }];
     private readonly List<Dictionary<string, object?>> _tickets = [];
     private readonly List<Dictionary<string, object?>> _notes = [];
+    private readonly List<Dictionary<string, object?>> _attachments = [];
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
@@ -49,6 +50,7 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
         if (path.EndsWith("Resources/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_resources, body));
         if (path.EndsWith("Tickets/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_tickets, body));
         if (path.EndsWith("TicketNotes/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_notes, body));
+        if (path.EndsWith("TicketAttachments/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(StripData(_attachments), body));
 
         // Create / update
         if (path.EndsWith("V1.0/Tickets", StringComparison.OrdinalIgnoreCase) && request.Method == HttpMethod.Post)
@@ -61,8 +63,18 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
             return CreateNote(body);
         if (path.EndsWith("V1.0/TicketNotes", StringComparison.OrdinalIgnoreCase) && request.Method == HttpMethod.Post)
             return Resp(HttpStatusCode.NotFound, "{\"errors\":[\"entity not found\"]}");
+        // Attachments are a child collection too: create on the ticket route, and only that route
+        // returns the base64 payload — the top-level entity always answers with data = null.
+        if (path.EndsWith("/Attachments", StringComparison.OrdinalIgnoreCase) && request.Method == HttpMethod.Post)
+            return Json(CreateAttachment(path, body));
+        if (path.Contains("/Attachments/", StringComparison.OrdinalIgnoreCase) && request.Method == HttpMethod.Get)
+        {
+            var id = long.Parse(path[(path.LastIndexOf('/') + 1)..]);
+            var hit = _attachments.FirstOrDefault(a => (long)a["id"]! == id);
+            return Json(hit is null ? "{\"items\":[]}" : "{\"items\":[" + Serialize(hit) + "]}");
+        }
         if (path.EndsWith("V1.0/TicketAttachments", StringComparison.OrdinalIgnoreCase) && request.Method == HttpMethod.Post)
-            return Json($"{{\"itemId\":{++_seq}}}");
+            return Resp(HttpStatusCode.NotFound, "{\"errors\":[\"entity not found\"]}");
 
         // Get by id: .../V1.0/Tickets/{id}
         if (path.Contains("V1.0/Tickets/", StringComparison.OrdinalIgnoreCase) && request.Method == HttpMethod.Get)
@@ -107,6 +119,37 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
         ticket["lastActivityDate"] = clock.GetUtcNow().ToString("o");
         return Json($"{{\"itemId\":{id}}}");
     }
+
+    private string CreateAttachment(string path, string body)
+    {
+        var input = Parse(body);
+        // .../V1.0/Tickets/{id}/Attachments
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var parentId = long.Parse(segments[^2]);
+        var data = input.GetValueOrDefault("data")?.ToString() ?? "";
+        var file = new Dictionary<string, object?>
+        {
+            ["id"] = ++_seq,
+            ["parentID"] = parentId,
+            ["ticketID"] = parentId,
+            ["title"] = input.GetValueOrDefault("title"),
+            ["fullPath"] = input.GetValueOrDefault("fullPath"),
+            ["contentType"] = input.GetValueOrDefault("contentType"),
+            ["attachmentType"] = input.GetValueOrDefault("attachmentType"),
+            ["publish"] = Convert.ToInt32(input.GetValueOrDefault("publish") ?? 1),
+            // Autotask reports the size as a decimal, which is exactly why the DTO cannot use long.
+            ["fileSize"] = (double)Convert.FromBase64String(data).Length,
+            ["attachDate"] = clock.GetUtcNow().ToString("o"),
+            ["attachedByResourceID"] = 20L,
+            ["data"] = data,
+        };
+        _attachments.Add(file);
+        return $"{{\"itemId\":{file["id"]}}}";
+    }
+
+    /// <summary>The list projection withholds the payload, exactly as the live API does.</summary>
+    private static List<Dictionary<string, object?>> StripData(List<Dictionary<string, object?>> rows)
+        => rows.Select(r => r.ToDictionary(kv => kv.Key, kv => kv.Key == "data" ? null : kv.Value)).ToList();
 
     private HttpResponseMessage CreateNote(string body)
     {

@@ -57,7 +57,14 @@ public sealed record AttachmentDto(
     string ContentType,
     long SizeBytes,
     AttachmentScanStatus ScanStatus,
-    DateTimeOffset UploadedAt);
+    DateTimeOffset UploadedAt)
+{
+    /// <summary>Who attached it. Null for a portal upload by the ticket's own requester.</summary>
+    public string? AuthorName { get; init; }
+
+    /// <summary>True when the file came from the PSA rather than being uploaded here.</summary>
+    public bool FromProvider { get; init; }
+}
 
 public sealed record CreateTicketInput(
     string Title,

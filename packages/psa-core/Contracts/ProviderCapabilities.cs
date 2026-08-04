@@ -23,6 +23,14 @@ public record ProviderCapabilities
     public bool SupportsPublicNotes { get; init; }
     public bool SupportsPrivateNotes { get; init; }
     public bool SupportsAttachments { get; init; }
+
+    /// <summary>
+    /// Whether the provider will serve an attachment's bytes back and can be swept for new files.
+    /// Distinct from <see cref="SupportsAttachments"/>: a provider can accept uploads and still have
+    /// no readable download route, which makes inbound attachment sync impossible rather than merely
+    /// unimplemented.
+    /// </summary>
+    public bool SupportsAttachmentDownload { get; init; }
     public bool SupportsTimeEntries { get; init; }
     public bool SupportsAssets { get; init; }
     public bool SupportsContracts { get; init; }

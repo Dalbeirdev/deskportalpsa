@@ -23,4 +23,13 @@ public class TicketAttachment : TenantEntity
     public AttachmentScanStatus ScanStatus { get; set; } = AttachmentScanStatus.Pending;
     public string? ScanDetail { get; set; }
     public DateTimeOffset UploadedAt { get; set; }
+
+    /// <summary>Who attached it. Null for portal uploads, the provider-side name for imports.</summary>
+    public string? AuthorName { get; set; }
+
+    /// <summary>True when this row came from the provider rather than a portal upload.</summary>
+    public bool ImportedFromProvider { get; set; }
+
+    /// <summary>Set when a portal upload has been pushed to the provider, so it is never re-sent.</summary>
+    public DateTimeOffset? PushedToProviderAt { get; set; }
 }

@@ -24,6 +24,12 @@ public class AttachmentTests
         public required AttachmentService Svc { get; init; }
         public required InMemoryObjectStorage Storage { get; init; }
         public required Guid TicketId { get; init; }
+        public required StubConnector Connector { get; init; }
+    }
+
+    private sealed class FakeResolver(Desk.PsaCore.Contracts.IServiceManagementConnector c) : Desk.Application.Connectors.IConnectorResolver
+    {
+        public Task<Desk.PsaCore.Contracts.IServiceManagementConnector> ResolveAsync(Guid id, CancellationToken ct = default) => Task.FromResult(c);
     }
 
     private static async Task<Fixture> SetupAsync(AttachmentPolicy? policy = null)
@@ -39,9 +45,10 @@ public class AttachmentTests
         await h.Db.SaveChangesAsync();
 
         var storage = new InMemoryObjectStorage(new AttachmentStorageOptions(), h.Clock);
-        var svc = new AttachmentService(h.Db, storage, new HeuristicMalwareScanner(),
+        var connector = new StubConnector();
+        var svc = new AttachmentService(h.Db, storage, new HeuristicMalwareScanner(), new FakeResolver(connector),
             new AuditWriter(h.Db, h.User, h.Tenant, h.Clock), policy ?? new AttachmentPolicy(), h.Clock);
-        return new Fixture { H = h, Svc = svc, Storage = storage, TicketId = ticket.Id };
+        return new Fixture { H = h, Svc = svc, Storage = storage, TicketId = ticket.Id, Connector = connector };
     }
 
     private static UploadAttachmentInput Upload(Guid ticketId, string name, string type, byte[] content)

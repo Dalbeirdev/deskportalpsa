@@ -3,6 +3,8 @@ using Desk.Application.Sync;
 using Desk.Domain.Enums;
 using Desk.Domain.Tenancy;
 using Desk.Domain.Tickets;
+using Desk.Application.Attachments;
+using Desk.Infrastructure.Attachments;
 using Desk.Infrastructure.Persistence;
 using Desk.Infrastructure.Sync;
 using Desk.PsaCore.Contracts;
@@ -41,7 +43,9 @@ public class NoteImportTests
     }
 
     private static ConnectionSyncRunner Runner(DeskDbContext db, StubConnector connector, TestClock clock)
-        => new(db, new FakeResolver(connector), new TicketSyncService(db, new MappingEngine(), new SyncEventStore(db, clock), clock), clock);
+        => new(db, new FakeResolver(connector),
+            new TicketSyncService(db, new MappingEngine(), new SyncEventStore(db, clock), clock),
+            new InMemoryObjectStorage(new AttachmentStorageOptions(), clock), new HeuristicMalwareScanner(), clock);
 
     private static UnifiedTicket Incoming(string extId) => new()
     {
@@ -141,6 +145,61 @@ public class NoteImportTests
         run.Notes.Should().Be(0);
         connector.NoteReads.Should().Be(0); // and no wasted provider call
         (await db.TicketNotes.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Time_logged_provider_side_is_reflected_in_the_tickets_stored_totals()
+    {
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString());
+        var connector = new StubConnector { SupportsTimeEntries = true };
+        connector.Tickets.Add(Incoming("7810"));
+        connector.TimeEntries["7810"] =
+        [
+            new UnifiedTimeEntry("1", "20", 0.5m, true, clock.GetUtcNow(), "billable work"),
+            new UnifiedTimeEntry("2", "20", 0.25m, false, clock.GetUtcNow(), "non-billable work"),
+        ];
+
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        var ticket = await db.Tickets.SingleAsync();
+        ticket.TimeWorkedHours.Should().Be(0.75m);
+        ticket.BillableHours.Should().Be(0.5m);
+        ticket.NonBillableHours.Should().Be(0.25m);
+    }
+
+    [Fact]
+    public async Task Time_totals_refresh_even_when_the_ticket_itself_is_unchanged()
+    {
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString());
+        var connector = new StubConnector { SupportsTimeEntries = true };
+        connector.Tickets.Add(Incoming("7810"));
+
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+        // Time is added provider-side. That bumps the provider's activity date, so the ticket comes
+        // back on the next page, but none of its own fields changed — the upsert reports unchanged.
+        connector.TimeEntries["7810"] = [new UnifiedTimeEntry("1", "20", 1.25m, true, clock.GetUtcNow(), "tech work")];
+
+        var run = await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        run.Updated.Should().Be(0); // proves the ticket really was seen as unchanged
+        (await db.Tickets.SingleAsync()).TimeWorkedHours.Should().Be(1.25m);
+    }
+
+    [Fact]
+    public async Task Time_totals_are_left_alone_when_the_provider_has_no_time_support()
+    {
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString());
+        var connector = new StubConnector(); // SupportsTimeEntries defaults to false
+        connector.Tickets.Add(Incoming("7810"));
+
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        // No wasted call, and no zeroing of totals a different source may own.
+        connector.TimeReads.Should().Be(0);
+        (await db.Tickets.SingleAsync()).TimeWorkedHours.Should().Be(0m); // untouched default
     }
 
     [Fact]

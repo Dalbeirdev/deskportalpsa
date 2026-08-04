@@ -30,7 +30,7 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         Task.FromResult(new ProviderCapabilities
         {
             SupportsTicketCreate = true, SupportsTicketUpdate = true, SupportsTicketDelete = false,
-            SupportsPublicNotes = true, SupportsPrivateNotes = true, SupportsAttachments = true,
+            SupportsPublicNotes = true, SupportsPrivateNotes = true, SupportsAttachments = true, SupportsAttachmentDownload = false,
             SupportsTimeEntries = true, SupportsAssets = true, SupportsContracts = true,
             SupportsSlaData = true, SupportsCustomFields = true, SupportsInboundWebhooks = true,
             SupportsOutboundWebhooks = true, SupportsIncrementalSync = true, SupportsBulkRead = true,
@@ -180,6 +180,17 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
     public Task<IReadOnlyList<UnifiedAttachment>> GetAttachmentsAsync(string ticketId, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<UnifiedAttachment>>([]);
 
+    /// <summary>Document sweep is not wired for ConnectWise; see DownloadAttachmentAsync.</summary>
+    public Task<IReadOnlyList<ProviderAttachmentRef>> GetRecentAttachmentsAsync(DateTimeOffset? since, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<ProviderAttachmentRef>>([]);
+
+    /// <summary>
+    /// ConnectWise serves document content from a separate multipart download endpoint that is not
+    /// wired yet, so report a miss rather than pretend the bytes were unavailable for another reason.
+    /// </summary>
+    public Task<DownloadedAttachment?> DownloadAttachmentAsync(string ticketId, string attachmentId, CancellationToken ct = default)
+        => Task.FromResult<DownloadedAttachment?>(null);
+
     public async Task<CreateAttachmentResult> AddAttachmentAsync(string ticketId, SecureAttachment attachment, CancellationToken ct = default)
     {
         var body = new
@@ -199,7 +210,18 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         return items.Select(e => new UnifiedTimeEntry(
             e.Id.ToString(), e.Member?.Id.ToString() ?? "", e.ActualHours ?? 0m,
             !string.Equals(e.BillableOption, "DoNotBill", StringComparison.OrdinalIgnoreCase),
-            e.TimeStart ?? clock.GetUtcNow(), e.Notes)).ToList();
+            e.TimeStart ?? clock.GetUtcNow(), e.Notes)
+        {
+            // CW already nests the member and work type as {id, name}, so no extra lookup is needed.
+            TechnicianName = e.Member?.Name,
+            WorkType = e.WorkType?.Name,
+            BillableOption = e.BillableOption switch
+            {
+                "DoNotBill" => BillableOption.DoNotBill,
+                "NoCharge" => BillableOption.NoCharge,
+                _ => Desk.PsaCore.Models.BillableOption.Billable,
+            },
+        }).ToList();
     }
 
     public async Task<CreateTimeEntryResult> AddTimeEntryAsync(string ticketId, UnifiedTimeEntryCreateRequest entry, CancellationToken ct = default)

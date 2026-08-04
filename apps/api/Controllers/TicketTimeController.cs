@@ -47,7 +47,13 @@ public sealed class TicketTimeController(DeskDbContext db, IConnectorResolver co
         var entries = await connector.GetTimeEntriesAsync(ticket.ExternalTicketId, ct);
         return Ok(entries
             .OrderByDescending(e => e.EntryDate)
-            .Select(e => new { externalId = e.ExternalId, hours = e.Hours, billable = e.Billable, entryDate = e.EntryDate, notes = e.Notes, technician = e.TechnicianExternalId }));
+            .Select(e => new
+            {
+                externalId = e.ExternalId, hours = e.Hours, billable = e.Billable, entryDate = e.EntryDate,
+                notes = e.Notes, technician = e.TechnicianExternalId,
+                // Names and work type make the summary readable; ids alone tell a reader nothing.
+                technicianName = e.TechnicianName, workType = e.WorkType, billableOption = e.BillableOption.ToString(),
+            }));
     }
 
     [HttpPost("{id:guid}/time")]
