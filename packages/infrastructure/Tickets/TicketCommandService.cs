@@ -24,6 +24,9 @@ public sealed class TicketCommandService(
     ISyncEventStore syncEvents,
     TimeProvider clock) : ITicketCommandService
 {
+    /// <summary>Portal-neutral status a newly raised ticket starts in.</summary>
+    private const string NewStatus = "NEW";
+
     public async Task<CreateTicketResultDto> CreateAsync(ClientAccess access, CreateTicketInput input, CancellationToken ct = default)
     {
         var company = await db.ClientCompanies.FirstOrDefaultAsync(c => c.Id == access.ClientCompanyId, ct)
@@ -46,6 +49,10 @@ public sealed class TicketCommandService(
         {
             Title = input.Title,
             Description = input.Description,
+            // The portal row starts at NEW, so tell the provider the same thing. Some PSAs
+            // (Autotask) reject a create without a status, and leaving it unset also meant the
+            // provider chose its own default — diverging from the portal on the very first write.
+            Status = MapOut(rules, ctx, "status", NewStatus),
             Priority = MapOut(rules, ctx, "priority", input.Priority),
             Category = MapOut(rules, ctx, "category", input.Category),
             QueueOrBoard = MapOut(rules, ctx, "queue", input.QueueOrBoard),
@@ -71,7 +78,7 @@ public sealed class TicketCommandService(
             RequesterEmail = requester.Email,
             Title = input.Title,
             Description = input.Description,
-            PortalStatus = "NEW",
+            PortalStatus = NewStatus,
             PortalPriority = input.Priority ?? "NORMAL",
             PortalCategory = input.Category,
             QueueOrBoard = input.QueueOrBoard,

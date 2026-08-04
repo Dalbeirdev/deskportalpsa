@@ -282,23 +282,50 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
         }
 
         if (!resp.IsSuccessStatusCode)
-            throw MapError(resp);
+            throw MapError(resp, await SafeBodyAsync(resp, ct));
 
         return await resp.Content.ReadFromJsonAsync<T>(cancellationToken: ct);
     }
 
-    private static ConnectorException MapError(HttpResponseMessage resp) => resp.StatusCode switch
+    /// <summary>
+    /// Reads the response body (best effort) so provider validation messages reach the caller.
+    /// Autotask explains WHY a create failed in an "errors" array — without it every failure reads
+    /// as an opaque 500 and admins cannot tell which field is wrong.
+    /// </summary>
+    private static async Task<string?> SafeBodyAsync(HttpResponseMessage resp, CancellationToken ct)
     {
-        HttpStatusCode.Unauthorized => new(ConnectorFailureKind.Authentication, "Autotask rejected the credentials."),
-        HttpStatusCode.Forbidden => new(ConnectorFailureKind.PermissionDenied, "Autotask denied permission."),
-        HttpStatusCode.NotFound => new(ConnectorFailureKind.NotFound, "Autotask entity not found."),
-        HttpStatusCode.TooManyRequests => new(ConnectorFailureKind.RateLimited, "Autotask rate limit hit.")
+        try
         {
-            RetryAfter = resp.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(10),
-        },
-        >= HttpStatusCode.InternalServerError => new(ConnectorFailureKind.ProviderError, $"Autotask server error ({(int)resp.StatusCode})."),
-        _ => new(ConnectorFailureKind.InvalidRequest, $"Autotask rejected the request ({(int)resp.StatusCode})."),
-    };
+            var raw = await resp.Content.ReadAsStringAsync(ct);
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+            try
+            {
+                using var doc = JsonDocument.Parse(raw);
+                if (doc.RootElement.TryGetProperty("errors", out var errs) && errs.ValueKind == JsonValueKind.Array)
+                    return string.Join("; ", errs.EnumerateArray().Select(e => e.ToString()));
+            }
+            catch (JsonException) { /* not JSON — fall through to the raw text */ }
+            return raw.Length > 400 ? raw[..400] : raw;
+        }
+        catch { return null; }
+    }
+
+    private static ConnectorException MapError(HttpResponseMessage resp, string? body)
+    {
+        var detail = string.IsNullOrWhiteSpace(body) ? "" : $" {body}";
+        return resp.StatusCode switch
+        {
+            HttpStatusCode.Unauthorized => new(ConnectorFailureKind.Authentication, "Autotask rejected the credentials."),
+            HttpStatusCode.Forbidden => new(ConnectorFailureKind.PermissionDenied, "Autotask denied permission."),
+            HttpStatusCode.NotFound => new(ConnectorFailureKind.NotFound, "Autotask entity not found."),
+            HttpStatusCode.TooManyRequests => new(ConnectorFailureKind.RateLimited, "Autotask rate limit hit.")
+            {
+                RetryAfter = resp.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(10),
+            },
+            >= HttpStatusCode.InternalServerError => new(ConnectorFailureKind.ProviderError, $"Autotask server error ({(int)resp.StatusCode}).{detail}"),
+            _ => new(ConnectorFailureKind.InvalidRequest, $"Autotask rejected the request ({(int)resp.StatusCode}).{detail}"),
+        };
+    }
 
     private UnifiedTicket ToUnified(AtTicket t) => new()
     {
