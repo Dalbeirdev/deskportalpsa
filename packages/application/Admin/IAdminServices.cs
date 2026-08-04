@@ -30,6 +30,12 @@ public interface IConnectionAdminService
 
     /// <summary>Forces a fresh discovery from the PSA and updates the cache.</summary>
     Task<ConnectionFieldsDto> RefreshFieldsAsync(Guid connectionId, CancellationToken ct = default);
+
+    /// <summary>Reads the connection's sync behaviour + import filters.</summary>
+    Task<ConnectionSettingsDto> GetSettingsAsync(Guid connectionId, CancellationToken ct = default);
+
+    /// <summary>Updates the connection's sync behaviour + import filters. Audited.</summary>
+    Task<ConnectionSettingsDto> SaveSettingsAsync(Guid connectionId, ConnectionSettingsDto input, CancellationToken ct = default);
 }
 
 /// <summary>

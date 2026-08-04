@@ -90,6 +90,19 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
             conditions.Add($"lastUpdated>[{since.ToUniversalTime():yyyy-MM-ddTHH:mm:ssZ}]");
         if (filter.ExternalCompanyId is { } company)
             conditions.Add($"company/id={company}");
+
+        // Import filters. CW expresses "in" as an OR group over ids; closed state is closedFlag.
+        if (filter.CompanyIds.Count > 0)
+            conditions.Add(IdGroup("company/id", filter.CompanyIds));
+        if (filter.QueueOrBoardIds.Count > 0)
+            conditions.Add(IdGroup("board/id", filter.QueueOrBoardIds));
+        if (filter.AssignedResourceIds.Count > 0)
+            conditions.Add(IdGroup("owner/id", filter.AssignedResourceIds));
+        if (!filter.IncludeClosed)
+            conditions.Add("closedFlag=false");
+        if (filter.ActiveWithinDays is > 0 and { } days)
+            conditions.Add($"lastUpdated>[{clock.GetUtcNow().AddDays(-days):yyyy-MM-ddTHH:mm:ssZ}]");
+
         if (conditions.Count > 0)
             query["conditions"] = string.Join(" and ", conditions);
 
@@ -302,6 +315,10 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         long.TryParse(value, out var id) ? new { id } : new { name = value };
 
     private static readonly string[] ClosedFamily = ["closed", "resolved", "completed", "done", "finished"];
+
+    /// <summary>CW has no IN operator, so an id list becomes an OR group: (f=1 or f=2).</summary>
+    private static string IdGroup(string field, IReadOnlyList<string> ids)
+        => "(" + string.Join(" or ", ids.Select(i => $"{field}={i}")) + ")";
 
     /// <summary>
     /// Statuses in ConnectWise are BOARD-scoped: each service board defines its own set, so a status

@@ -64,6 +64,17 @@ public sealed class AdminConnectionsController(
     public async Task<IActionResult> Fields(Guid id, CancellationToken ct)
         => Ok(await svc.GetFieldsAsync(id, ct));
 
+    /// <summary>Sync behaviour + import filters for this connection.</summary>
+    [HttpGet("{id:guid}/settings")]
+    [RequirePermission(Permissions.ConnectionsView)]
+    public async Task<IActionResult> GetSettings(Guid id, CancellationToken ct)
+        => Ok(await svc.GetSettingsAsync(id, ct));
+
+    [HttpPut("{id:guid}/settings")]
+    [RequirePermission(Permissions.ConnectionsManage)]
+    public async Task<IActionResult> SaveSettings(Guid id, [FromBody] ConnectionSettingsDto input, CancellationToken ct)
+        => Ok(await svc.SaveSettingsAsync(id, input, ct));
+
     /// <summary>Force a fresh discovery of field options from the PSA and update the cache.</summary>
     [HttpPost("{id:guid}/fields/refresh")]
     [RequirePermission(Permissions.ConnectionsManage)]

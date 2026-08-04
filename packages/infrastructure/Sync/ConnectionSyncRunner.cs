@@ -2,6 +2,7 @@ using Desk.Application.Common;
 using Desk.Application.Connectors;
 using Desk.Application.Sync;
 using Desk.Domain.Enums;
+using Desk.Domain.Tenancy;
 using Desk.Infrastructure.Persistence;
 using Desk.PsaCore.Models;
 using Microsoft.EntityFrameworkCore;
@@ -39,10 +40,26 @@ public sealed class ConnectionSyncRunner(
             do
             {
                 var page = await connector.GetTicketsAsync(
-                    new TicketFilter { ModifiedSince = full ? null : connection.LastSuccessfulSyncAt, PageSize = 100, Cursor = cursor }, ct);
+                    new TicketFilter
+                    {
+                        ModifiedSince = full ? null : connection.LastSuccessfulSyncAt,
+                        PageSize = 100,
+                        Cursor = cursor,
+                        CompanyIds = Csv(connection.FilterCompanyIds),
+                        QueueOrBoardIds = Csv(connection.FilterQueueIds),
+                        AssignedResourceIds = Csv(connection.FilterResourceIds),
+                        IncludeClosed = connection.ImportClosedTickets,
+                        ActiveWithinDays = connection.FilterActiveWithinDays,
+                    }, ct);
                 pages++;
                 foreach (var ticket in page.Items)
                 {
+                    // Client-side guard: providers express filters differently (and some not at all),
+                    // so re-apply them here to keep behaviour identical across connectors.
+                    if (!Passes(connection, ticket)) { skipped++; continue; }
+                    // Brand-new tickets are only created when auto-import is on; existing ones still update.
+                    if (!connection.AutoImportNewTickets && !await KnownAsync(psaConnectionId, ticket.ExternalId, ct))
+                    { skipped++; continue; }
                     fetched++;
                     switch (await sync.UpsertFromProviderAsync(psaConnectionId, ticket, rules, ct))
                     {
@@ -72,4 +89,36 @@ public sealed class ConnectionSyncRunner(
 
         return new SyncRunResult(fetched, created, updated, skipped, pages);
     }
+
+    private static IReadOnlyList<string> Csv(string? raw)
+        => string.IsNullOrWhiteSpace(raw)
+            ? []
+            : raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>Re-applies the connection's import filters to a fetched ticket (provider-agnostic).</summary>
+    private static bool Passes(PsaConnection c, UnifiedTicket t)
+    {
+        var closed = t.ClosedAt is not null || t.ResolvedAt is not null;
+        if (closed && !c.ImportClosedTickets) return false;
+        if (!closed && !c.ImportOpenTickets) return false;
+
+        var queues = Csv(c.FilterQueueIds);
+        if (queues.Count > 0 && !queues.Contains(t.QueueOrBoard ?? "", StringComparer.OrdinalIgnoreCase)) return false;
+
+        var resources = Csv(c.FilterResourceIds);
+        if (resources.Count > 0 && !resources.Contains(t.AssignedTechnicianExternalId ?? "", StringComparer.OrdinalIgnoreCase)) return false;
+
+        var companies = Csv(c.FilterCompanyIds);
+        if (companies.Count > 0 && !companies.Contains(t.RequesterExternalId ?? "", StringComparer.OrdinalIgnoreCase)) return false;
+
+        if (c.FilterActiveWithinDays is > 0 and { } days)
+        {
+            var last = t.ModifiedAt ?? t.CreatedAt;
+            if (last is not null && last < DateTimeOffset.UtcNow.AddDays(-days)) return false;
+        }
+        return true;
+    }
+
+    private Task<bool> KnownAsync(Guid connectionId, string externalId, CancellationToken ct)
+        => db.Tickets.AnyAsync(t => t.PsaConnectionId == connectionId && t.ExternalTicketId == externalId, ct);
 }

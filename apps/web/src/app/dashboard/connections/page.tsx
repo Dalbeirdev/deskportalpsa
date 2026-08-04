@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plug, Plus, ShieldCheck, ChevronDown } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { ConnectionSummary, ConnectionFields } from '@/lib/types';
+import { SyncSettings } from './SyncSettings';
 
 const PROVIDERS = [
   { value: 2, label: 'Datto Autotask', creds: ['ApiIntegrationCode', 'UserName', 'Secret'] },
@@ -95,6 +96,8 @@ export default function ConnectionsPage() {
     },
     onError: (_e, id) => setResults((m) => ({ ...m, [id]: { ok: false, msg: 'Field refresh failed' } })),
   });
+
+  const [settingsId, setSettingsId] = useState<string | null>(null);
 
   // Live field discovery (boards/queues, statuses, priorities, categories)
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -209,6 +212,8 @@ export default function ConnectionsPage() {
                   onSync={() => sync.mutate({ id: c.id, full: false })}
                   onResyncAll={() => sync.mutate({ id: c.id, full: true })}
                   syncing={sync.isPending && sync.variables?.id === c.id}
+                  settingsOpen={settingsId === c.id}
+                  onToggleSettings={() => setSettingsId(settingsId === c.id ? null : c.id)}
                   onRefreshFields={() => refreshFields.mutate(c.id)}
                   refreshingFields={refreshFields.isPending && refreshFields.variables === c.id}
                   onEdit={() => openEdit(c)}
@@ -224,7 +229,7 @@ export default function ConnectionsPage() {
 }
 
 function FragmentRow({
-  c, result, expanded, fields, onTest, testing, onSync, onResyncAll, syncing, onRefreshFields, refreshingFields, onEdit, onToggleFields,
+  c, result, expanded, fields, onTest, testing, onSync, onResyncAll, syncing, settingsOpen, onToggleSettings, onRefreshFields, refreshingFields, onEdit, onToggleFields,
 }: {
   c: ConnectionSummary;
   result?: { ok: boolean; msg: string };
@@ -235,6 +240,8 @@ function FragmentRow({
   onSync: () => void;
   onResyncAll: () => void;
   syncing: boolean;
+  settingsOpen: boolean;
+  onToggleSettings: () => void;
   onRefreshFields: () => void;
   refreshingFields: boolean;
   onEdit: () => void;
@@ -262,9 +269,19 @@ function FragmentRow({
             <ActionButton onClick={onTest} disabled={testing}>{testing ? 'Testing…' : 'Test'}</ActionButton>
             <ActionButton onClick={onSync} disabled={syncing}>{syncing ? 'Syncing…' : 'Sync now'}</ActionButton>
             <ActionButton onClick={onResyncAll} disabled={syncing}>Re-sync all</ActionButton>
+            <ActionButton onClick={onToggleSettings}>
+              <ChevronDown size={13} className={settingsOpen ? 'rotate-180 transition-transform' : 'transition-transform'} /> Sync settings
+            </ActionButton>
           </div>
         </td>
       </tr>
+      {settingsOpen && (
+        <tr className="border-b border-[var(--border)] bg-[var(--bg)]">
+          <td colSpan={5} className="px-4 py-4">
+            <SyncSettings connectionId={c.id} provider={Number(c.provider)} />
+          </td>
+        </tr>
+      )}
       {expanded && (
         <tr className="border-b border-[var(--border)] bg-[var(--bg)]">
           <td colSpan={5} className="px-4 py-4">

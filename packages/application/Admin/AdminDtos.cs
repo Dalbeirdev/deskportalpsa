@@ -107,3 +107,9 @@ public sealed record ConnectionFieldsDto(
     IReadOnlyList<FieldOptionDto> Categories,
     IReadOnlyList<FieldOptionDto> WorkTypes,
     IReadOnlyList<FieldOptionDto> WorkRoles);
+
+/// <summary>Per-connection sync behaviour + import filters (what flows, and which tickets are ours).</summary>
+public sealed record ConnectionSettingsDto(
+    bool TwoWaySync, bool AutoImportNewTickets, bool ImportNotes, bool ImportSystemNotes, bool SyncAttachments,
+    bool ImportOpenTickets, bool ImportClosedTickets,
+    string? FilterCompanyIds, string? FilterQueueIds, string? FilterResourceIds, int? FilterActiveWithinDays);

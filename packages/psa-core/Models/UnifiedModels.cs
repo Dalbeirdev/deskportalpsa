@@ -134,6 +134,18 @@ public record TicketFilter
     public string? ExternalCompanyId { get; init; }
     public int PageSize { get; init; } = 100;
     public string? Cursor { get; init; }
+
+    // Optional import filters. Connectors push down what the provider can express server-side; the
+    // sync runner re-applies them client-side so behaviour is identical across providers.
+    public IReadOnlyList<string> CompanyIds { get; init; } = [];
+    public IReadOnlyList<string> QueueOrBoardIds { get; init; } = [];
+    public IReadOnlyList<string> AssignedResourceIds { get; init; } = [];
+
+    /// <summary>Include tickets the provider considers closed/completed. False = open/active only.</summary>
+    public bool IncludeClosed { get; init; } = true;
+
+    /// <summary>Only tickets active within this many days. Null = no age limit.</summary>
+    public int? ActiveWithinDays { get; init; }
 }
 
 /// <summary>Provider-agnostic paginated result.</summary>

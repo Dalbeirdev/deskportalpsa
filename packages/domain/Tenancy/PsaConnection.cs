@@ -31,6 +31,36 @@ public class PsaConnection : TenantEntity
     public DateTimeOffset? LastHealthCheckAt { get; set; }
     public string? LastError { get; set; }
 
+    // ---- Sync behaviour: what flows automatically between the portal and this PSA ----
+
+    /// <summary>Pull provider-side changes back into the portal. Off = portal→PSA writes only.</summary>
+    public bool TwoWaySync { get; set; } = true;
+
+    /// <summary>Create brand-new provider tickets in the portal on each sync (hands-free intake).</summary>
+    public bool AutoImportNewTickets { get; set; } = true;
+
+    /// <summary>Mirror provider notes into the portal thread. Requires <see cref="TwoWaySync"/>.</summary>
+    public bool ImportNotes { get; set; } = true;
+
+    /// <summary>Include machine-generated notes (workflow/SLA noise). Off keeps threads human-only.</summary>
+    public bool ImportSystemNotes { get; set; }
+
+    /// <summary>Upload portal attachments to the provider and mirror theirs back.</summary>
+    public bool SyncAttachments { get; set; } = true;
+
+    // ---- Import filters: which of the provider's tickets are ours to import ----
+
+    public bool ImportOpenTickets { get; set; } = true;
+    public bool ImportClosedTickets { get; set; }
+
+    /// <summary>Comma-separated external ids; empty = no restriction. Queue = CW service board.</summary>
+    public string? FilterCompanyIds { get; set; }
+    public string? FilterQueueIds { get; set; }
+    public string? FilterResourceIds { get; set; }
+
+    /// <summary>Only import tickets active within this many days. Null/0 = no age limit.</summary>
+    public int? FilterActiveWithinDays { get; set; }
+
     // Rate-limit + retry configuration (provider defaults may override).
     public int RateLimitPerMinute { get; set; } = 60;
     public int MaxRetries { get; set; } = 5;

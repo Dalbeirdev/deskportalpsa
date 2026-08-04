@@ -54,6 +54,22 @@ export const MeSchema = z.object({
   permissions: z.array(z.string()),
 });
 
+
+export const ConnectionSettingsSchema = z.object({
+  twoWaySync: z.boolean(),
+  autoImportNewTickets: z.boolean(),
+  importNotes: z.boolean(),
+  importSystemNotes: z.boolean(),
+  syncAttachments: z.boolean(),
+  importOpenTickets: z.boolean(),
+  importClosedTickets: z.boolean(),
+  filterCompanyIds: z.string().nullable(),
+  filterQueueIds: z.string().nullable(),
+  filterResourceIds: z.string().nullable(),
+  filterActiveWithinDays: z.number().nullable(),
+});
+export type ConnectionSettings = z.infer<typeof ConnectionSettingsSchema>;
+
 export const api = {
   listTickets: () => request('/api/tickets', z.array(TicketListItemSchema)) as Promise<TicketListItem[]>,
   getTicket: (id: string) => request(`/api/tickets/${id}`, TicketDetailSchema) as Promise<TicketDetail>,
@@ -122,6 +138,10 @@ export const api = {
   }) => request(`/api/admin/connections/${id}`, ConnectionSummarySchema, { method: 'PUT', body: JSON.stringify(body) }),
   connectionFields: (id: string) =>
     request(`/api/admin/connections/${id}/fields`, ConnectionFieldsSchema) as Promise<ConnectionFields>,
+  connectionSettings: (id: string) =>
+    request(`/api/admin/connections/${id}/settings`, ConnectionSettingsSchema) as Promise<ConnectionSettings>,
+  saveConnectionSettings: (id: string, body: ConnectionSettings) =>
+    request(`/api/admin/connections/${id}/settings`, ConnectionSettingsSchema, { method: 'PUT', body: JSON.stringify(body) }) as Promise<ConnectionSettings>,
   refreshConnectionFields: (id: string) =>
     request(`/api/admin/connections/${id}/fields/refresh`, ConnectionFieldsSchema, { method: 'POST' }) as Promise<ConnectionFields>,
   listMappings: (provider: number) =>

@@ -143,6 +143,55 @@ public sealed class ConnectionAdminService(
         return fields;
     }
 
+    public async Task<ConnectionSettingsDto> GetSettingsAsync(Guid connectionId, CancellationToken ct = default)
+    {
+        var c = await db.PsaConnections.AsNoTracking().FirstOrDefaultAsync(x => x.Id == connectionId, ct)
+            ?? throw new NotFoundException("PSA connection");
+        return ToSettings(c);
+    }
+
+    public async Task<ConnectionSettingsDto> SaveSettingsAsync(Guid connectionId, ConnectionSettingsDto input, CancellationToken ct = default)
+    {
+        var c = await db.PsaConnections.FirstOrDefaultAsync(x => x.Id == connectionId, ct)
+            ?? throw new NotFoundException("PSA connection");
+
+        if (!input.ImportOpenTickets && !input.ImportClosedTickets)
+            throw new ValidationFailedException("Select at least one of open or closed tickets to import.");
+        if (input.FilterActiveWithinDays is < 0)
+            throw new ValidationFailedException("Active-within days cannot be negative.");
+
+        c.TwoWaySync = input.TwoWaySync;
+        c.AutoImportNewTickets = input.AutoImportNewTickets;
+        // Note import only makes sense when provider changes flow back at all.
+        c.ImportNotes = input.ImportNotes && input.TwoWaySync;
+        c.ImportSystemNotes = input.ImportSystemNotes && c.ImportNotes;
+        c.SyncAttachments = input.SyncAttachments;
+        c.ImportOpenTickets = input.ImportOpenTickets;
+        c.ImportClosedTickets = input.ImportClosedTickets;
+        c.FilterCompanyIds = Clean(input.FilterCompanyIds);
+        c.FilterQueueIds = Clean(input.FilterQueueIds);
+        c.FilterResourceIds = Clean(input.FilterResourceIds);
+        c.FilterActiveWithinDays = input.FilterActiveWithinDays is > 0 ? input.FilterActiveWithinDays : null;
+
+        await db.SaveChangesAsync(ct);
+        await audit.WriteAsync("connection.settings.updated", "PsaConnection", connectionId.ToString(),
+            new { c.TwoWaySync, c.AutoImportNewTickets, c.ImportOpenTickets, c.ImportClosedTickets }, ct);
+        return ToSettings(c);
+    }
+
+    private static ConnectionSettingsDto ToSettings(Desk.Domain.Tenancy.PsaConnection c) => new(
+        c.TwoWaySync, c.AutoImportNewTickets, c.ImportNotes, c.ImportSystemNotes, c.SyncAttachments,
+        c.ImportOpenTickets, c.ImportClosedTickets,
+        c.FilterCompanyIds, c.FilterQueueIds, c.FilterResourceIds, c.FilterActiveWithinDays);
+
+    /// <summary>Normalizes a comma-separated id list; empty becomes null (= no restriction).</summary>
+    private static string? Clean(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var parts = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length == 0 ? null : string.Join(",", parts);
+    }
+
     public async Task<ConnectionFieldsDto> RefreshFieldsAsync(Guid connectionId, CancellationToken ct = default)
     {
         _ = await db.PsaConnections.FirstOrDefaultAsync(c => c.Id == connectionId, ct)

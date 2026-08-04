@@ -79,6 +79,16 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
         if (filter.ExternalCompanyId is { } company)
             filters.Add(Filter("companyID", "eq", long.Parse(company)));
 
+        // Import filters. Autotask expresses "in" with the "in" operator over a value list.
+        if (filter.CompanyIds.Count > 0)
+            filters.Add(Filter("companyID", "in", filter.CompanyIds.Select(long.Parse).ToArray()));
+        if (filter.QueueOrBoardIds.Count > 0)
+            filters.Add(Filter("queueID", "in", filter.QueueOrBoardIds.Select(long.Parse).ToArray()));
+        if (filter.AssignedResourceIds.Count > 0)
+            filters.Add(Filter("assignedResourceID", "in", filter.AssignedResourceIds.Select(long.Parse).ToArray()));
+        if (filter.ActiveWithinDays is > 0 and { } days)
+            filters.Add(Filter("lastActivityDate", "gte", clock.GetUtcNow().AddDays(-days).ToString("o")));
+
         var items = await QueryAsync<AtTicket>("Tickets", filters, filter.PageSize, ct);
         return new PaginatedResult<UnifiedTicket>(items.Select(ToUnified).ToList(), null, false);
     }
