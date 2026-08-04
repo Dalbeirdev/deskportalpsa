@@ -80,6 +80,21 @@ public sealed class MappingAdminService(
         return Dto(rule);
     }
 
+    public async Task DeleteAsync(Guid ruleId, CancellationToken ct = default)
+    {
+        var rule = await db.FieldMappings.FirstOrDefaultAsync(m => m.Id == ruleId, ct)
+            ?? throw new NotFoundException("Mapping rule");
+        var (provider, connectionId, field, portalValue) = (rule.Provider, rule.PsaConnectionId, rule.PortalField, rule.PortalValue);
+
+        db.FieldMappings.Remove(rule);
+        await db.SaveChangesAsync(ct);
+
+        // Same versioning/audit discipline as an upsert, so a deletion is recoverable by rollback.
+        await SnapshotAsync(provider, connectionId, $"delete {field} {portalValue}", ct);
+        await audit.WriteAsync("mapping.deleted", "FieldMapping", ruleId.ToString(),
+            new { provider, field, portalValue }, ct);
+    }
+
     public async Task<IReadOnlyList<MappingVersionDto>> VersionsAsync(ProviderType provider, Guid? connectionId, CancellationToken ct = default)
         => await db.FieldMappingVersions.AsNoTracking()
             .Where(v => v.Provider == provider && v.PsaConnectionId == connectionId)

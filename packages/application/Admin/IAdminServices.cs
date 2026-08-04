@@ -47,6 +47,9 @@ public interface IMappingAdminService
     Task<IReadOnlyList<MappingRuleDto>> ListAsync(ProviderType provider, CancellationToken ct = default);
     Task<MappingRuleDto> UpsertAsync(UpsertMappingInput input, string? changeNote, CancellationToken ct = default);
     Task<IReadOnlyList<MappingVersionDto>> VersionsAsync(ProviderType provider, Guid? connectionId, CancellationToken ct = default);
+
+    /// <summary>Removes a mapping rule entirely (snapshotted + audited, like any other change).</summary>
+    Task DeleteAsync(Guid ruleId, CancellationToken ct = default);
     Task RollbackAsync(Guid versionId, CancellationToken ct = default);
 }
 

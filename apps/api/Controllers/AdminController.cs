@@ -129,6 +129,11 @@ public sealed class AdminMappingsController(IMappingAdminService svc) : Controll
     public async Task<IActionResult> Upsert([FromBody] UpsertMappingInput input, [FromQuery] string? note, CancellationToken ct)
         => Ok(await svc.UpsertAsync(input, note, ct));
 
+    [HttpDelete("{ruleId:guid}")]
+    [RequirePermission(Permissions.MappingsManage)]
+    public async Task<IActionResult> Delete(Guid ruleId, CancellationToken ct)
+    { await svc.DeleteAsync(ruleId, ct); return NoContent(); }
+
     [HttpGet("versions")]
     [RequirePermission(Permissions.MappingsView)]
     public async Task<IActionResult> Versions([FromQuery] ProviderType provider, [FromQuery] Guid? connectionId, CancellationToken ct)

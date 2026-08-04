@@ -93,6 +93,11 @@ export default function MappingsPage() {
     queryKey: ['fields', conn?.id], queryFn: () => api.connectionFields(conn!.id), enabled: !!conn, retry: false,
   });
 
+  const del = useMutation({
+    mutationFn: (ruleId: string) => api.deleteMapping(ruleId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['mappings', provider] }),
+  });
+
   const upsert = useMutation({
     mutationFn: (body: Parameters<typeof api.upsertMapping>[0]) => api.upsertMapping(body, `map ${tab}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['mappings', provider] }); setDraft(null); },
@@ -122,15 +127,32 @@ export default function MappingsPage() {
   }, [mappings, tab, conn]);
 
   const mapped = rows.filter((r) => r.externalValue).length;
-  const options = useMemo(() => {
-    const fromRules = (mappings ?? []).filter((m) => m.portalField === tab && m.externalValue).map((m) => m.externalValue as string);
+  // Options carry the provider's id AND label. We SAVE the id — Autotask rejects names on write
+  // ("Could not convert string to integer") — while showing the human label.
+  const options = useMemo<{ value: string; label: string }[]>(() => {
     const discovered = ({
       status: fields?.statuses, priority: fields?.priorities, queue: fields?.queuesOrBoards,
       category: fields?.categories, workType: fields?.workTypes,
-    }[tab] ?? []).map((o) => o.label);
-    const base = discovered.length ? discovered : CURATED[tab];
-    return Array.from(new Set([...base, ...fromRules]));
+    }[tab] ?? []).map((o) => ({ value: o.value, label: o.label }));
+    const base = discovered.length ? discovered : CURATED[tab].map((c) => ({ value: c, label: c }));
+
+    // Keep any value already stored by a rule selectable, even if discovery no longer returns it
+    // (or the rule predates id-based saving and holds a label).
+    const known = new Set(base.flatMap((o) => [o.value, o.label]));
+    const legacy = (mappings ?? [])
+      .filter((m) => m.portalField === tab && m.externalValue && !known.has(m.externalValue))
+      .map((m) => ({ value: m.externalValue as string, label: m.externalValue as string }));
+    return [...base, ...Array.from(new Map(legacy.map((l) => [l.value, l])).values())];
   }, [mappings, tab, fields]);
+
+  /// A rule may store the provider id (current) or a label (legacy) — match either so the select
+  /// shows the real state instead of falsely reading "not mapped".
+  const selectedValue = (external: string | null) => {
+    if (!external) return '';
+    return options.find((o) => o.value === external)?.value
+        ?? options.find((o) => o.label === external)?.value
+        ?? external;
+  };
 
   function save(row: DisplayRow, externalValue: string | null, portalValue?: string) {
     if (!conn || provider == null) return;
@@ -263,10 +285,10 @@ export default function MappingsPage() {
                   <td className="px-2 py-3 text-center"><ArrowLeftRight size={14} className="mx-auto text-[var(--faint)]" /></td>
                   <td className="px-5 py-3">
                     <div className="relative max-w-xs">
-                      <select value={r.externalValue ?? ''} onChange={(e) => save(r, e.target.value || null)} disabled={upsert.isPending}
+                      <select value={selectedValue(r.externalValue)} onChange={(e) => save(r, e.target.value || null)} disabled={upsert.isPending}
                         className="w-full appearance-none rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 pr-8 text-sm outline-none focus:border-brand disabled:opacity-60">
                         <option value="">— not mapped —</option>
-                        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+                        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
                       <ChevronDown size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--faint)]" />
                     </div>
@@ -282,7 +304,14 @@ export default function MappingsPage() {
                         <button onClick={() => setEditingId(r.id ?? null)} aria-label="Rename portal value"
                           className="rounded-md p-1.5 text-[var(--muted)] hover:bg-[var(--bg)] hover:text-brand"><Pencil size={15} /></button>
                       )}
-                      <button onClick={() => save(r, null)} disabled={!r.externalValue || upsert.isPending} aria-label="Clear mapping"
+                      <button
+                        onClick={() => {
+                          if (r.fixed) { save(r, null); return; }   // canonical value: clear, keep the row
+                          if (r.id && window.confirm(`Remove the "${r.portalValue}" mapping?`)) del.mutate(r.id);
+                        }}
+                        disabled={(r.fixed && !r.externalValue) || upsert.isPending || del.isPending}
+                        aria-label={r.fixed ? 'Clear mapping' : 'Delete mapping'}
+                        title={r.fixed ? 'Clear this mapping' : 'Delete this mapping'}
                         className="rounded-md p-1.5 text-[var(--muted)] hover:bg-red-50 hover:text-red-600 disabled:opacity-40 dark:hover:bg-red-950/50"><Trash2 size={15} /></button>
                     </div>
                   </td>
@@ -302,7 +331,7 @@ export default function MappingsPage() {
                         disabled={!draft.portal.trim() || upsert.isPending}
                         className="w-full appearance-none rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 pr-8 text-sm outline-none focus:border-brand disabled:opacity-60">
                         <option value="">— select PSA value —</option>
-                        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+                        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
                       <ChevronDown size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--faint)]" />
                     </div>

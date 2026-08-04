@@ -159,6 +159,8 @@ export const api = {
     note?: string,
   ) => request(`/api/admin/mappings${note ? `?note=${encodeURIComponent(note)}` : ''}`,
     MappingRuleSchema, { method: 'POST', body: JSON.stringify(body) }),
+  deleteMapping: (ruleId: string) =>
+    request(`/api/admin/mappings/${ruleId}`, z.unknown(), { method: 'DELETE' }),
   health: () => request('/api/admin/health', z.array(HealthSchema)) as Promise<Health[]>,
   jobs: (status?: number) =>
     request(`/api/admin/jobs${status != null ? `?status=${status}` : ''}`, z.array(JobSchema)) as Promise<Job[]>,
