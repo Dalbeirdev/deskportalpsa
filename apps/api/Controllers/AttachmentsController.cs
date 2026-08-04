@@ -29,7 +29,7 @@ public sealed class AttachmentsController(
     [RequirePermission(Permissions.TicketsAddPublicNote)]
     [HttpPost("tickets/{ticketId:guid}/attachments")]
     [RequestSizeLimit(25 * 1024 * 1024)]
-    public async Task<IActionResult> Upload(Guid ticketId, IFormFile file, CancellationToken ct)
+    public async Task<IActionResult> Upload(Guid ticketId, IFormFile file, [FromQuery] Guid? noteId, CancellationToken ct)
     {
         if (file is null || file.Length == 0) return BadRequest("No file provided.");
         var access = await AccessAsync(ct);
@@ -39,7 +39,7 @@ public sealed class AttachmentsController(
         await file.CopyToAsync(ms, ct);
 
         var dto = await attachments.UploadAsync(new UploadAttachmentInput(
-            ticketId, access.MspOrganizationId, file.FileName, file.ContentType, ms.ToArray()), ct);
+            ticketId, access.MspOrganizationId, file.FileName, file.ContentType, ms.ToArray(), noteId), ct);
 
         return Ok(dto);
     }

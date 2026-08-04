@@ -32,6 +32,7 @@ export const AttachmentSchema = z.object({
   uploadedAt: z.string(),
   authorName: z.string().nullable().default(null),
   fromProvider: z.boolean().default(false),
+  ticketNoteId: z.string().nullable().default(null),
 });
 
 export const TicketDetailSchema = z.object({

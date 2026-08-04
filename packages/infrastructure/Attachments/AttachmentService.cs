@@ -45,6 +45,7 @@ public sealed class AttachmentService(
         {
             MspOrganizationId = input.MspOrganizationId,
             TicketId = ticket.Id,
+            TicketNoteId = input.TicketNoteId,
             OriginalFileName = input.FileName,
             ContentType = input.ContentType,
             SizeBytes = input.Content.LongLength,
@@ -93,10 +94,16 @@ public sealed class AttachmentService(
 
         try
         {
+            // Resolve the provider's own note id so the file lands on the reply, not loose on the ticket.
+            var externalNoteId = attachment.TicketNoteId is { } noteId
+                ? await db.TicketNotes.Where(n => n.Id == noteId).Select(n => n.ExternalNoteId).FirstOrDefaultAsync(ct)
+                : null;
+
             var connector = await connectors.ResolveAsync(ticket.PsaConnectionId, ct);
             var result = await connector.AddAttachmentAsync(ticket.ExternalTicketId,
                 new SecureAttachment(attachment.OriginalFileName, attachment.ContentType,
-                    attachment.SizeBytes, attachment.StorageObjectKey, content), ct);
+                    attachment.SizeBytes, attachment.StorageObjectKey, content)
+                { ExternalNoteId = externalNoteId }, ct);
 
             if (!result.Success)
             {
@@ -134,5 +141,5 @@ public sealed class AttachmentService(
 
     private static AttachmentDto Dto(TicketAttachment a) =>
         new(a.Id, a.OriginalFileName, a.ContentType, a.SizeBytes, a.ScanStatus, a.UploadedAt)
-        { AuthorName = a.AuthorName, FromProvider = a.ImportedFromProvider };
+        { AuthorName = a.AuthorName, FromProvider = a.ImportedFromProvider, TicketNoteId = a.TicketNoteId };
 }

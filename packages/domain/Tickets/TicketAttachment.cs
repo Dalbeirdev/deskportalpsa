@@ -12,6 +12,13 @@ public class TicketAttachment : TenantEntity
     public Guid TicketId { get; set; }
     public Ticket? Ticket { get; set; }
 
+    /// <summary>
+    /// The conversation entry this file was posted with, when it is known. Files belong to a message,
+    /// not to a ticket-wide bucket — a reader needs to see which reply carried which document.
+    /// Null for files uploaded on their own, and for provider files with no note association.
+    /// </summary>
+    public Guid? TicketNoteId { get; set; }
+
     public string? ExternalAttachmentId { get; set; }
     public required string OriginalFileName { get; set; }
     public required string ContentType { get; set; }

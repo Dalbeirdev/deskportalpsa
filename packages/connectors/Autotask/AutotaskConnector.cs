@@ -229,6 +229,7 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
         {
             CreatedAt = a.AttachDate,
             AuthorName = a.AttachedByResourceId is { } rid && resourceNames.TryGetValue(rid, out var n) ? n : "",
+            ExternalNoteId = a.TicketNoteId is > 0 ? a.TicketNoteId!.Value.ToString() : null,
         };
 
     public async Task<IReadOnlyList<ProviderAttachmentRef>> GetRecentAttachmentsAsync(DateTimeOffset? since, CancellationToken ct = default)
@@ -283,6 +284,11 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
             ["publish"] = config.PublicPublishValue,
             ["data"] = Convert.ToBase64String(attachment.Content),
         };
+        // File it against the note it was posted with. Autotask accepts the field and then stores
+        // null for it — the association appears to be settable only from its own UI — so the portal
+        // keeps its own note link and does not depend on reading this back. Sent anyway: it is the
+        // documented field, it costs nothing, and other tenants/versions may honour it.
+        if (long.TryParse(attachment.ExternalNoteId, out var noteId)) body["ticketNoteID"] = noteId;
         // Attachments are a child collection, same as notes.
         var result = await SendAsync<AtCreateResult>(HttpMethod.Post, $"V1.0/Tickets/{long.Parse(ticketId)}/Attachments", body, ct);
         return new CreateAttachmentResult(true, result!.ItemId.ToString(), null);

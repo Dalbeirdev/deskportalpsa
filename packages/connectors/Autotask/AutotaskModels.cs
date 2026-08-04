@@ -139,6 +139,7 @@ internal sealed class AtTicketAttachment
     [JsonPropertyName("attachDate")] public DateTimeOffset? AttachDate { get; set; }
     [JsonPropertyName("attachedByResourceID")] public long? AttachedByResourceId { get; set; }
     [JsonPropertyName("attachedByContactID")] public long? AttachedByContactId { get; set; }
+    [JsonPropertyName("ticketNoteID")] public long? TicketNoteId { get; set; }
     // Only returned on a get-by-id; the query projection omits it to keep list reads small.
     [JsonPropertyName("data")] public string? Data { get; set; }
 }

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useTimer } from '@/components/TimerProvider';
 import { api } from '@/lib/api';
+import type { TicketDetail } from '@/lib/types';
 
 const STATUS_TONE: Record<string, string> = {
   NEW: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
@@ -57,6 +58,41 @@ function fmtSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// Technicians think in minutes; a bare "0.17h" is unreadable at a glance. Show both, as the PSA's
+// own decimal is what gets invoiced.
+function fmtDuration(hours: number) {
+  const mins = Math.round(hours * 60);
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+type TicketAttachment = TicketDetail['attachments'][number];
+
+/** One file, rendered the same way under a reply and in the loose-files list. */
+function AttachmentChip({ a, provider, onDownload }: {
+  a: TicketAttachment; provider: number; onDownload: (id: string) => void;
+}) {
+  const clean = String(a.scanStatus) === '1' || String(a.scanStatus) === 'Clean';
+  return (
+    <span className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-xs">
+      <Paperclip size={12} className="shrink-0 text-[var(--muted)]" />
+      <span className="truncate">{a.fileName}</span>
+      {a.fromProvider && (
+        <span title={a.authorName ? `Attached by ${a.authorName}` : undefined} className="shrink-0 text-[var(--faint)]">
+          · {providerLabel(provider)}
+        </span>
+      )}
+      <span className="shrink-0 text-[var(--faint)]">{fmtSize(a.sizeBytes)}</span>
+      {clean
+        ? <button onClick={() => onDownload(a.id)} aria-label={`Download ${a.fileName}`}
+            className="shrink-0 rounded p-0.5 text-[var(--muted)] hover:text-brand"><Download size={13} /></button>
+        : <span className="shrink-0 rounded bg-red-100 px-1 py-0.5 font-medium text-red-700 dark:bg-red-950 dark:text-red-300">Quarantined</span>}
+    </span>
+  );
+}
+
 // PSAs distinguish "do not bill" from "no charge"; the boolean alone flattens that away.
 function billableLabel(option: string, billable: boolean) {
   if (option === 'NoCharge') return 'No charge';
@@ -66,6 +102,7 @@ function billableLabel(option: string, billable: boolean) {
 
 // ProviderType: 1 = ConnectWise, 2 = Autotask.
 const providerLabel = (provider: number) => (provider === 1 ? 'ConnectWise' : provider === 2 ? 'Autotask' : 'the PSA');
+const providerAbbrev = (provider: number) => (provider === 1 ? 'CW' : provider === 2 ? 'AT' : 'PSA');
 
 export default function TicketDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -73,6 +110,9 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const router = useRouter();
   const [comment, setComment] = useState('');
   const [uploading, setUploading] = useState(false);
+  // Files chosen in the composer are held until the reply is sent, so they can be filed against
+  // that message rather than dropped loose on the ticket.
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [oldestFirst, setOldestFirst] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -103,8 +143,13 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   }
 
   const addComment = useMutation({
-    mutationFn: (body: string) => api.addComment(id, body),
-    onSuccess: () => { setComment(''); qc.invalidateQueries({ queryKey: ['ticket', id] }); },
+    mutationFn: async (body: string) => {
+      const note = await api.addComment(id, body);
+      // Upload after the reply exists, so each file carries its note id all the way to the PSA.
+      for (const file of pendingFiles) await api.uploadAttachment(id, file, note.id);
+      return note;
+    },
+    onSuccess: () => { setComment(''); setPendingFiles([]); qc.invalidateQueries({ queryKey: ['ticket', id] }); },
   });
 
   const { data: entries } = useQuery({ queryKey: ['time-entries', id], queryFn: () => api.listTimeEntries(id), enabled: !!ticket, retry: false });
@@ -179,6 +224,17 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
 
       {ticket && (() => {
         const Icon = categoryIcon(ticket.portalCategory, ticket.title);
+        // Files belong to the message they were posted with; only genuinely loose ones fall through
+        // to the list at the bottom.
+        const filesByNote = new Map<string, TicketAttachment[]>();
+        for (const a of ticket.attachments) {
+          if (!a.ticketNoteId) continue;
+          const bucket = filesByNote.get(a.ticketNoteId) ?? [];
+          bucket.push(a);
+          filesByNote.set(a.ticketNoteId, bucket);
+        }
+        const looseFiles = ticket.attachments.filter((a) => !a.ticketNoteId);
+
         const convo = [...ticket.conversation].sort((a, b) =>
           (oldestFirst ? 1 : -1) * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()));
         return (
@@ -316,7 +372,26 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--faint)]">
                     Time entries <span className="rounded-full bg-[var(--bg)] px-2 py-0.5 text-xs text-[var(--muted)]">{entries.length}</span>
                   </h2>
-                  <span className="text-xs text-[var(--muted)]">{entries.reduce((a, e) => a + e.hours, 0).toFixed(2)}h total</span>
+                  {(() => {
+                    // Totals count only time the PSA actually holds, so this figure reconciles with
+                    // the provider's own summary. Rejected entries are called out separately rather
+                    // than folded in, where they would silently inflate what the customer is shown.
+                    const synced = entries.filter((e) => e.syncStatus === 'Synced');
+                    const failed = entries.filter((e) => e.syncStatus !== 'Synced');
+                    const total = synced.reduce((a, e) => a + e.hours, 0);
+                    const billable = synced.filter((e) => e.billable).reduce((a, e) => a + e.hours, 0);
+                    return (
+                      <span className="text-xs text-[var(--muted)]">
+                        Total: <strong className="text-[var(--fg)]">{fmtDuration(total)}</strong>{' '}
+                        ({total.toFixed(4)} h){' · '}billable {fmtDuration(billable)}
+                        {failed.length > 0 && (
+                          <span className="text-red-600 dark:text-red-400">
+                            {' · '}{failed.length} not recorded ({fmtDuration(failed.reduce((a, e) => a + e.hours, 0))})
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <ul className="divide-y divide-[var(--border)]">
                   {entries.map((e) => (
@@ -333,17 +408,43 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                           <button onClick={() => setEditEntry(null)} className="rounded-md border border-[var(--border)] p-1.5 text-[var(--muted)] hover:bg-[var(--bg)]"><X size={15} /></button>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-3">
-                          <span className="w-14 shrink-0 font-semibold tabular-nums">{e.hours.toFixed(2)}h</span>
-                          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium ${e.billable ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{billableLabel(e.billableOption, e.billable)}</span>
-                          {e.workType && <span className="hidden shrink-0 rounded bg-[var(--bg)] px-1.5 py-0.5 text-[11px] text-[var(--muted)] sm:inline">{e.workType}</span>}
-                          <span className="min-w-0 flex-1 truncate text-sm text-[var(--muted)]">{e.notes || '—'}</span>
-                          {e.technicianName && <span className="hidden shrink-0 text-xs text-[var(--muted)] md:inline">{e.technicianName}</span>}
-                          <span className="shrink-0 text-xs text-[var(--faint)]">{fmtDay(e.entryDate)}</span>
-                          <button onClick={() => setEditEntry({ id: e.externalId, hours: e.hours.toString(), notes: e.notes ?? '' })}
-                            aria-label="Edit" className="rounded-md p-1.5 text-[var(--muted)] hover:bg-[var(--bg)] hover:text-brand"><Pencil size={14} /></button>
-                          <button onClick={() => { if (window.confirm('Delete this time entry from the PSA?')) delEntry.mutate(e.externalId); }}
-                            disabled={delEntry.isPending} aria-label="Delete" className="rounded-md p-1.5 text-[var(--muted)] hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"><Trash2 size={14} /></button>
+                        <div>
+                          <div className="flex items-center gap-3">
+                            <span className="w-24 shrink-0 tabular-nums">
+                              <strong>{fmtDuration(e.hours)}</strong>{' '}
+                              <span className="text-xs text-[var(--faint)]">({e.hours.toFixed(4)} h)</span>
+                            </span>
+                            <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium ${e.billable ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{billableLabel(e.billableOption, e.billable)}</span>
+                            {e.workType && <span className="hidden shrink-0 rounded bg-[var(--bg)] px-1.5 py-0.5 text-[11px] text-[var(--muted)] sm:inline">{e.workType}</span>}
+                            <span className="min-w-0 flex-1 truncate text-sm text-[var(--muted)]">{e.notes || '—'}</span>
+                            {e.technicianName && <span className="hidden shrink-0 text-xs text-[var(--muted)] md:inline">{e.technicianName}</span>}
+                            {/* Which system logged it: a technician's own entry reads differently from
+                                one raised through the portal, and only one of them can go wrong here. */}
+                            <span className={`hidden shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium sm:inline ${e.source === 'Portal' ? 'bg-brand/10 text-brand' : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'}`}>
+                              {e.source === 'Portal' ? 'Desk Portal' : providerLabel(Number(ticket.provider))}
+                            </span>
+                            <span className="hidden w-32 shrink-0 text-right text-xs lg:inline">
+                              {e.syncStatus === 'Synced'
+                                ? <span className="text-[var(--muted)]">synced ({providerAbbrev(Number(ticket.provider))} #{e.externalId})</span>
+                                : <span className="font-medium text-red-600 dark:text-red-400">{e.syncStatus.toLowerCase()}</span>}
+                            </span>
+                            <span className="shrink-0 text-xs text-[var(--faint)]">{fmtDay(e.entryDate)}</span>
+                            {/* A rejected entry has nothing to edit or delete on the provider side. */}
+                            {e.syncStatus === 'Synced' && (
+                              <>
+                                <button onClick={() => setEditEntry({ id: e.externalId, hours: e.hours.toString(), notes: e.notes ?? '' })}
+                                  aria-label="Edit" className="rounded-md p-1.5 text-[var(--muted)] hover:bg-[var(--bg)] hover:text-brand"><Pencil size={14} /></button>
+                                <button onClick={() => { if (window.confirm('Delete this time entry from the PSA?')) delEntry.mutate(e.externalId); }}
+                                  disabled={delEntry.isPending} aria-label="Delete" className="rounded-md p-1.5 text-[var(--muted)] hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"><Trash2 size={14} /></button>
+                              </>
+                            )}
+                          </div>
+                          {e.syncStatus !== 'Synced' && (
+                            <p className="mt-1 rounded-md bg-red-50 px-2 py-1 text-xs text-red-700 dark:bg-red-950/50 dark:text-red-300">
+                              Not recorded in {providerLabel(Number(ticket.provider))}
+                              {e.syncError ? `: ${e.syncError}` : '.'}
+                            </p>
+                          )}
                         </div>
                       )}
                     </li>
@@ -380,6 +481,15 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                         <span className="shrink-0 text-xs text-[var(--faint)]">{fmt(n.createdAt, true)}</span>
                       </div>
                       <p className="mt-1 whitespace-pre-line text-sm">{n.body}</p>
+                      {filesByNote.get(n.id)?.length ? (
+                        <ul className="mt-2 flex flex-wrap gap-2">
+                          {filesByNote.get(n.id)!.map((a) => (
+                            <li key={a.id}>
+                              <AttachmentChip a={a} provider={Number(ticket.provider)} onDownload={download} />
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
                     </div>
                   </div>
                 ))}
@@ -394,16 +504,30 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   </div>
                   <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} maxLength={4000}
                     placeholder="Add a reply…" className="w-full resize-y bg-transparent px-4 py-3 text-sm outline-none" />
+                  {pendingFiles.length > 0 && (
+                    <ul className="flex flex-wrap gap-2 px-4 pb-2">
+                      {pendingFiles.map((f, i) => (
+                        <li key={`${f.name}-${i}`} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs">
+                          <Paperclip size={12} className="text-[var(--muted)]" />
+                          <span className="max-w-40 truncate">{f.name}</span>
+                          <span className="text-[var(--faint)]">{fmtSize(f.size)}</span>
+                          <button type="button" aria-label={`Remove ${f.name}`}
+                            onClick={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
+                            className="text-[var(--muted)] hover:text-red-600"><X size={12} /></button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                   <div className="flex items-center justify-between px-4 pb-3">
                     <span className="text-xs text-[var(--faint)]">{comment.length} / 4000</span>
                     <div className="flex items-center gap-2">
                       <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium hover:bg-[var(--bg)] disabled:opacity-50">
-                        <Paperclip size={15} /> {uploading ? 'Uploading…' : 'Attach file'}
+                        <Paperclip size={15} /> Attach file
                       </button>
                       <button type="submit" disabled={addComment.isPending || !comment.trim()}
                         className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50">
-                        <Send size={15} /> {addComment.isPending ? 'Sending…' : 'Send reply'}
+                        <Send size={15} /> {addComment.isPending ? 'Sending…' : pendingFiles.length > 0 ? `Send reply + ${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''}` : 'Send reply'}
                       </button>
                     </div>
                   </div>
@@ -415,11 +539,14 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
             {/* Attachments */}
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
               <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--faint)]">
-                Attachments <span className="rounded-full bg-[var(--bg)] px-2 py-0.5 text-xs text-[var(--muted)]">{ticket.attachments.length}</span>
+                Other files <span className="rounded-full bg-[var(--bg)] px-2 py-0.5 text-xs text-[var(--muted)]">{looseFiles.length}</span>
               </h2>
-              {ticket.attachments.length > 0 && (
+              <p className="-mt-2 mb-3 text-xs text-[var(--muted)]">
+                Files not posted with a reply. Anything attached to a message is shown with it above.
+              </p>
+              {looseFiles.length > 0 && (
                 <ul className="mb-3 space-y-2">
-                  {ticket.attachments.map((a) => {
+                  {looseFiles.map((a) => {
                     const clean = String(a.scanStatus) === '1' || String(a.scanStatus) === 'Clean';
                     const sourceLabel = providerLabel(Number(ticket.provider));
                     return (
@@ -453,8 +580,13 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
               <p className="mt-2 text-xs text-[var(--faint)]">Files are scanned for malware; executables are blocked. Max 25 MB per file.</p>
             </div>
 
-            <input ref={fileRef} type="file" className="hidden" disabled={uploading}
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }} />
+            <input ref={fileRef} type="file" multiple className="hidden" disabled={uploading}
+              onChange={(e) => {
+                const chosen = Array.from(e.target.files ?? []);
+                // Staged, not sent: a file picked in the composer belongs to the reply being written.
+                if (chosen.length) setPendingFiles((prev) => [...prev, ...chosen]);
+                e.target.value = '';
+              }} />
           </>
         );
       })()}

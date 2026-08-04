@@ -101,10 +101,11 @@ export const api = {
     request(`/api/tickets/${id}/time/${entryId}`, TimeAggregateSchema, { method: 'PUT', body: JSON.stringify(body) }),
   deleteTimeEntry: (id: string, entryId: string) =>
     request(`/api/tickets/${id}/time/${entryId}`, TimeAggregateSchema, { method: 'DELETE' }),
-  uploadAttachment: async (ticketId: string, file: File) => {
+  uploadAttachment: async (ticketId: string, file: File, noteId?: string) => {
     const fd = new FormData();
     fd.append('file', file);
-    const res = await fetch(`${BFF_BASE}/api/tickets/${ticketId}/attachments`, {
+    const query = noteId ? `?noteId=${noteId}` : '';
+    const res = await fetch(`${BFF_BASE}/api/tickets/${ticketId}/attachments${query}`, {
       method: 'POST',
       headers: { 'X-Correlation-ID': crypto.randomUUID() }, // no Content-Type — browser sets multipart boundary
       body: fd,
@@ -333,10 +334,14 @@ const TimeEntrySchema = z.object({
   billable: z.boolean(),
   entryDate: z.string(),
   notes: z.string().nullable(),
-  technician: z.string(),
+  technician: z.string().nullable().default(null),
   technicianName: z.string().nullable().default(null),
   workType: z.string().nullable().default(null),
   billableOption: z.string().default('Billable'),
+  // Which system the entry was logged in, and whether it actually reached the PSA.
+  source: z.string().default('Provider'),
+  syncStatus: z.string().default('Synced'),
+  syncError: z.string().nullable().default(null),
 });
 export type TimeEntry = z.infer<typeof TimeEntrySchema>;
 

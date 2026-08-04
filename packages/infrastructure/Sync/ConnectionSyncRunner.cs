@@ -215,6 +215,12 @@ public sealed class ConnectionSyncRunner(
         var byExternalId = tickets.ToDictionary(t => t.ExternalTicketId!, t => t);
 
         var ticketIds = tickets.Select(t => t.Id).ToList();
+        // Provider note id -> portal note, so an imported file lands under the reply it belongs to
+        // instead of in an undifferentiated pile at the bottom of the ticket.
+        var noteIdByExternalId = await db.TicketNotes
+            .Where(n => ticketIds.Contains(n.TicketId) && n.ExternalNoteId != null)
+            .ToDictionaryAsync(n => n.ExternalNoteId!, n => n.Id, ct);
+
         var known = new HashSet<string>(await db.TicketAttachments
             .Where(a => ticketIds.Contains(a.TicketId) && a.ExternalAttachmentId != null)
             .Select(a => a.ExternalAttachmentId!)
@@ -239,6 +245,9 @@ public sealed class ConnectionSyncRunner(
                 MspOrganizationId = ticket.MspOrganizationId,
                 TicketId = ticket.Id,
                 ExternalAttachmentId = file.ExternalId,
+                TicketNoteId = file.ExternalNoteId is { } n && noteIdByExternalId.TryGetValue(n, out var localNote)
+                    ? localNote
+                    : null,
                 OriginalFileName = payload.FileName,
                 ContentType = payload.ContentType,
                 SizeBytes = payload.Content.LongLength,

@@ -64,6 +64,9 @@ public sealed record AttachmentDto(
 
     /// <summary>True when the file came from the PSA rather than being uploaded here.</summary>
     public bool FromProvider { get; init; }
+
+    /// <summary>Conversation entry this file was posted with, so the UI can show it in context.</summary>
+    public Guid? TicketNoteId { get; init; }
 }
 
 public sealed record CreateTicketInput(

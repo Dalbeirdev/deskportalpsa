@@ -29,7 +29,10 @@ public sealed record UploadAttachmentInput(
     Guid MspOrganizationId,
     string FileName,
     string ContentType,
-    byte[] Content);
+    byte[] Content,
+    // The conversation entry this file was posted with. Trailing + optional so standalone uploads
+    // and existing call sites are unaffected.
+    Guid? TicketNoteId = null);
 
 public interface IAttachmentService
 {

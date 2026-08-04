@@ -139,6 +139,9 @@ public record UnifiedAttachment(
 
     /// <summary>Who attached it provider-side. Empty means provider-generated, as with notes.</summary>
     public string? AuthorName { get; init; }
+
+    /// <summary>Provider note this file hangs off, when the provider records one.</summary>
+    public string? ExternalNoteId { get; init; }
 }
 
 /// <summary>An attachment paired with the ticket it hangs off, as returned by a tenant-wide sweep.</summary>
@@ -153,7 +156,12 @@ public record SecureAttachment(
     string ContentType,
     long SizeBytes,
     string StorageObjectKey,
-    byte[] Content);
+    byte[] Content)
+{
+    /// <summary>Provider note this file was posted with, so the PSA files it against the message
+    /// rather than the ticket at large. Null for a standalone upload.</summary>
+    public string? ExternalNoteId { get; init; }
+}
 
 /// <summary>Cursor/offset filter for paginated reads.</summary>
 public record TicketFilter

@@ -73,7 +73,7 @@ public sealed class TicketReadService(DeskDbContext db) : ITicketReadService
             Attachments: ticket.Attachments
                 .OrderBy(a => a.UploadedAt)
                 .Select(a => new AttachmentDto(a.Id, a.OriginalFileName, a.ContentType, a.SizeBytes, a.ScanStatus, a.UploadedAt)
-                    { AuthorName = a.AuthorName, FromProvider = a.ImportedFromProvider })
+                    { AuthorName = a.AuthorName, FromProvider = a.ImportedFromProvider, TicketNoteId = a.TicketNoteId })
                 .ToList(),
             CustomerName: customerName,
             UpdatedAt: ticket.UpdatedAt,
