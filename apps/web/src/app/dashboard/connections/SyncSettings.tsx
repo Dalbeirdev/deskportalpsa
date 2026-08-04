@@ -10,15 +10,19 @@ import { api, type ConnectionSettings } from '@/lib/api';
 const queueLabel = (provider: number) => (provider === 1 ? 'Service Board IDs' : 'Queue IDs');
 const resourceLabel = (provider: number) => (provider === 1 ? 'Member IDs' : 'Resource IDs');
 
-function Toggle({ label, hint, checked, onChange, disabled }: {
-  label: string; hint: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean;
+function Toggle({ label, hint, checked, onChange, disabled, notYet }: {
+  label: string; hint: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; notYet?: boolean;
 }) {
+  const off = disabled || notYet;
   return (
-    <label className={`flex gap-2.5 rounded-lg border border-[var(--border)] p-3 ${disabled ? 'opacity-50' : 'cursor-pointer hover:bg-[var(--bg)]'}`}>
-      <input type="checkbox" checked={checked} disabled={disabled}
+    <label className={`flex gap-2.5 rounded-lg border border-[var(--border)] p-3 ${off ? 'opacity-60' : 'cursor-pointer hover:bg-[var(--bg)]'}`}>
+      <input type="checkbox" checked={checked && !notYet} disabled={off}
         onChange={(e) => onChange(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--brand-line,#3b82f6)]" />
       <span>
-        <span className="block text-sm font-medium">{label}</span>
+        <span className="flex items-center gap-1.5 text-sm font-medium">
+          {label}
+          {notYet && <span className="rounded-full bg-[var(--bg)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--faint)]">Not yet active</span>}
+        </span>
         <span className="block text-xs text-[var(--muted)]">{hint}</span>
       </span>
     </label>
@@ -75,12 +79,12 @@ export function SyncSettings({ connectionId, provider }: { connectionId: string;
             hint="Pull provider-side changes back into the portal. Off = portal → PSA writes only." />
           <Toggle label="Auto-import new tickets" checked={form.autoImportNewTickets} onChange={(v) => set('autoImportNewTickets', v)}
             hint="Create brand-new provider tickets here on each sync. Off = only tickets already known are updated." />
-          <Toggle label="Import notes" checked={form.importNotes} disabled={!form.twoWaySync} onChange={(v) => set('importNotes', v)}
-            hint="Mirror provider notes into the portal thread. Needs two-way sync." />
-          <Toggle label="Import system notes" checked={form.importSystemNotes} disabled={!form.importNotes} onChange={(v) => set('importSystemNotes', v)}
-            hint="Include machine-generated workflow/SLA notes. Off keeps threads human-only." />
-          <Toggle label="Sync attachments" checked={form.syncAttachments} onChange={(v) => set('syncAttachments', v)}
-            hint="Upload portal attachments to the provider and mirror theirs back." />
+          <Toggle label="Import notes" notYet checked={form.importNotes} onChange={(v) => set('importNotes', v)}
+            hint="Will mirror provider notes into the portal thread. Inbound note sync is not built yet, so this has no effect." />
+          <Toggle label="Import system notes" notYet checked={form.importSystemNotes} onChange={(v) => set('importSystemNotes', v)}
+            hint="Will exclude machine-generated workflow/SLA notes. Depends on note import." />
+          <Toggle label="Sync attachments" notYet checked={form.syncAttachments} onChange={(v) => set('syncAttachments', v)}
+            hint="Will mirror attachments both ways. Portal-side upload works today; provider sync is not built yet." />
         </div>
       </div>
 

@@ -28,6 +28,11 @@ public sealed class ConnectionSyncRunner(
         var connection = await db.PsaConnections.FirstOrDefaultAsync(c => c.Id == psaConnectionId, ct)
             ?? throw new NotFoundException("PSA connection");
 
+        // Two-way sync off means nothing flows back from the provider: portal → PSA writes still
+        // happen, but an inbound run must not touch the projection.
+        if (!connection.TwoWaySync)
+            return new SyncRunResult(0, 0, 0, 0, 0);
+
         var connector = await resolver.ResolveAsync(psaConnectionId, ct);
         var rules = await db.FieldMappings.AsNoTracking()
             .Where(m => m.Provider == connection.Provider && m.IsActive)
