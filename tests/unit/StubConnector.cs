@@ -91,6 +91,7 @@ public sealed class StubConnector(ProviderType provider = ProviderType.AutotaskP
     public Task<IReadOnlyList<ExternalOrganization>> GetOrganizationsAsync(CancellationToken ct = default) => No<IReadOnlyList<ExternalOrganization>>();
     public Task<IReadOnlyList<ExternalContact>> GetContactsAsync(string organizationId, CancellationToken ct = default) => No<IReadOnlyList<ExternalContact>>();
     public Task<IReadOnlyList<ExternalTechnician>> GetTechniciansAsync(CancellationToken ct = default) => No<IReadOnlyList<ExternalTechnician>>();
+    public Task<IReadOnlyList<ExternalTechnicianAssignment>> GetTechnicianAssignmentsAsync(CancellationToken ct = default) => No<IReadOnlyList<ExternalTechnicianAssignment>>();
     public Task<IReadOnlyList<ExternalDevice>> GetDevicesAsync(string organizationId, CancellationToken ct = default) => No<IReadOnlyList<ExternalDevice>>();
     public Task<UnifiedTicket?> GetTicketAsync(string ticketId, CancellationToken ct = default) => No<UnifiedTicket?>();
     public Task<CreateTicketResult> CreateTicketAsync(UnifiedTicketCreateRequest ticket, CancellationToken ct = default) => No<CreateTicketResult>();

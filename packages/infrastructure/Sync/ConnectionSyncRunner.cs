@@ -82,6 +82,7 @@ public sealed class ConnectionSyncRunner(
 
                     if (connection.ImportNotes)
                         notes += await ImportNotesAsync(connection, connector, ticket.ExternalId, ct);
+                    await ResolveAssigneeNameAsync(psaConnectionId, connector, ticket.ExternalId, ct);
 
                     // Time logged provider-side never reaches the portal's stored totals otherwise:
                     // they were only rewritten when time was logged from here, so a technician's own
@@ -170,6 +171,45 @@ public sealed class ConnectionSyncRunner(
         }
         if (added > 0) await db.SaveChangesAsync(ct);
         return added;
+    }
+
+    // Resolved once per run and reused: the provider's resource list does not change mid-sync, and
+    // a per-ticket lookup would cost a request for every row.
+    private Dictionary<string, string>? _technicianNames;
+
+    /// <summary>
+    /// Puts a readable name against the provider's assignee id, so the ticket can say who is working
+    /// on it rather than showing a bare numeric resource id.
+    /// </summary>
+    private async Task ResolveAssigneeNameAsync(Guid connectionId, IServiceManagementConnector connector, string externalTicketId, CancellationToken ct)
+    {
+        var ticket = await db.Tickets.FirstOrDefaultAsync(
+            t => t.PsaConnectionId == connectionId && t.ExternalTicketId == externalTicketId, ct);
+        if (ticket?.AssignedTechnicianExternalId is not { Length: > 0 } assignee)
+        {
+            if (ticket is not null && ticket.AssignedTechnicianName is not null)
+            {
+                ticket.AssignedTechnicianName = null; // unassigned provider-side: drop the stale name
+                await db.SaveChangesAsync(ct);
+            }
+            return;
+        }
+
+        if (_technicianNames is null)
+        {
+            _technicianNames = [];
+            try
+            {
+                foreach (var t in await connector.GetTechniciansAsync(ct))
+                    _technicianNames[t.ExternalId] = t.DisplayName;
+            }
+            catch (ConnectorException) { /* the id still shows; the name is the nicety */ }
+        }
+
+        var name = _technicianNames.GetValueOrDefault(assignee);
+        if (name == ticket.AssignedTechnicianName) return;
+        ticket.AssignedTechnicianName = name;
+        await db.SaveChangesAsync(ct);
     }
 
     /// <summary>Rewrites one ticket's worked/billable totals from the PSA, which owns the truth.</summary>

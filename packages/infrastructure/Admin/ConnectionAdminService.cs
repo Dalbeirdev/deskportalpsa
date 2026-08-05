@@ -223,8 +223,10 @@ public sealed class ConnectionAdminService(
         var workRoles = await SafeAsync(() => connector.GetWorkRolesAsync(ct));
         // Only active technicians: an admin picking a default should not be offered a leaver.
         var technicians = await SafeTechniciansAsync(connector, ct);
+        var coverage = await SafeCoverageAsync(connector, ct);
         return new ConnectionFieldsDto(
-            Map(boards), Map(statuses), Map(priorities), Map(categories), Map(workTypes), Map(workRoles), technicians);
+            Map(boards), Map(statuses), Map(priorities), Map(categories), Map(workTypes), Map(workRoles),
+            technicians, coverage);
     }
 
     private static async Task<IReadOnlyList<FieldOptionDto>> SafeTechniciansAsync(IServiceManagementConnector connector, CancellationToken ct)
@@ -235,6 +237,17 @@ public sealed class ConnectionAdminService(
             return techs.Where(t => t.IsActive && !string.IsNullOrWhiteSpace(t.DisplayName))
                 .Select(t => new FieldOptionDto(t.ExternalId, t.DisplayName))
                 .ToList();
+        }
+        catch (ConnectorException) { return []; }
+    }
+
+    private static async Task<IReadOnlyList<TechnicianCoverageDto>> SafeCoverageAsync(IServiceManagementConnector connector, CancellationToken ct)
+    {
+        try
+        {
+            var rows = await connector.GetTechnicianAssignmentsAsync(ct);
+            return rows.Select(a => new TechnicianCoverageDto(
+                a.TechnicianExternalId, a.RoleId, a.RoleName, a.QueueOrBoardId)).ToList();
         }
         catch (ConnectorException) { return []; }
     }

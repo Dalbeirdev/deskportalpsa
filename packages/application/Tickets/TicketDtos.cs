@@ -49,7 +49,11 @@ public sealed record TicketDetailDto(
     // Ticket service instructions the client set for technicians to follow (account override
     // if present, otherwise the organization-wide default). Trailing + optional so existing
     // construction sites and tests are unaffected.
-    string? ServiceInstructions = null);
+    string? ServiceInstructions = null,
+    // Who the work sits with. The id is the provider's; the name is resolved for display, and is
+    // null when the technician can no longer be looked up.
+    string? AssignedTechnicianExternalId = null,
+    string? AssignedTechnicianName = null);
 
 public sealed record AttachmentDto(
     Guid Id,

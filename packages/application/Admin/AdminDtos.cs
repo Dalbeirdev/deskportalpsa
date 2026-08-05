@@ -107,7 +107,11 @@ public sealed record ConnectionFieldsDto(
     IReadOnlyList<FieldOptionDto> Categories,
     IReadOnlyList<FieldOptionDto> WorkTypes,
     IReadOnlyList<FieldOptionDto> WorkRoles,
-    IReadOnlyList<FieldOptionDto> Technicians);
+    IReadOnlyList<FieldOptionDto> Technicians,
+    IReadOnlyList<TechnicianCoverageDto> TechnicianCoverage);
+
+/// <summary>A technician's role on one queue/board. Repeated per queue they cover.</summary>
+public sealed record TechnicianCoverageDto(string TechnicianId, string? RoleId, string? RoleName, string? QueueOrBoardId);
 
 /// <summary>Per-connection sync behaviour + import filters (what flows, and which tickets are ours).</summary>
 public sealed record ConnectionSettingsDto(

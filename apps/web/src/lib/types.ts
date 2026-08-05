@@ -53,6 +53,8 @@ export const TicketDetailSchema = z.object({
   updatedAt: z.string(),
   connectionName: z.string().nullable().optional(),
   serviceInstructions: z.string().nullable().optional(),
+  assignedTechnicianExternalId: z.string().nullable().default(null),
+  assignedTechnicianName: z.string().nullable().default(null),
 });
 export type TicketDetail = z.infer<typeof TicketDetailSchema>;
 
@@ -156,6 +158,12 @@ export const ConnectionFieldsSchema = z.object({
   workTypes: z.array(FieldOptionSchema).default([]),
   workRoles: z.array(FieldOptionSchema).default([]),
   technicians: z.array(FieldOptionSchema).default([]),
+  technicianCoverage: z.array(z.object({
+    technicianId: z.string(),
+    roleId: z.string().nullable(),
+    roleName: z.string().nullable(),
+    queueOrBoardId: z.string().nullable(),
+  })).default([]),
 });
 export type ConnectionFields = z.infer<typeof ConnectionFieldsSchema>;
 

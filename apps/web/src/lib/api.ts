@@ -86,6 +86,16 @@ export const api = {
     }),
   addComment: (id: string, body: string) =>
     request(`/api/tickets/${id}/comments`, TicketNoteResponse, { method: 'POST', body: JSON.stringify({ body }) }),
+  ticketAssignees: (id: string) =>
+    request(`/api/tickets/${id}/assignees`, AssigneeOptionsSchema),
+  assignTicket: (id: string, body: { technicianExternalId?: string; queueOrBoardId?: string; roleId?: string }) =>
+    request(`/api/tickets/${id}/assignment`,
+      z.object({
+        assignedTechnicianExternalId: z.string().nullable(),
+        assignedTechnicianName: z.string().nullable(),
+        queueOrBoard: z.string().nullable(),
+      }),
+      { method: 'PUT', body: JSON.stringify(body) }),
   updateTicketStatus: (id: string, status: string) =>
     request(`/api/tickets/${id}/status`, z.object({ portalStatus: z.string() }), { method: 'POST', body: JSON.stringify({ status }) }),
   logTime: (id: string, body: { hours: number; billable: string; notes?: string; workType?: string; workRole?: string }) =>
@@ -329,6 +339,20 @@ const ClientUserSchema = z.object({
   grants: z.array(AccessGrantSchema),
 });
 export type ClientUser = z.infer<typeof ClientUserSchema>;
+
+const AssigneeOptionsSchema = z.object({
+  queueOrBoardId: z.string().nullable(),
+  filteredByRole: z.boolean(),
+  filteredByQueue: z.boolean(),
+  queuesOrBoards: z.array(z.object({ value: z.string(), label: z.string() })),
+  technicians: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    roles: z.array(z.string()),
+    roleOptions: z.array(z.object({ id: z.string(), name: z.string() })),
+  })),
+});
+export type AssigneeOptions = z.infer<typeof AssigneeOptionsSchema>;
 
 const TimeEntrySchema = z.object({
   externalId: z.string(),

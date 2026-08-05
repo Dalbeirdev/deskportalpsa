@@ -23,6 +23,12 @@ public interface IServiceManagementConnector
     Task<IReadOnlyList<ExternalContact>> GetContactsAsync(string organizationId, CancellationToken ct = default);
     Task<IReadOnlyList<ExternalTechnician>> GetTechniciansAsync(CancellationToken ct = default);
 
+    /// <summary>
+    /// Role and queue coverage per technician. Empty for providers that do not model it, in which
+    /// case callers fall back to offering every technician rather than none.
+    /// </summary>
+    Task<IReadOnlyList<ExternalTechnicianAssignment>> GetTechnicianAssignmentsAsync(CancellationToken ct = default);
+
     /// <summary>Managed devices/assets for a company. Empty when the provider has no asset registry.</summary>
     Task<IReadOnlyList<ExternalDevice>> GetDevicesAsync(string organizationId, CancellationToken ct = default);
 

@@ -68,6 +68,14 @@ public sealed class MockConnector : IServiceManagementConnector
     public Task<IReadOnlyList<ExternalTechnician>> GetTechniciansAsync(CancellationToken ct = default)
     { Guard(); return Task.FromResult<IReadOnlyList<ExternalTechnician>>(_techs); }
 
+    public Task<IReadOnlyList<ExternalTechnicianAssignment>> GetTechnicianAssignmentsAsync(CancellationToken ct = default)
+    {
+        Guard();
+        var rows = _techs.Select((t, i) => new ExternalTechnicianAssignment(
+            t.ExternalId, i == 0 ? "R-1" : "R-2", i == 0 ? "Engineer" : "Help Desk", "Q-1")).ToList();
+        return Task.FromResult<IReadOnlyList<ExternalTechnicianAssignment>>(rows);
+    }
+
     public Task<PaginatedResult<UnifiedTicket>> GetTicketsAsync(TicketFilter filter, CancellationToken ct = default)
     {
         Guard();

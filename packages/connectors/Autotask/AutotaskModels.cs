@@ -165,6 +165,7 @@ internal sealed class AtResourceRole
     [JsonPropertyName("id")] public long Id { get; set; }
     [JsonPropertyName("resourceID")] public long ResourceId { get; set; }
     [JsonPropertyName("roleID")] public long RoleId { get; set; }
+    [JsonPropertyName("queueID")] public long? QueueId { get; set; }
     [JsonPropertyName("isActive")] public bool IsActive { get; set; }
 }
 

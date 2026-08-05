@@ -38,6 +38,9 @@ public class Ticket : TenantEntity
     public string? QueueOrBoard { get; set; }
     public string? AssignedTechnicianExternalId { get; set; }
 
+    /// <summary>Display name for the assignee, resolved on sync so reads never call the provider.</summary>
+    public string? AssignedTechnicianName { get; set; }
+
     // SLA & time
     public DateTimeOffset? SlaDueAt { get; set; }
     public DateTimeOffset? ResolvedAt { get; set; }

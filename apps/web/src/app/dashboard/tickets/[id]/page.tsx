@@ -7,10 +7,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Pencil, MoreHorizontal, Paperclip,
   Send, Bold, Smile, Link2, ArrowUpDown, Lock, Monitor, Wifi, Mail, KeyRound, Cpu, Ticket,
-  Copy, RefreshCw, Download, Clock, Trash2, Check, X, ClipboardList,
+  Copy, RefreshCw, Download, Clock, Trash2, Check, X, ClipboardList, UserCog,
 } from 'lucide-react';
 import { useTimer } from '@/components/TimerProvider';
-import { api } from '@/lib/api';
+import { api, type AssigneeOptions } from '@/lib/api';
 import type { TicketDetail } from '@/lib/types';
 
 const STATUS_TONE: Record<string, string> = {
@@ -70,6 +70,90 @@ function fmtDuration(hours: number) {
 
 type TicketAttachment = TicketDetail['attachments'][number];
 
+/**
+ * Picks who works the ticket and which queue it sits on. Roles are shown next to each name because
+ * "who can take this" is a role question first — an Engineer and a Help Desk tech covering the same
+ * board are not interchangeable, and the provider only exposes that through queue coverage.
+ */
+function AssignPanel({ options, currentTechnicianId, currentQueueId, pending, error, onCancel, onSave }: {
+  options: AssigneeOptions | undefined;
+  currentTechnicianId: string | null;
+  currentQueueId: string | null;
+  pending: boolean;
+  error: string | null;
+  onCancel: () => void;
+  onSave: (body: { technicianExternalId?: string; queueOrBoardId?: string; roleId?: string }) => void;
+}) {
+  const [technician, setTechnician] = useState(currentTechnicianId ?? '');
+  const [queue, setQueue] = useState('');
+  const [role, setRole] = useState('');
+
+  if (!options) return <p className="text-xs text-[var(--muted)]">Loading technicians…</p>;
+
+  // Only worth asking when the person genuinely holds more than one role here; otherwise the
+  // server picks the single role they have on this queue and the field is noise.
+  const roleOptions = options.technicians.find((t) => t.id === technician)?.roleOptions ?? [];
+
+  const changed = (technician && technician !== currentTechnicianId) || (queue && queue !== currentQueueId);
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium">Technician</span>
+          <select value={technician} onChange={(e) => { setTechnician(e.target.value); setRole(''); }}
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
+            <option value="">— unchanged —</option>
+            {options.technicians.map((t) => (
+              <option key={t.id} value={t.id}>{t.roles.length ? `${t.name} · ${t.roles.join(', ')}` : t.name}</option>
+            ))}
+          </select>
+          <span className="mt-1 block text-xs text-[var(--muted)]">
+            {options.filteredByQueue
+              ? 'Technicians who cover this queue, with the role they hold on it.'
+              : options.filteredByRole
+                ? 'Technicians who hold a role in the PSA. This queue has no specific coverage, so all of them are listed.'
+                : 'This PSA does not publish role or queue coverage, so everyone is listed.'}
+          </span>
+        </label>
+        {roleOptions.length > 1 && (
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium">Role</span>
+            <select value={role} onChange={(e) => setRole(e.target.value)}
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
+              <option value="">— their role on this queue —</option>
+              {roleOptions.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+            <span className="mt-1 block text-xs text-[var(--muted)]">They hold several — pick which one they take this in.</span>
+          </label>
+        )}
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium">Queue / board</span>
+          <select value={queue} onChange={(e) => setQueue(e.target.value)}
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
+            <option value="">— unchanged —</option>
+            {options.queuesOrBoards.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <span className="mt-1 block text-xs text-[var(--muted)]">Moving a ticket can change who covers it.</span>
+        </label>
+      </div>
+      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onSave({
+            technicianExternalId: technician || undefined,
+            queueOrBoardId: queue || undefined,
+            roleId: role || undefined,
+          })}
+          disabled={pending || !changed}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50">
+          <Check size={15} /> {pending ? 'Saving…' : 'Save assignment'}
+        </button>
+        <button onClick={onCancel} className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm hover:bg-[var(--bg)]">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 /** One file, rendered the same way under a reply and in the loose-files list. */
 function AttachmentChip({ a, provider, onDownload }: {
   a: TicketAttachment; provider: number; onDownload: (id: string) => void;
@@ -113,6 +197,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   // Files chosen in the composer are held until the reply is sent, so they can be filed against
   // that message rather than dropped loose on the ticket.
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [assignOpen, setAssignOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [oldestFirst, setOldestFirst] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -132,6 +217,22 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
 
   const { data: ticket, isLoading, isError } = useQuery({ queryKey: ['ticket', id], queryFn: () => api.getTicket(id) });
   const { data: list } = useQuery({ queryKey: ['tickets'], queryFn: api.listTickets });
+  // Only fetched once the picker is opened: it costs a provider round trip for coverage data that
+  // most visits to a ticket never need.
+  const { data: assignOpts } = useQuery({
+    queryKey: ['assignees', id],
+    queryFn: () => api.ticketAssignees(id),
+    enabled: assignOpen,
+    retry: false,
+  });
+  const assign = useMutation({
+    mutationFn: (body: { technicianExternalId?: string; queueOrBoardId?: string; roleId?: string }) => api.assignTicket(id, body),
+    onSuccess: () => {
+      setAssignOpen(false);
+      [['ticket', id], ['tickets'], ['team']].forEach((k) => qc.invalidateQueries({ queryKey: k }));
+    },
+  });
+
   const { data: timeOpts } = useQuery({ queryKey: ['time-options', id], queryFn: () => api.ticketTimeOptions(id), enabled: !!ticket, retry: false });
 
   function startTimerHere() {
@@ -275,11 +376,31 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 <Meta label="Reference" value={ticket.externalTicketId ?? '—'} />
                 <Meta label="Source" value={ticket.connectionName ?? '—'} />
                 <Meta label="Queue / Board" value={ticket.queueOrBoard ?? '—'} />
+                <Meta label="Assigned to" value={ticket.assignedTechnicianName ?? ticket.assignedTechnicianExternalId ?? 'Unassigned'} />
                 <Meta label="Category" value={ticket.portalCategory ?? '—'} />
                 <Meta label="Customer" value={ticket.customerName ?? '—'} />
                 <Meta label="Opened" value={fmt(ticket.createdAt)} />
                 <Meta label="Updated" value={fmt(ticket.updatedAt)} />
               </dl>
+
+              <div className="mt-4 border-t border-[var(--border)] pt-4">
+                {!assignOpen ? (
+                  <button onClick={() => setAssignOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium hover:bg-[var(--bg)]">
+                    <UserCog size={14} /> {ticket.assignedTechnicianName ? 'Reassign or move queue' : 'Assign technician'}
+                  </button>
+                ) : (
+                  <AssignPanel
+                    options={assignOpts}
+                    currentTechnicianId={ticket.assignedTechnicianExternalId}
+                    currentQueueId={assignOpts?.queueOrBoardId ?? null}
+                    pending={assign.isPending}
+                    error={assign.isError ? (assign.error instanceof Error ? assign.error.message : 'The PSA rejected the change.') : null}
+                    onCancel={() => { setAssignOpen(false); assign.reset(); }}
+                    onSave={(body) => assign.mutate(body)}
+                  />
+                )}
+              </div>
             </div>
 
             {/* Service instructions the client set for technicians (from the Control Panel). */}

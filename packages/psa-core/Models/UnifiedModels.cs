@@ -80,6 +80,11 @@ public record UnifiedTicketUpdate
     public string? Category { get; init; }
     public string? QueueOrBoard { get; init; }
     public string? AssignedTechnicianExternalId { get; init; }
+    /// <summary>
+    /// Role the technician takes the ticket in. Autotask refuses an assignment without one — the
+    /// resource and its role are a pair there — so this is not decoration.
+    /// </summary>
+    public string? AssignedTechnicianRoleId { get; init; }
     public required string IdempotencyKey { get; init; }
 }
 
@@ -143,6 +148,14 @@ public record UnifiedAttachment(
     /// <summary>Provider note this file hangs off, when the provider records one.</summary>
     public string? ExternalNoteId { get; init; }
 }
+
+/// <summary>
+/// One technician's coverage: the role they hold, and the queue/board it applies to. A technician
+/// commonly appears several times — one row per queue they work, sometimes in different roles — so
+/// assignment can offer the people who actually cover the ticket's board rather than everyone.
+/// </summary>
+public record ExternalTechnicianAssignment(
+    string TechnicianExternalId, string? RoleId, string? RoleName, string? QueueOrBoardId);
 
 /// <summary>An attachment paired with the ticket it hangs off, as returned by a tenant-wide sweep.</summary>
 public record ProviderAttachmentRef(string TicketExternalId, UnifiedAttachment Attachment);

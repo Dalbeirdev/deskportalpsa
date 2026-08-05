@@ -82,6 +82,13 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
             !string.Equals(c.Status?.Name, "Inactive", StringComparison.OrdinalIgnoreCase))).ToList();
     }
 
+    /// <summary>
+    /// ConnectWise models board coverage through board teams, which is not wired yet. Reporting none
+    /// makes assignment offer every member rather than an arbitrary subset.
+    /// </summary>
+    public Task<IReadOnlyList<ExternalTechnicianAssignment>> GetTechnicianAssignmentsAsync(CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<ExternalTechnicianAssignment>>([]);
+
     public async Task<PaginatedResult<UnifiedTicket>> GetTicketsAsync(TicketFilter filter, CancellationToken ct = default)
     {
         var query = new Dictionary<string, string> { ["pageSize"] = filter.PageSize.ToString() };

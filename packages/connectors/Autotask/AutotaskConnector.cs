@@ -69,6 +69,27 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
             r.Id.ToString(), r.Email ?? "", $"{r.FirstName} {r.LastName}".Trim(), r.IsActive)).ToList();
     }
 
+    public async Task<IReadOnlyList<ExternalTechnicianAssignment>> GetTechnicianAssignmentsAsync(CancellationToken ct = default)
+    {
+        var links = await QueryAsync<AtResourceRole>("ResourceRoles", [Filter("isActive", "eq", true)], 500, ct);
+        if (links.Count == 0) return [];
+
+        var roleNames = new Dictionary<long, string>();
+        try
+        {
+            foreach (var r in await QueryAsync<AtRole>("Roles", [Filter("isActive", "eq", true)], 500, ct))
+                roleNames[r.Id] = r.Name ?? r.Id.ToString();
+        }
+        catch (ConnectorException) { /* ids still work; names are the nicety */ }
+
+        return links.Select(l => new ExternalTechnicianAssignment(
+            l.ResourceId.ToString(),
+            l.RoleId.ToString(),
+            roleNames.GetValueOrDefault(l.RoleId),
+            // A row without a queue is department-wide coverage, not coverage of no queue.
+            l.QueueId is > 0 ? l.QueueId!.Value.ToString() : null)).ToList();
+    }
+
     public async Task<PaginatedResult<UnifiedTicket>> GetTicketsAsync(TicketFilter filter, CancellationToken ct = default)
     {
         var filters = new List<object>();
@@ -131,7 +152,15 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
         if (update.Priority is not null) body["priority"] = update.Priority;
         if (update.Category is not null) body["ticketCategory"] = update.Category;
         if (update.QueueOrBoard is not null) body["queueID"] = update.QueueOrBoard;
-        if (update.AssignedTechnicianExternalId is not null) body["assignedResourceID"] = update.AssignedTechnicianExternalId;
+        if (update.AssignedTechnicianExternalId is not null)
+        {
+            body["assignedResourceID"] = update.AssignedTechnicianExternalId;
+            // Autotask rejects a resource without a role: "you must assign both a assignedResourceID
+            // and assignedResourceRoleID". Callers resolve the role from the technician's own
+            // coverage, so the pair always travels together.
+            if (update.AssignedTechnicianRoleId is not null)
+                body["assignedResourceRoleID"] = update.AssignedTechnicianRoleId;
+        }
 
         await SendAsync<AtCreateResult>(HttpMethod.Patch, "V1.0/Tickets", body, ct);
         return new UpdateTicketResult(true, null);

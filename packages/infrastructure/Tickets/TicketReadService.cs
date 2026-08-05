@@ -78,7 +78,9 @@ public sealed class TicketReadService(DeskDbContext db) : ITicketReadService
             CustomerName: customerName,
             UpdatedAt: ticket.UpdatedAt,
             ConnectionName: connectionName,
-            ServiceInstructions: serviceInstructions);
+            ServiceInstructions: serviceInstructions,
+            AssignedTechnicianExternalId: ticket.AssignedTechnicianExternalId,
+            AssignedTechnicianName: ticket.AssignedTechnicianName);
     }
 
     public async Task<IReadOnlyList<NotificationDto>> RecentActivityAsync(ClientAccess access, int take = 10, CancellationToken ct = default)
