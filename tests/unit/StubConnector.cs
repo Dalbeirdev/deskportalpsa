@@ -28,9 +28,15 @@ public sealed class StubConnector(ProviderType provider = ProviderType.AutotaskP
     /// <summary>Attachments pushed out by the portal, in call order.</summary>
     public List<(string TicketId, SecureAttachment Attachment)> Uploaded { get; } = [];
 
+    /// <summary>When set, attachment reads fail — an unknown list, which must not be read as empty.</summary>
+    public ConnectorException? AttachmentReadFailure { get; set; }
+
     public Task<IReadOnlyList<UnifiedAttachment>> GetAttachmentsAsync(string ticketId, CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<UnifiedAttachment>>(
+    {
+        if (AttachmentReadFailure is not null) throw AttachmentReadFailure;
+        return Task.FromResult<IReadOnlyList<UnifiedAttachment>>(
             Attachments.GetValueOrDefault(ticketId, []).Select(a => a.Meta).ToList());
+    }
 
     public Task<IReadOnlyList<ProviderAttachmentRef>> GetRecentAttachmentsAsync(DateTimeOffset? since, CancellationToken ct = default)
     {
