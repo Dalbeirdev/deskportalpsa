@@ -83,11 +83,34 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
     }
 
     /// <summary>
-    /// ConnectWise models board coverage through board teams, which is not wired yet. Reporting none
-    /// makes assignment offer every member rather than an arbitrary subset.
+    /// Board coverage, derived from service board teams: who is on a team, and which board that team
+    /// serves. The team stands in for the role — ConnectWise has no per-board role the way Autotask
+    /// does, and the team is what actually determines who picks work up from a board.
+    ///
+    /// Teams are only expanded on the board-scoped route (the bulk /service/teams response omits
+    /// both boardId and members), so this costs one request per board. Boards are few and the result
+    /// is cached by the discovery layer, but the loop is capped so a pathological tenant cannot turn
+    /// one discovery into hundreds of calls.
     /// </summary>
-    public Task<IReadOnlyList<ExternalTechnicianAssignment>> GetTechnicianAssignmentsAsync(CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<ExternalTechnicianAssignment>>([]);
+    public async Task<IReadOnlyList<ExternalTechnicianAssignment>> GetTechnicianAssignmentsAsync(CancellationToken ct = default)
+    {
+        const int maxBoards = 50;
+        var boards = await GetListAsync<CwRef>("service/boards", new() { ["pageSize"] = "1000" }, ct);
+
+        var rows = new List<ExternalTechnicianAssignment>();
+        foreach (var board in boards.Take(maxBoards))
+        {
+            List<CwBoardTeam> teams;
+            try { teams = await GetListAsync<CwBoardTeam>($"service/boards/{board.Id}/teams", new() { ["pageSize"] = "1000" }, ct); }
+            catch (ConnectorException) { continue; } // one unreadable board must not lose the rest
+
+            foreach (var team in teams)
+                foreach (var memberId in team.Members ?? [])
+                    rows.Add(new ExternalTechnicianAssignment(
+                        memberId.ToString(), team.Id.ToString(), team.Name, board.Id.ToString()));
+        }
+        return rows;
+    }
 
     public async Task<PaginatedResult<UnifiedTicket>> GetTicketsAsync(TicketFilter filter, CancellationToken ct = default)
     {

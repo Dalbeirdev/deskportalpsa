@@ -75,6 +75,15 @@ internal sealed class CwTicketNote
     [JsonPropertyName("contact")] public CwRef? Contact { get; set; }
 }
 
+internal sealed class CwBoardTeam
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("boardId")] public long? BoardId { get; set; }
+    // Member ids only — the board-scoped route returns these; the bulk /service/teams route does not.
+    [JsonPropertyName("members")] public List<long>? Members { get; set; }
+}
+
 internal sealed class CwTimeEntry
 {
     [JsonPropertyName("id")] public long Id { get; set; }

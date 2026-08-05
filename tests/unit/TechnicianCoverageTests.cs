@@ -74,6 +74,30 @@ public class TechnicianCoverageTests
     }
 
     [Fact]
+    public void A_technician_on_two_boards_is_offered_the_role_for_the_board_in_hand()
+    {
+        // ConnectWise models this through board teams: the same member sits on different teams per
+        // board, so the label must follow the ticket's board rather than picking one arbitrarily.
+        var cw = new TechnicianCoverageDto[]
+        {
+            new("sarabjit", "28", "Techpio Support", "7"),
+            new("sarabjit", "30", "Techpio", "8"),
+            new("sarabjit", "30", "Techpio", "9"),
+        };
+        static List<TechnicianCoverageDto> For(TechnicianCoverageDto[] all, string tech, string? queue)
+        {
+            var mine = all.Where(c => c.TechnicianId == tech && c.RoleId is not null).ToList();
+            var scoped = queue is null ? [] : mine.Where(c => c.QueueOrBoardId == queue).ToList();
+            var usable = scoped.Count > 0 ? scoped : mine.Where(c => c.QueueOrBoardId is null).ToList();
+            if (usable.Count == 0) usable = mine;
+            return usable.GroupBy(c => c.RoleId!).Select(g => g.First()).ToList();
+        }
+
+        For(cw, "sarabjit", "7").Select(r => r.RoleName).Should().BeEquivalentTo("Techpio Support");
+        For(cw, "sarabjit", "9").Select(r => r.RoleName).Should().BeEquivalentTo("Techpio");
+    }
+
+    [Fact]
     public void With_no_queue_resolved_every_role_the_technician_holds_is_available()
     {
         RolesFor("sudanshu", null).Select(r => r.RoleName)
