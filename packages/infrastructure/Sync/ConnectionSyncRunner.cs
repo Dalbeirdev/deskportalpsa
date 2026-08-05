@@ -46,6 +46,8 @@ public sealed class ConnectionSyncRunner(
             .ToListAsync(ct);
 
         int fetched = 0, created = 0, updated = 0, skipped = 0, pages = 0, notes = 0, files = 0;
+        // External ids seen this run, for providers whose attachments can only be read per ticket.
+        var touched = new List<string>();
         string? cursor = null;
         try
         {
@@ -73,6 +75,7 @@ public sealed class ConnectionSyncRunner(
                     if (!connection.AutoImportNewTickets && !await KnownAsync(psaConnectionId, ticket.ExternalId, ct))
                     { skipped++; continue; }
                     fetched++;
+                    touched.Add(ticket.ExternalId);
                     switch (await sync.UpsertFromProviderAsync(psaConnectionId, ticket, rules, ct))
                     {
                         case TicketSyncOutcome.Created: created++; break;
@@ -102,8 +105,14 @@ public sealed class ConnectionSyncRunner(
             // Attachments are swept separately, and deliberately outside the ticket loop: providers
             // do not reliably touch a ticket's modified timestamp when a file is attached, so an
             // incremental ticket page would miss them entirely. One dated query covers the tenant.
+            //
+            // Providers that cannot answer that query — ConnectWise indexes documents per record —
+            // fall back to reading the tickets this run actually touched. That misses files added to
+            // a quiet ticket, which is why the sweep is preferred wherever it exists.
             if (connection.SyncAttachments && capabilities.SupportsAttachmentDownload)
-                files = await ImportAttachmentsAsync(connection, connector, full ? null : connection.LastSuccessfulSyncAt, ct);
+                files = capabilities.SupportsAttachmentSweep
+                    ? await ImportAttachmentsAsync(connection, connector, full ? null : connection.LastSuccessfulSyncAt, ct)
+                    : await ImportAttachmentsPerTicketAsync(connection, connector, touched, ct);
 
             connection.LastSuccessfulSyncAt = clock.GetUtcNow();
             connection.LastHealthCheckAt = clock.GetUtcNow();
@@ -230,6 +239,25 @@ public sealed class ConnectionSyncRunner(
     }
 
     /// <summary>
+    /// Per-ticket attachment import, for providers with no dated tenant-wide query. Reuses the same
+    /// dedup, scan and storage path as the sweep by handing it the rows it would have produced.
+    /// </summary>
+    private async Task<int> ImportAttachmentsPerTicketAsync(PsaConnection connection, IServiceManagementConnector connector, IReadOnlyList<string> externalTicketIds, CancellationToken ct)
+    {
+        var refs = new List<ProviderAttachmentRef>();
+        foreach (var externalTicketId in externalTicketIds.Distinct())
+        {
+            try
+            {
+                foreach (var file in await connector.GetAttachmentsAsync(externalTicketId, ct))
+                    refs.Add(new ProviderAttachmentRef(externalTicketId, file));
+            }
+            catch (ConnectorException) { /* one ticket's files must not fail the run */ }
+        }
+        return refs.Count == 0 ? 0 : await StoreAttachmentsAsync(connection, connector, refs, ct);
+    }
+
+    /// <summary>
     /// Mirrors the provider's attachments into the portal, bytes included. Deduplication is by the
     /// provider's own attachment id, which — exactly as with notes — also suppresses the echo of a
     /// portal upload that was already pushed out and recorded with that id.
@@ -243,6 +271,12 @@ public sealed class ConnectionSyncRunner(
         try { incoming = await connector.GetRecentAttachmentsAsync(since, ct); }
         catch (ConnectorException) { return 0; } // files must not fail the whole run
         if (incoming.Count == 0) return 0;
+        return await StoreAttachmentsAsync(connection, connector, incoming, ct);
+    }
+
+    /// <summary>Dedups, downloads, scans and stores a set of provider attachments.</summary>
+    private async Task<int> StoreAttachmentsAsync(PsaConnection connection, IServiceManagementConnector connector, IReadOnlyList<ProviderAttachmentRef> incoming, CancellationToken ct)
+    {
 
         // Only tickets this connection already projects. A file on a ticket we do not import is not
         // ours to store, and the sweep is deliberately tenant-wide.

@@ -31,6 +31,13 @@ public record ProviderCapabilities
     /// unimplemented.
     /// </summary>
     public bool SupportsAttachmentDownload { get; init; }
+
+    /// <summary>
+    /// True when the provider can answer "every attachment added since X" tenant-wide. Autotask can;
+    /// ConnectWise indexes documents per record with no dated query, so its files must be read one
+    /// ticket at a time instead.
+    /// </summary>
+    public bool SupportsAttachmentSweep { get; init; }
     public bool SupportsTimeEntries { get; init; }
     public bool SupportsAssets { get; init; }
     public bool SupportsContracts { get; init; }

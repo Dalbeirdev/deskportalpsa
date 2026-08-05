@@ -80,12 +80,16 @@ public sealed class StubConnector(ProviderType provider = ProviderType.AutotaskP
     /// <summary>On by default: most attachment tests need a provider that can serve bytes back.</summary>
     public bool SupportsAttachmentDownload { get; set; } = true;
 
+    /// <summary>Mirrors a provider that can answer "attachments since X"; off exercises the per-ticket path.</summary>
+    public bool SupportsAttachmentSweep { get; set; } = true;
+
     public Task<ProviderCapabilities> GetCapabilitiesAsync(CancellationToken ct = default)
         => Task.FromResult(new ProviderCapabilities
         {
             SupportsTimeEntries = SupportsTimeEntries,
             SupportsAttachments = true,
             SupportsAttachmentDownload = SupportsAttachmentDownload,
+            SupportsAttachmentSweep = SupportsAttachmentSweep,
         });
     public Task<ConnectionTestResult> TestConnectionAsync(CancellationToken ct = default) => No<ConnectionTestResult>();
     public Task<IReadOnlyList<ExternalOrganization>> GetOrganizationsAsync(CancellationToken ct = default) => No<IReadOnlyList<ExternalOrganization>>();

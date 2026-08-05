@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
@@ -14,6 +15,8 @@ public sealed class FakeConnectWiseServer(TimeProvider clock) : HttpMessageHandl
     public HttpStatusCode? ForceStatus { get; set; }
 
     private long _seq = 5000;
+    // Documents keyed by id, holding what the real API stores: the record it hangs off, plus bytes.
+    private readonly Dictionary<long, (long RecordId, string FileName, byte[] Content)> _documents = [];
     private readonly List<Dictionary<string, object?>> _tickets = [];
     private readonly List<Dictionary<string, object?>> _notes = [];
 
@@ -61,8 +64,54 @@ public sealed class FakeConnectWiseServer(TimeProvider clock) : HttpMessageHandl
         }
         if (path.Contains("service/tickets/") && request.Method == HttpMethod.Patch)
             return PatchTicket(ExtractTicketId(path), body);
+        // Documents. The real API takes a MULTIPART upload and rejects a JSON body outright with
+        // 415 — the connector used to send JSON, so modelling that here keeps it honest.
         if (path.EndsWith("system/documents") && request.Method == HttpMethod.Post)
-            return Ok($"{{\"id\":{++_seq}}}");
+        {
+            if (request.Content is not MultipartFormDataContent)
+                return Resp(HttpStatusCode.UnsupportedMediaType,
+                    "{\"code\":\"InvalidObject\",\"message\":\"The request entity's media type 'application/json' is not supported for this resource.\"}");
+
+            var parts = (MultipartFormDataContent)request.Content;
+            var fields = new Dictionary<string, string>();
+            byte[] content = [];
+            var fileName = "";
+            foreach (var part in parts)
+            {
+                var name = part.Headers.ContentDisposition?.Name?.Trim('"') ?? "";
+                if (name == "file")
+                {
+                    fileName = part.Headers.ContentDisposition?.FileName?.Trim('"') ?? "";
+                    content = await part.ReadAsByteArrayAsync(ct);
+                }
+                else fields[name] = await part.ReadAsStringAsync(ct);
+            }
+
+            var id = ++_seq;
+            _documents[id] = (long.Parse(fields.GetValueOrDefault("recordId", "0")),
+                              fileName.Length > 0 ? fileName : fields.GetValueOrDefault("title", "file"),
+                              content);
+            return Ok($"{{\"id\":{id},\"title\":\"{fields.GetValueOrDefault("title", "")}\",\"fileName\":\"{fileName}\",\"size\":{content.Length}}}");
+        }
+
+        if (path.Contains("system/documents/") && path.EndsWith("/download") && request.Method == HttpMethod.Get)
+        {
+            var id = long.Parse(path.Split('/')[^2]);
+            if (!_documents.TryGetValue(id, out var doc)) return Resp(HttpStatusCode.NotFound, "{}");
+            var file = new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(doc.Content) };
+            file.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+            file.Content.Headers.ContentDisposition =
+                new ContentDispositionHeaderValue("attachment") { FileName = doc.FileName };
+            return file;
+        }
+
+        if (path.EndsWith("system/documents") && request.Method == HttpMethod.Get)
+        {
+            var recordId = long.Parse(QueryValue(request.RequestUri.Query, "recordId") ?? "0");
+            var rows = _documents.Where(d => d.Value.RecordId == recordId)
+                .Select(d => $"{{\"id\":{d.Key},\"title\":\"{d.Value.FileName}\",\"fileName\":\"{d.Value.FileName}\",\"size\":{d.Value.Content.Length},\"owner\":\"Tech One\"}}");
+            return Arr("[" + string.Join(",", rows) + "]");
+        }
 
         return Resp(HttpStatusCode.NotFound, "{}");
     }

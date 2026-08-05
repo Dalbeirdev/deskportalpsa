@@ -154,7 +154,8 @@ public abstract class ConnectorCertificationSuite
     public async Task Attachment_sweep_finds_a_file_without_the_ticket_being_touched()
     {
         var c = CreateConnector();
-        if (!(await c.GetCapabilitiesAsync()).SupportsAttachmentDownload) return;
+        // Providers with no dated tenant-wide query declare it; sync reads their files per ticket.
+        if (!(await c.GetCapabilitiesAsync()).SupportsAttachmentSweep) return;
         var t = await c.CreateTicketAsync(new UnifiedTicketCreateRequest { Title = "T", ExternalCompanyId = SeededOrganizationId, IdempotencyKey = "sweep" });
         byte[] content = [1, 2, 3];
         await c.AddAttachmentAsync(t.ExternalId!, new SecureAttachment("a.bin", "application/octet-stream", 3, "k", content));
