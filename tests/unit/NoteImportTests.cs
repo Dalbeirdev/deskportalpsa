@@ -203,6 +203,99 @@ public class NoteImportTests
     }
 
     [Fact]
+    public async Task A_note_deleted_in_the_provider_is_removed_from_the_thread()
+    {
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString());
+        var connector = new StubConnector();
+        connector.Tickets.Add(Incoming("7810"));
+        connector.Notes["7810"] =
+        [
+            Note("1", "Jane Tech", "Kept.", clock.GetUtcNow()),
+            Note("2", "Jane Tech", "Posted in error.", clock.GetUtcNow()),
+        ];
+        (await Runner(db, connector, clock).RunAsync(Conn, full: true)).Notes.Should().Be(2);
+
+        connector.Notes["7810"] = [Note("1", "Jane Tech", "Kept.", clock.GetUtcNow())];
+        var run = await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        run.NotesRemoved.Should().Be(1);
+        (await db.TicketNotes.Select(n => n.Body).ToListAsync()).Should().Equal("Kept.");
+    }
+
+    [Fact]
+    public async Task A_reply_written_in_the_portal_is_never_removed_by_reconciliation()
+    {
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString());
+        var connector = new StubConnector();
+        connector.Tickets.Add(Incoming("7810"));
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+        var ticket = await db.Tickets.SingleAsync();
+
+        // Written here and pushed out, so it carries a provider id — but the portal is its origin.
+        db.TicketNotes.Add(new TicketNote
+        {
+            MspOrganizationId = Org, TicketId = ticket.Id, ExternalNoteId = "500",
+            AuthorName = "Demo Admin", AuthoredByClient = true, Body = "My original reply.",
+            IsPublic = true, NoteCreatedAt = clock.GetUtcNow(),
+        });
+        await db.SaveChangesAsync();
+
+        // A technician deleted the PSA's copy. The customer's own message must survive.
+        connector.Notes["7810"] = [];
+        var run = await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        run.NotesRemoved.Should().Be(0);
+        (await db.TicketNotes.SingleAsync()).Body.Should().Be("My original reply.");
+    }
+
+    [Fact]
+    public async Task A_ticket_whose_notes_could_not_be_read_keeps_its_thread()
+    {
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString());
+        var connector = new StubConnector();
+        connector.Tickets.Add(Incoming("7810"));
+        connector.Notes["7810"] = [Note("1", "Jane Tech", "Still valid.", clock.GetUtcNow())];
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        // An unknown list is not an empty list: a rate-limited read must not wipe the conversation.
+        connector.NoteReadFailure = new ConnectorException(ConnectorFailureKind.RateLimited, "429");
+        var run = await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        run.NotesRemoved.Should().Be(0);
+        (await db.TicketNotes.CountAsync()).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task A_note_filtered_out_by_the_system_note_setting_is_not_mistaken_for_a_deletion()
+    {
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString(), importSystemNotes: true);
+        var connector = new StubConnector();
+        connector.Tickets.Add(Incoming("7810"));
+        connector.Notes["7810"] =
+        [
+            Note("1", "Jane Tech", "Human reply.", clock.GetUtcNow()),
+            Note("2", "", "SLA warning raised.", clock.GetUtcNow()),
+        ];
+        (await Runner(db, connector, clock).RunAsync(Conn, full: true)).Notes.Should().Be(2);
+
+        // The connection now excludes system notes, but the SLA note is still THERE provider-side.
+        // Were the comparison built from the FILTERED list rather than everything the provider
+        // returned, this run would delete a note that was never actually removed.
+        var connection = await db.PsaConnections.SingleAsync();
+        connection.ImportSystemNotes = false;
+        await db.SaveChangesAsync();
+
+        var run = await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        run.NotesRemoved.Should().Be(0);
+        (await db.TicketNotes.CountAsync()).Should().Be(2);
+    }
+
+    [Fact]
     public async Task A_failing_note_read_does_not_fail_the_ticket_sync()
     {
         var clock = new TestClock();

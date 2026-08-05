@@ -45,7 +45,7 @@ public sealed class ConnectionSyncRunner(
             .Where(m => m.Provider == connection.Provider && m.IsActive)
             .ToListAsync(ct);
 
-        int fetched = 0, created = 0, updated = 0, skipped = 0, pages = 0, notes = 0, files = 0, filesRemoved = 0;
+        int fetched = 0, created = 0, updated = 0, skipped = 0, pages = 0, notes = 0, notesRemoved = 0, files = 0, filesRemoved = 0;
         // External ids seen this run, for providers whose attachments can only be read per ticket.
         var touched = new List<string>();
         string? cursor = null;
@@ -84,7 +84,11 @@ public sealed class ConnectionSyncRunner(
                     }
 
                     if (connection.ImportNotes)
-                        notes += await ImportNotesAsync(connection, connector, ticket.ExternalId, ct);
+                    {
+                        var (addedNotes, removedNotes) = await ImportNotesAsync(connection, connector, ticket.ExternalId, ct);
+                        notes += addedNotes;
+                        notesRemoved += removedNotes;
+                    }
                     await ResolveAssigneeNameAsync(psaConnectionId, connector, ticket.ExternalId, ct);
 
                     // Time logged provider-side never reaches the portal's stored totals otherwise:
@@ -129,7 +133,7 @@ public sealed class ConnectionSyncRunner(
             throw;
         }
 
-        return new SyncRunResult(fetched, created, updated, skipped, pages, notes, files, filesRemoved);
+        return new SyncRunResult(fetched, created, updated, skipped, pages, notes, files, filesRemoved, notesRemoved);
     }
 
     /// <summary>
@@ -139,15 +143,17 @@ public sealed class ConnectionSyncRunner(
     /// Internal notes never reach here — the connector's GetPublicNotesAsync filters them out, so a
     /// private note cannot leak into a customer-visible thread.
     /// </summary>
-    private async Task<int> ImportNotesAsync(PsaConnection connection, IServiceManagementConnector connector, string externalTicketId, CancellationToken ct)
+    private async Task<(int Added, int Removed)> ImportNotesAsync(PsaConnection connection, IServiceManagementConnector connector, string externalTicketId, CancellationToken ct)
     {
         var ticket = await db.Tickets.FirstOrDefaultAsync(
             t => t.PsaConnectionId == connection.Id && t.ExternalTicketId == externalTicketId, ct);
-        if (ticket is null) return 0;
+        if (ticket is null) return (0, 0);
 
         IReadOnlyList<UnifiedTicketNote> incoming;
+        // A read that throws leaves an UNKNOWN list, not an empty one — returning here also means
+        // nothing is reconciled, so a rate-limited ticket never loses its thread.
         try { incoming = await connector.GetPublicNotesAsync(externalTicketId, ct); }
-        catch (ConnectorException) { return 0; } // one ticket's notes must not fail the whole run
+        catch (ConnectorException) { return (0, 0); } // one ticket's notes must not fail the whole run
 
         var existing = await db.TicketNotes
             .Where(n => n.TicketId == ticket.Id && n.ExternalNoteId != null)
@@ -178,8 +184,42 @@ public sealed class ConnectionSyncRunner(
             known.Add(n.ExternalId);
             added++;
         }
-        if (added > 0) await db.SaveChangesAsync(ct);
-        return added;
+
+        var removed = await ReconcileDeletedNotesAsync(ticket.Id, incoming, ct);
+        if (added > 0 || removed > 0) await db.SaveChangesAsync(ct);
+        return (added, removed);
+    }
+
+    /// <summary>
+    /// Drops imported notes the provider no longer returns. Unlike attachments there is no dated
+    /// sweep to get wrong: notes are always read one ticket at a time, so a successful read is the
+    /// complete public thread for that ticket and anything missing from it has been deleted.
+    ///
+    /// Replies written in the portal are never removed. They carry a provider note id from being
+    /// pushed out, but the portal is where they originated — erasing a customer's own message
+    /// because a technician deleted the PSA's copy would destroy the only record of it.
+    /// The comparison uses every note the provider returned, not the filtered subset, so a note
+    /// skipped by the system-note setting is never mistaken for a deleted one.
+    /// </summary>
+    private async Task<int> ReconcileDeletedNotesAsync(Guid ticketId, IReadOnlyList<UnifiedTicketNote> incoming, CancellationToken ct)
+    {
+        var stillPresent = incoming
+            .Select(n => n.ExternalId)
+            .Where(id => !string.IsNullOrEmpty(id))
+            .ToHashSet();
+
+        var orphans = await db.TicketNotes
+            .Where(n => n.TicketId == ticketId
+                        && n.ExternalNoteId != null
+                        // Provider-origin: every imported note is stamped this way, and every portal
+                        // reply the opposite, so this separates the two without a redundant column.
+                        && !n.AuthoredByClient
+                        && !stillPresent.Contains(n.ExternalNoteId))
+            .ToListAsync(ct);
+        if (orphans.Count == 0) return 0;
+
+        db.TicketNotes.RemoveRange(orphans);
+        return orphans.Count;
     }
 
     /// <summary>
