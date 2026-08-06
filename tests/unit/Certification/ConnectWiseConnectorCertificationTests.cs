@@ -1,6 +1,9 @@
 using System.Net;
 using Desk.Connectors.ConnectWise;
 using Desk.PsaCore.Contracts;
+using Desk.PsaCore.Models;
+using FluentAssertions;
+using Xunit;
 
 namespace Desk.Tests.Unit.Certification;
 
@@ -41,4 +44,26 @@ public sealed class ConnectWiseConnectorCertificationTests : ConnectorCertificat
 
     protected override string SeededOrganizationId => "1";
     protected override string WebhookSecret => Secret;
+
+    /// <summary>
+    /// CW validates status against the ticket's BOARD on create. A mapped status is typically the
+    /// verbose global name ("New (not responded)") while a board names it tersely ("New") — the
+    /// connector must resolve one to the other, or every portal create on that board fails.
+    /// </summary>
+    [Fact]
+    public async Task Create_resolves_a_verbose_status_against_the_boards_own_names()
+    {
+        var c = CreateConnector();
+        var created = await c.CreateTicketAsync(new UnifiedTicketCreateRequest
+        {
+            Title = "board-scoped status",
+            ExternalCompanyId = SeededOrganizationId,
+            QueueOrBoard = "1",
+            Status = "New (not responded)", // no board carries this literal name
+            IdempotencyKey = "status-resolve",
+        });
+
+        created.Success.Should().BeTrue();
+        (await c.GetTicketAsync(created.ExternalId!))!.Status.Should().NotBeNull();
+    }
 }

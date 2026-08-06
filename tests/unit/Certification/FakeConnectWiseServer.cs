@@ -55,7 +55,7 @@ public sealed class FakeConnectWiseServer(TimeProvider clock) : HttpMessageHandl
         if (path.EndsWith("service/tickets") && request.Method == HttpMethod.Get)
             return Arr("[" + string.Join(",", FilterTickets(conditions).Select(Serialize)) + "]");
         if (path.EndsWith("service/tickets") && request.Method == HttpMethod.Post)
-            return Ok(CreateTicket(body));
+            return CreateTicket(body);
         if (path.Contains("service/tickets/") && request.Method == HttpMethod.Get)
         {
             var id = ExtractTicketId(path);
@@ -116,24 +116,48 @@ public sealed class FakeConnectWiseServer(TimeProvider clock) : HttpMessageHandl
         return Resp(HttpStatusCode.NotFound, "{}");
     }
 
-    private string CreateTicket(string body)
+    private HttpResponseMessage CreateTicket(string body)
     {
         using var doc = JsonDocument.Parse(body);
         var r = doc.RootElement;
+
+        // The live API validates status against the TICKET'S BOARD on create, not globally: a
+        // perfectly real status name from another board earns "Service Status X not found for
+        // Service Board N". The connector shipped with that bug because this fake accepted any
+        // name — so the fake now enforces what ConnectWise enforces.
+        if (r.TryGetProperty("status", out var st))
+        {
+            var okById = st.TryGetProperty("id", out var sid) && (sid.GetInt64() is 1 or 5);
+            var okByName = st.TryGetProperty("name", out var sn) && (sn.GetString() is "New" or "Closed");
+            if (!okById && !okByName)
+                return Resp(HttpStatusCode.BadRequest,
+                    "{\"code\":\"InvalidObject\",\"message\":\"ticket object is invalid\",\"errors\":[{\"code\":\"NotFound\",\"message\":\"Service Status not found for Service Board 1\",\"field\":\"status/name\"}]}");
+        }
+
         var now = clock.GetUtcNow();
+        // The live API returns references EXPANDED ({id, name}) even when the create sent only an
+        // id; readers depend on the name. Mirror that.
+        object? status = null;
+        if (r.TryGetProperty("status", out var stored))
+        {
+            long? sid = stored.TryGetProperty("id", out var idEl) ? idEl.GetInt64() : null;
+            var name = stored.TryGetProperty("name", out var nmEl) ? nmEl.GetString() : null;
+            sid ??= name == "Closed" ? 5 : 1;
+            status = new Dictionary<string, object?> { ["id"] = sid, ["name"] = name ?? (sid == 5 ? "Closed" : "New") };
+        }
         var ticket = new Dictionary<string, object?>
         {
             ["id"] = ++_seq,
             ["summary"] = Str(r, "summary"),
             ["initialDescription"] = Str(r, "initialDescription"),
-            ["status"] = RefOf(r, "status"),
+            ["status"] = status,
             ["priority"] = RefOf(r, "priority"),
             ["board"] = RefOf(r, "board"),
             ["company"] = RefOf(r, "company"),
             ["lastUpdated"] = now.ToString("o"),
         };
         _tickets.Add(ticket);
-        return Serialize(ticket);
+        return Ok(Serialize(ticket));
     }
 
     private HttpResponseMessage PatchTicket(long id, string body)

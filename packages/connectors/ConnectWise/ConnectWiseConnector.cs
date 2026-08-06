@@ -155,7 +155,12 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
             ["company"] = new { id = long.Parse(ticket.ExternalCompanyId) },
         };
         if (ticket.QueueOrBoard is not null) body["board"] = Ref(ticket.QueueOrBoard);
-        if (ticket.Status is not null) body["status"] = Ref(ticket.Status);
+        // Statuses are BOARD-scoped: "New (not responded)" exists on one board and not another, and
+        // CW rejects the whole create over it. Resolve against the target board the same way status
+        // updates do. With no board given CW picks its default board — whose statuses we cannot know
+        // in advance — so the status is left for CW to default too, rather than sent blind.
+        if (ticket.Status is not null && ticket.QueueOrBoard is not null && long.TryParse(ticket.QueueOrBoard, out var boardId))
+            body["status"] = await ResolveBoardStatusAsync(boardId, ticket.Status, ct);
         if (ticket.Priority is not null) body["priority"] = Ref(ticket.Priority);
         // CW's classification trio maps to the portal's ticket/issue/sub-issue types.
         if (ticket.TicketType is not null) body["type"] = Ref(ticket.TicketType);
@@ -457,7 +462,11 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         var want = Norm(desired);
         var match = statuses.FirstOrDefault(s => Norm(s.Name ?? "") == want)
                  ?? statuses.FirstOrDefault(s => Norm(s.Name ?? "").StartsWith(want))
-                 ?? statuses.FirstOrDefault(s => Norm(s.Name ?? "").Contains(want));
+                 ?? statuses.FirstOrDefault(s => Norm(s.Name ?? "").Contains(want))
+                 // The reverse direction: a verbose mapped value ("New (not responded)") against a
+                 // board whose name is the terse prefix ("New"). Guarded to 3+ chars so a
+                 // one-letter status cannot swallow everything.
+                 ?? statuses.FirstOrDefault(s => Norm(s.Name ?? "") is { Length: >= 3 } n && want.StartsWith(n));
 
         // Boards name their terminal state differently ("Completed", "Closed (resolved)", "Done").
         // For closed-family requests, fall back to closed-family synonyms before giving up.
@@ -513,7 +522,7 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         }
 
         if (!resp.IsSuccessStatusCode)
-            throw MapError(resp);
+            throw MapError(resp, await SafeBodyAsync(resp, ct));
 
         return await resp.Content.ReadFromJsonAsync<T>(JsonOpts, ct);
     }
@@ -532,7 +541,7 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         catch (HttpRequestException ex)
         { throw new ConnectorException(ConnectorFailureKind.Timeout, "ConnectWise request failed.", ex); }
 
-        if (!resp.IsSuccessStatusCode) throw MapError(resp);
+        if (!resp.IsSuccessStatusCode) throw MapError(resp, await SafeBodyAsync(resp, ct));
         return await resp.Content.ReadFromJsonAsync<T>(JsonOpts, ct);
     }
 
@@ -552,7 +561,7 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         using (resp)
         {
             if (resp.StatusCode == HttpStatusCode.NotFound) return (null, null, null);
-            if (!resp.IsSuccessStatusCode) throw MapError(resp);
+            if (!resp.IsSuccessStatusCode) throw MapError(resp, await SafeBodyAsync(resp, ct));
             return (await resp.Content.ReadAsByteArrayAsync(ct),
                     resp.Content.Headers.ContentType?.MediaType,
                     resp.Content.Headers.ContentDisposition?.FileNameStar
@@ -587,10 +596,34 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         { throw new ConnectorException(ConnectorFailureKind.Timeout, "ConnectWise request failed.", ex); }
 
         if (!resp.IsSuccessStatusCode)
-            throw MapError(resp);
+            throw MapError(resp, await SafeBodyAsync(resp, ct));
     }
 
-    private static ConnectorException MapError(HttpResponseMessage resp) => resp.StatusCode switch
+    /// <summary>
+    /// Pulls the human-readable reason out of a CW error body ({code, message, errors:[{message}]}).
+    /// "ConnectWise rejected the request (400)" tells an admin nothing; "Service Status X not found
+    /// for Service Board 8" tells them exactly what to fix.
+    /// </summary>
+    private static async Task<string?> SafeBodyAsync(HttpResponseMessage resp, CancellationToken ct)
+    {
+        try
+        {
+            var raw = await resp.Content.ReadAsStringAsync(ct);
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+            using var doc = JsonDocument.Parse(raw);
+            var parts = new List<string>();
+            if (doc.RootElement.TryGetProperty("message", out var m) && m.GetString() is { Length: > 0 } msg)
+                parts.Add(msg);
+            if (doc.RootElement.TryGetProperty("errors", out var errs) && errs.ValueKind == JsonValueKind.Array)
+                foreach (var e in errs.EnumerateArray())
+                    if (e.TryGetProperty("message", out var em) && em.GetString() is { Length: > 0 } detail)
+                        parts.Add(detail);
+            return parts.Count > 0 ? string.Join(" ", parts) : null;
+        }
+        catch (Exception) { return null; } // an unreadable error body must not mask the real failure
+    }
+
+    private static ConnectorException MapError(HttpResponseMessage resp, string? detail = null) => resp.StatusCode switch
     {
         HttpStatusCode.Unauthorized => new(ConnectorFailureKind.Authentication, "ConnectWise rejected the credentials."),
         HttpStatusCode.Forbidden => new(ConnectorFailureKind.PermissionDenied, "ConnectWise denied permission."),
@@ -599,8 +632,10 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         {
             RetryAfter = resp.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(10),
         },
-        >= HttpStatusCode.InternalServerError => new(ConnectorFailureKind.ProviderError, $"ConnectWise server error ({(int)resp.StatusCode})."),
-        _ => new(ConnectorFailureKind.InvalidRequest, $"ConnectWise rejected the request ({(int)resp.StatusCode})."),
+        >= HttpStatusCode.InternalServerError => new(ConnectorFailureKind.ProviderError,
+            detail is null ? $"ConnectWise server error ({(int)resp.StatusCode})." : $"ConnectWise server error ({(int)resp.StatusCode}): {detail}"),
+        _ => new(ConnectorFailureKind.InvalidRequest,
+            detail is null ? $"ConnectWise rejected the request ({(int)resp.StatusCode})." : $"ConnectWise rejected the request: {detail}"),
     };
 
     private UnifiedTicket ToUnified(CwTicket t) => new()
