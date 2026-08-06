@@ -71,6 +71,8 @@ export const ConnectionSettingsSchema = z.object({
   defaultTicketType: z.string().nullable(),
   defaultIssueType: z.string().nullable(),
   defaultSubIssueType: z.string().nullable(),
+  defaultTimeEntryResourceId: z.string().nullable(),
+  defaultTimeEntryRoleId: z.string().nullable(),
 });
 export type ConnectionSettings = z.infer<typeof ConnectionSettingsSchema>;
 
@@ -84,6 +86,16 @@ export const api = {
     }),
   addComment: (id: string, body: string) =>
     request(`/api/tickets/${id}/comments`, TicketNoteResponse, { method: 'POST', body: JSON.stringify({ body }) }),
+  ticketAssignees: (id: string) =>
+    request(`/api/tickets/${id}/assignees`, AssigneeOptionsSchema),
+  assignTicket: (id: string, body: { technicianExternalId?: string; queueOrBoardId?: string; roleId?: string }) =>
+    request(`/api/tickets/${id}/assignment`,
+      z.object({
+        assignedTechnicianExternalId: z.string().nullable(),
+        assignedTechnicianName: z.string().nullable(),
+        queueOrBoard: z.string().nullable(),
+      }),
+      { method: 'PUT', body: JSON.stringify(body) }),
   updateTicketStatus: (id: string, status: string) =>
     request(`/api/tickets/${id}/status`, z.object({ portalStatus: z.string() }), { method: 'POST', body: JSON.stringify({ status }) }),
   logTime: (id: string, body: { hours: number; billable: string; notes?: string; workType?: string; workRole?: string }) =>
@@ -97,12 +109,15 @@ export const api = {
     request(`/api/tickets/${id}/time`, z.array(TimeEntrySchema)) as Promise<TimeEntry[]>,
   updateTimeEntry: (id: string, entryId: string, body: { hours?: number; billable?: string; notes?: string }) =>
     request(`/api/tickets/${id}/time/${entryId}`, TimeAggregateSchema, { method: 'PUT', body: JSON.stringify(body) }),
+  retryTimeEntry: (id: string, entryId: string) =>
+    request(`/api/tickets/${id}/time/${entryId}/retry`, TimeAggregateSchema, { method: 'POST' }),
   deleteTimeEntry: (id: string, entryId: string) =>
     request(`/api/tickets/${id}/time/${entryId}`, TimeAggregateSchema, { method: 'DELETE' }),
-  uploadAttachment: async (ticketId: string, file: File) => {
+  uploadAttachment: async (ticketId: string, file: File, noteId?: string) => {
     const fd = new FormData();
     fd.append('file', file);
-    const res = await fetch(`${BFF_BASE}/api/tickets/${ticketId}/attachments`, {
+    const query = noteId ? `?noteId=${noteId}` : '';
+    const res = await fetch(`${BFF_BASE}/api/tickets/${ticketId}/attachments${query}`, {
       method: 'POST',
       headers: { 'X-Correlation-ID': crypto.randomUUID() }, // no Content-Type — browser sets multipart boundary
       body: fd,
@@ -325,13 +340,34 @@ const ClientUserSchema = z.object({
 });
 export type ClientUser = z.infer<typeof ClientUserSchema>;
 
+const AssigneeOptionsSchema = z.object({
+  queueOrBoardId: z.string().nullable(),
+  filteredByRole: z.boolean(),
+  filteredByQueue: z.boolean(),
+  queuesOrBoards: z.array(z.object({ value: z.string(), label: z.string() })),
+  technicians: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    roles: z.array(z.string()),
+    roleOptions: z.array(z.object({ id: z.string(), name: z.string() })),
+  })),
+});
+export type AssigneeOptions = z.infer<typeof AssigneeOptionsSchema>;
+
 const TimeEntrySchema = z.object({
   externalId: z.string(),
   hours: z.number(),
   billable: z.boolean(),
   entryDate: z.string(),
   notes: z.string().nullable(),
-  technician: z.string(),
+  technician: z.string().nullable().default(null),
+  technicianName: z.string().nullable().default(null),
+  workType: z.string().nullable().default(null),
+  billableOption: z.string().default('Billable'),
+  // Which system the entry was logged in, and whether it actually reached the PSA.
+  source: z.string().default('Provider'),
+  syncStatus: z.string().default('Synced'),
+  syncError: z.string().nullable().default(null),
 });
 export type TimeEntry = z.infer<typeof TimeEntrySchema>;
 

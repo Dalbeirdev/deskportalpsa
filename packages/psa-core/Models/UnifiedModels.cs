@@ -80,6 +80,11 @@ public record UnifiedTicketUpdate
     public string? Category { get; init; }
     public string? QueueOrBoard { get; init; }
     public string? AssignedTechnicianExternalId { get; init; }
+    /// <summary>
+    /// Role the technician takes the ticket in. Autotask refuses an assignment without one — the
+    /// resource and its role are a pair there — so this is not decoration.
+    /// </summary>
+    public string? AssignedTechnicianRoleId { get; init; }
     public required string IdempotencyKey { get; init; }
 }
 
@@ -98,7 +103,17 @@ public record UnifiedTimeEntry(
     decimal Hours,
     bool Billable,
     DateTimeOffset EntryDate,
-    string? Notes);
+    string? Notes)
+{
+    /// <summary>Display name of the technician, resolved by the connector. Null when unresolvable.</summary>
+    public string? TechnicianName { get; init; }
+
+    /// <summary>Work-type label as the provider names it (CW work type, Autotask billing code).</summary>
+    public string? WorkType { get; init; }
+
+    /// <summary>How the entry is charged — finer grained than <see cref="Billable"/>.</summary>
+    public BillableOption BillableOption { get; init; } = BillableOption.Billable;
+}
 
 /// <summary>How a time entry is charged. Maps to ConnectWise billableOption / Autotask billing flags.</summary>
 public enum BillableOption { Billable, DoNotBill, NoCharge }
@@ -123,14 +138,43 @@ public record UnifiedAttachment(
     string ExternalId,
     string FileName,
     string ContentType,
-    long SizeBytes);
+    long SizeBytes)
+{
+    public DateTimeOffset? CreatedAt { get; init; }
+
+    /// <summary>Who attached it provider-side. Empty means provider-generated, as with notes.</summary>
+    public string? AuthorName { get; init; }
+
+    /// <summary>Provider note this file hangs off, when the provider records one.</summary>
+    public string? ExternalNoteId { get; init; }
+}
+
+/// <summary>
+/// One technician's coverage: the role they hold, and the queue/board it applies to. A technician
+/// commonly appears several times — one row per queue they work, sometimes in different roles — so
+/// assignment can offer the people who actually cover the ticket's board rather than everyone.
+/// </summary>
+public record ExternalTechnicianAssignment(
+    string TechnicianExternalId, string? RoleId, string? RoleName, string? QueueOrBoardId);
+
+/// <summary>An attachment paired with the ticket it hangs off, as returned by a tenant-wide sweep.</summary>
+public record ProviderAttachmentRef(string TicketExternalId, UnifiedAttachment Attachment);
+
+/// <summary>An attachment's bytes pulled back from a provider, ready to stage in object storage.</summary>
+public record DownloadedAttachment(string FileName, string ContentType, byte[] Content);
 
 /// <summary>An attachment already scanned + staged in object storage, ready to push to a PSA.</summary>
 public record SecureAttachment(
     string FileName,
     string ContentType,
     long SizeBytes,
-    string StorageObjectKey);
+    string StorageObjectKey,
+    byte[] Content)
+{
+    /// <summary>Provider note this file was posted with, so the PSA files it against the message
+    /// rather than the ticket at large. Null for a standalone upload.</summary>
+    public string? ExternalNoteId { get; init; }
+}
 
 /// <summary>Cursor/offset filter for paginated reads.</summary>
 public record TicketFilter

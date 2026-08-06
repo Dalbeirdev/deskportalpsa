@@ -72,12 +72,15 @@ public sealed class TicketReadService(DeskDbContext db) : ITicketReadService
                 .ToList(),
             Attachments: ticket.Attachments
                 .OrderBy(a => a.UploadedAt)
-                .Select(a => new AttachmentDto(a.Id, a.OriginalFileName, a.ContentType, a.SizeBytes, a.ScanStatus, a.UploadedAt))
+                .Select(a => new AttachmentDto(a.Id, a.OriginalFileName, a.ContentType, a.SizeBytes, a.ScanStatus, a.UploadedAt)
+                    { AuthorName = a.AuthorName, FromProvider = a.ImportedFromProvider, TicketNoteId = a.TicketNoteId })
                 .ToList(),
             CustomerName: customerName,
             UpdatedAt: ticket.UpdatedAt,
             ConnectionName: connectionName,
-            ServiceInstructions: serviceInstructions);
+            ServiceInstructions: serviceInstructions,
+            AssignedTechnicianExternalId: ticket.AssignedTechnicianExternalId,
+            AssignedTechnicianName: ticket.AssignedTechnicianName);
     }
 
     public async Task<IReadOnlyList<NotificationDto>> RecentActivityAsync(ClientAccess access, int take = 10, CancellationToken ct = default)

@@ -1,0 +1,311 @@
+using Desk.Application.Mapping;
+using Desk.Application.Sync;
+using Desk.Domain.Enums;
+using Desk.Domain.Tenancy;
+using Desk.Domain.Tickets;
+using Desk.Application.Attachments;
+using Desk.Infrastructure.Attachments;
+using Desk.Infrastructure.Persistence;
+using Desk.Infrastructure.Sync;
+using Desk.PsaCore.Contracts;
+using Desk.PsaCore.Models;
+using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Xunit;
+
+namespace Desk.Tests.Unit;
+
+/// <summary>
+/// Inbound conversation sync: provider notes must reach the portal thread exactly once, keep their
+/// real author, and never carry a provider-side internal note into a customer-visible conversation.
+/// </summary>
+public class NoteImportTests
+{
+    private static readonly Guid Org = Guid.NewGuid();
+    private static readonly Guid Conn = Guid.NewGuid();
+
+    private sealed class FakeResolver(IServiceManagementConnector c) : Desk.Application.Connectors.IConnectorResolver
+    {
+        public Task<IServiceManagementConnector> ResolveAsync(Guid id, CancellationToken ct = default) => Task.FromResult(c);
+    }
+
+    private static async Task<DeskDbContext> SeedAsync(string dbName, bool importNotes = true, bool importSystemNotes = false)
+    {
+        var db = TestDbContextFactory.ForPlatform(dbName);
+        db.PsaConnections.Add(new PsaConnection
+        {
+            Id = Conn, MspOrganizationId = Org, Name = "AT", Provider = ProviderType.AutotaskPsa,
+            ApiEndpoint = "https://x", CredentialSecretRef = "mem://x",
+            ImportNotes = importNotes, ImportSystemNotes = importSystemNotes,
+        });
+        await db.SaveChangesAsync();
+        return db;
+    }
+
+    private static ConnectionSyncRunner Runner(DeskDbContext db, StubConnector connector, TestClock clock)
+        => new(db, new FakeResolver(connector),
+            new TicketSyncService(db, new MappingEngine(), new SyncEventStore(db, clock), clock),
+            new InMemoryObjectStorage(new AttachmentStorageOptions(), clock), new HeuristicMalwareScanner(), clock);
+
+    private static UnifiedTicket Incoming(string extId) => new()
+    {
+        ExternalId = extId, Title = "Network issue", Status = "1", Priority = "1",
+        RequesterExternalId = "176", RequesterName = "Acme", RequesterEmail = "a@acme.test",
+    };
+
+    private static UnifiedTicketNote Note(string id, string author, string body, DateTimeOffset at) =>
+        new(id, author, body, IsPublic: true, at);
+
+    [Fact]
+    public async Task Provider_notes_are_imported_once_and_keep_their_author()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var clock = new TestClock();
+        await using var db = await SeedAsync(dbName);
+        var connector = new StubConnector();
+        connector.Tickets.Add(Incoming("7809"));
+        connector.Notes["7809"] =
+        [
+            Note("29683530", "Jane Tech", "Applied a fix on the switch port.", clock.GetUtcNow()),
+            Note("29683533", "Demo Admin", "Confirmed, thank you.", clock.GetUtcNow().AddMinutes(1)),
+        ];
+
+        var first = await Runner(db, connector, clock).RunAsync(Conn, full: true);
+        var second = await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        first.Notes.Should().Be(2);
+        second.Notes.Should().Be(0); // re-running must not duplicate the thread
+        var notes = await db.TicketNotes.OrderBy(n => n.NoteCreatedAt).ToListAsync();
+        notes.Select(n => n.AuthorName).Should().Equal("Jane Tech", "Demo Admin");
+        notes.Should().OnlyContain(n => n.IsPublic && !n.AuthoredByClient);
+    }
+
+    [Fact]
+    public async Task A_reply_written_in_the_portal_is_not_re_imported_as_an_echo()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var clock = new TestClock();
+        await using var db = await SeedAsync(dbName);
+        var connector = new StubConnector();
+        connector.Tickets.Add(Incoming("7809"));
+        // Seed the projection the way the portal does after the provider accepts an outbound reply:
+        // the note is stored locally already carrying the provider's own note id.
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+        var ticket = await db.Tickets.SingleAsync();
+        db.TicketNotes.Add(new TicketNote
+        {
+            MspOrganizationId = Org, TicketId = ticket.Id, ExternalNoteId = "29683533",
+            AuthorName = "Demo Admin", AuthoredByClient = true, Body = "Portal reply.",
+            IsPublic = true, NoteCreatedAt = clock.GetUtcNow(),
+        });
+        await db.SaveChangesAsync();
+        connector.Notes["7809"] = [Note("29683533", "Desk Portal", "Portal reply.", clock.GetUtcNow())];
+
+        var run = await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        run.Notes.Should().Be(0);
+        var note = await db.TicketNotes.SingleAsync();
+        note.AuthoredByClient.Should().BeTrue();   // the client's own byline survives the round trip
+        note.AuthorName.Should().Be("Demo Admin");
+    }
+
+    [Fact]
+    public async Task System_notes_are_skipped_unless_the_connection_asks_for_them()
+    {
+        var clock = new TestClock();
+        var connector = new StubConnector();
+        connector.Tickets.Add(Incoming("7809"));
+        connector.Notes["7809"] =
+        [
+            Note("1", "Jane Tech", "Human reply.", clock.GetUtcNow()),
+            Note("2", "", "SLA warning raised.", clock.GetUtcNow()), // no author = provider automation
+        ];
+
+        await using var off = await SeedAsync(Guid.NewGuid().ToString());
+        (await Runner(off, connector, clock).RunAsync(Conn, full: true)).Notes.Should().Be(1);
+        (await off.TicketNotes.Select(n => n.Body).ToListAsync()).Should().Equal("Human reply.");
+
+        await using var on = await SeedAsync(Guid.NewGuid().ToString(), importSystemNotes: true);
+        (await Runner(on, connector, clock).RunAsync(Conn, full: true)).Notes.Should().Be(2);
+        (await on.TicketNotes.Where(n => n.Body == "SLA warning raised.").Select(n => n.AuthorName).SingleAsync())
+            .Should().Be("AutotaskPsa automation");
+    }
+
+    [Fact]
+    public async Task Note_import_is_skipped_entirely_when_the_connection_disables_it()
+    {
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString(), importNotes: false);
+        var connector = new StubConnector();
+        connector.Tickets.Add(Incoming("7809"));
+        connector.Notes["7809"] = [Note("1", "Jane Tech", "Should not arrive.", clock.GetUtcNow())];
+
+        var run = await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        run.Notes.Should().Be(0);
+        connector.NoteReads.Should().Be(0); // and no wasted provider call
+        (await db.TicketNotes.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Time_logged_provider_side_is_reflected_in_the_tickets_stored_totals()
+    {
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString());
+        var connector = new StubConnector { SupportsTimeEntries = true };
+        connector.Tickets.Add(Incoming("7810"));
+        connector.TimeEntries["7810"] =
+        [
+            new UnifiedTimeEntry("1", "20", 0.5m, true, clock.GetUtcNow(), "billable work"),
+            new UnifiedTimeEntry("2", "20", 0.25m, false, clock.GetUtcNow(), "non-billable work"),
+        ];
+
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        var ticket = await db.Tickets.SingleAsync();
+        ticket.TimeWorkedHours.Should().Be(0.75m);
+        ticket.BillableHours.Should().Be(0.5m);
+        ticket.NonBillableHours.Should().Be(0.25m);
+    }
+
+    [Fact]
+    public async Task Time_totals_refresh_even_when_the_ticket_itself_is_unchanged()
+    {
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString());
+        var connector = new StubConnector { SupportsTimeEntries = true };
+        connector.Tickets.Add(Incoming("7810"));
+
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+        // Time is added provider-side. That bumps the provider's activity date, so the ticket comes
+        // back on the next page, but none of its own fields changed — the upsert reports unchanged.
+        connector.TimeEntries["7810"] = [new UnifiedTimeEntry("1", "20", 1.25m, true, clock.GetUtcNow(), "tech work")];
+
+        var run = await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        run.Updated.Should().Be(0); // proves the ticket really was seen as unchanged
+        (await db.Tickets.SingleAsync()).TimeWorkedHours.Should().Be(1.25m);
+    }
+
+    [Fact]
+    public async Task Time_totals_are_left_alone_when_the_provider_has_no_time_support()
+    {
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString());
+        var connector = new StubConnector(); // SupportsTimeEntries defaults to false
+        connector.Tickets.Add(Incoming("7810"));
+
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        // No wasted call, and no zeroing of totals a different source may own.
+        connector.TimeReads.Should().Be(0);
+        (await db.Tickets.SingleAsync()).TimeWorkedHours.Should().Be(0m); // untouched default
+    }
+
+    [Fact]
+    public async Task A_note_deleted_in_the_provider_is_removed_from_the_thread()
+    {
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString());
+        var connector = new StubConnector();
+        connector.Tickets.Add(Incoming("7810"));
+        connector.Notes["7810"] =
+        [
+            Note("1", "Jane Tech", "Kept.", clock.GetUtcNow()),
+            Note("2", "Jane Tech", "Posted in error.", clock.GetUtcNow()),
+        ];
+        (await Runner(db, connector, clock).RunAsync(Conn, full: true)).Notes.Should().Be(2);
+
+        connector.Notes["7810"] = [Note("1", "Jane Tech", "Kept.", clock.GetUtcNow())];
+        var run = await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        run.NotesRemoved.Should().Be(1);
+        (await db.TicketNotes.Select(n => n.Body).ToListAsync()).Should().Equal("Kept.");
+    }
+
+    [Fact]
+    public async Task A_reply_written_in_the_portal_is_never_removed_by_reconciliation()
+    {
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString());
+        var connector = new StubConnector();
+        connector.Tickets.Add(Incoming("7810"));
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+        var ticket = await db.Tickets.SingleAsync();
+
+        // Written here and pushed out, so it carries a provider id — but the portal is its origin.
+        db.TicketNotes.Add(new TicketNote
+        {
+            MspOrganizationId = Org, TicketId = ticket.Id, ExternalNoteId = "500",
+            AuthorName = "Demo Admin", AuthoredByClient = true, Body = "My original reply.",
+            IsPublic = true, NoteCreatedAt = clock.GetUtcNow(),
+        });
+        await db.SaveChangesAsync();
+
+        // A technician deleted the PSA's copy. The customer's own message must survive.
+        connector.Notes["7810"] = [];
+        var run = await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        run.NotesRemoved.Should().Be(0);
+        (await db.TicketNotes.SingleAsync()).Body.Should().Be("My original reply.");
+    }
+
+    [Fact]
+    public async Task A_ticket_whose_notes_could_not_be_read_keeps_its_thread()
+    {
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString());
+        var connector = new StubConnector();
+        connector.Tickets.Add(Incoming("7810"));
+        connector.Notes["7810"] = [Note("1", "Jane Tech", "Still valid.", clock.GetUtcNow())];
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        // An unknown list is not an empty list: a rate-limited read must not wipe the conversation.
+        connector.NoteReadFailure = new ConnectorException(ConnectorFailureKind.RateLimited, "429");
+        var run = await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        run.NotesRemoved.Should().Be(0);
+        (await db.TicketNotes.CountAsync()).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task A_note_filtered_out_by_the_system_note_setting_is_not_mistaken_for_a_deletion()
+    {
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString(), importSystemNotes: true);
+        var connector = new StubConnector();
+        connector.Tickets.Add(Incoming("7810"));
+        connector.Notes["7810"] =
+        [
+            Note("1", "Jane Tech", "Human reply.", clock.GetUtcNow()),
+            Note("2", "", "SLA warning raised.", clock.GetUtcNow()),
+        ];
+        (await Runner(db, connector, clock).RunAsync(Conn, full: true)).Notes.Should().Be(2);
+
+        // The connection now excludes system notes, but the SLA note is still THERE provider-side.
+        // Were the comparison built from the FILTERED list rather than everything the provider
+        // returned, this run would delete a note that was never actually removed.
+        var connection = await db.PsaConnections.SingleAsync();
+        connection.ImportSystemNotes = false;
+        await db.SaveChangesAsync();
+
+        var run = await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        run.NotesRemoved.Should().Be(0);
+        (await db.TicketNotes.CountAsync()).Should().Be(2);
+    }
+
+    [Fact]
+    public async Task A_failing_note_read_does_not_fail_the_ticket_sync()
+    {
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString());
+        var connector = new StubConnector { NoteReadFailure = new ConnectorException(ConnectorFailureKind.RateLimited, "429") };
+        connector.Tickets.Add(Incoming("7809"));
+
+        var run = await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        run.Created.Should().Be(1);
+        run.Notes.Should().Be(0);
+    }
+}

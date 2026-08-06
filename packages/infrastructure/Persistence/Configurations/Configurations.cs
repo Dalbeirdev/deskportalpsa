@@ -163,6 +163,23 @@ public sealed class TicketAttachmentConfig : IEntityTypeConfiguration<TicketAtta
         b.Property(x => x.ContentType).HasMaxLength(200).IsRequired();
         b.Property(x => x.StorageObjectKey).HasMaxLength(400).IsRequired();
         b.HasIndex(x => x.TicketId);
+        b.HasIndex(x => x.TicketNoteId);
+    }
+}
+
+public sealed class TicketTimeEntryConfig : IEntityTypeConfiguration<TicketTimeEntry>
+{
+    public void Configure(EntityTypeBuilder<TicketTimeEntry> b)
+    {
+        b.ToTable("ticket_time_entries");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Hours).HasPrecision(9, 4);
+        b.Property(x => x.ExternalEntryId).HasMaxLength(100);
+        b.Property(x => x.TechnicianName).HasMaxLength(200);
+        b.Property(x => x.WorkTypeLabel).HasMaxLength(200);
+        b.HasIndex(x => x.TicketId);
+        // Reconciling a provider read against portal rows is a lookup by the PSA's own id.
+        b.HasIndex(x => x.ExternalEntryId);
     }
 }
 

@@ -38,6 +38,10 @@ public sealed class AutotaskConnectorFactory(
                 UserName: Require(secret, "UserName"),
                 Secret: Require(secret, "Secret")),
             WebhookSecret = secret.GetValueOrDefault("WebhookSecret", ""),
+            // Time-entry defaults live on the connection, not in the secret store: they are
+            // configuration an admin picks from live discovery, not credentials.
+            DefaultTimeEntryResourceId = ParseId(connection.DefaultTimeEntryResourceId),
+            DefaultTimeEntryRoleId = ParseId(connection.DefaultTimeEntryRoleId),
         };
 
         var http = httpFactory.CreateClient("autotask");
@@ -45,6 +49,8 @@ public sealed class AutotaskConnectorFactory(
 
         return new AutotaskConnector(http, config, clock);
     }
+
+    private static long? ParseId(string? raw) => long.TryParse(raw, out var id) && id > 0 ? id : null;
 
     /// <summary>
     /// Normalizes the configured endpoint to the API root the connector expects

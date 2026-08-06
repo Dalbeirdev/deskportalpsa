@@ -49,7 +49,11 @@ public sealed record TicketDetailDto(
     // Ticket service instructions the client set for technicians to follow (account override
     // if present, otherwise the organization-wide default). Trailing + optional so existing
     // construction sites and tests are unaffected.
-    string? ServiceInstructions = null);
+    string? ServiceInstructions = null,
+    // Who the work sits with. The id is the provider's; the name is resolved for display, and is
+    // null when the technician can no longer be looked up.
+    string? AssignedTechnicianExternalId = null,
+    string? AssignedTechnicianName = null);
 
 public sealed record AttachmentDto(
     Guid Id,
@@ -57,7 +61,17 @@ public sealed record AttachmentDto(
     string ContentType,
     long SizeBytes,
     AttachmentScanStatus ScanStatus,
-    DateTimeOffset UploadedAt);
+    DateTimeOffset UploadedAt)
+{
+    /// <summary>Who attached it. Null for a portal upload by the ticket's own requester.</summary>
+    public string? AuthorName { get; init; }
+
+    /// <summary>True when the file came from the PSA rather than being uploaded here.</summary>
+    public bool FromProvider { get; init; }
+
+    /// <summary>Conversation entry this file was posted with, so the UI can show it in context.</summary>
+    public Guid? TicketNoteId { get; init; }
+}
 
 public sealed record CreateTicketInput(
     string Title,

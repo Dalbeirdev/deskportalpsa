@@ -23,6 +23,21 @@ public record ProviderCapabilities
     public bool SupportsPublicNotes { get; init; }
     public bool SupportsPrivateNotes { get; init; }
     public bool SupportsAttachments { get; init; }
+
+    /// <summary>
+    /// Whether the provider will serve an attachment's bytes back and can be swept for new files.
+    /// Distinct from <see cref="SupportsAttachments"/>: a provider can accept uploads and still have
+    /// no readable download route, which makes inbound attachment sync impossible rather than merely
+    /// unimplemented.
+    /// </summary>
+    public bool SupportsAttachmentDownload { get; init; }
+
+    /// <summary>
+    /// True when the provider can answer "every attachment added since X" tenant-wide. Autotask can;
+    /// ConnectWise indexes documents per record with no dated query, so its files must be read one
+    /// ticket at a time instead.
+    /// </summary>
+    public bool SupportsAttachmentSweep { get; init; }
     public bool SupportsTimeEntries { get; init; }
     public bool SupportsAssets { get; init; }
     public bool SupportsContracts { get; init; }

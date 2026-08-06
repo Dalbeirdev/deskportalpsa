@@ -30,7 +30,7 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         Task.FromResult(new ProviderCapabilities
         {
             SupportsTicketCreate = true, SupportsTicketUpdate = true, SupportsTicketDelete = false,
-            SupportsPublicNotes = true, SupportsPrivateNotes = true, SupportsAttachments = true,
+            SupportsPublicNotes = true, SupportsPrivateNotes = true, SupportsAttachments = true, SupportsAttachmentDownload = true, SupportsAttachmentSweep = false,
             SupportsTimeEntries = true, SupportsAssets = true, SupportsContracts = true,
             SupportsSlaData = true, SupportsCustomFields = true, SupportsInboundWebhooks = true,
             SupportsOutboundWebhooks = true, SupportsIncrementalSync = true, SupportsBulkRead = true,
@@ -80,6 +80,36 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
             c.Type?.Name,
             c.SerialNumber ?? c.TagNumber,
             !string.Equals(c.Status?.Name, "Inactive", StringComparison.OrdinalIgnoreCase))).ToList();
+    }
+
+    /// <summary>
+    /// Board coverage, derived from service board teams: who is on a team, and which board that team
+    /// serves. The team stands in for the role — ConnectWise has no per-board role the way Autotask
+    /// does, and the team is what actually determines who picks work up from a board.
+    ///
+    /// Teams are only expanded on the board-scoped route (the bulk /service/teams response omits
+    /// both boardId and members), so this costs one request per board. Boards are few and the result
+    /// is cached by the discovery layer, but the loop is capped so a pathological tenant cannot turn
+    /// one discovery into hundreds of calls.
+    /// </summary>
+    public async Task<IReadOnlyList<ExternalTechnicianAssignment>> GetTechnicianAssignmentsAsync(CancellationToken ct = default)
+    {
+        const int maxBoards = 50;
+        var boards = await GetListAsync<CwRef>("service/boards", new() { ["pageSize"] = "1000" }, ct);
+
+        var rows = new List<ExternalTechnicianAssignment>();
+        foreach (var board in boards.Take(maxBoards))
+        {
+            List<CwBoardTeam> teams;
+            try { teams = await GetListAsync<CwBoardTeam>($"service/boards/{board.Id}/teams", new() { ["pageSize"] = "1000" }, ct); }
+            catch (ConnectorException) { continue; } // one unreadable board must not lose the rest
+
+            foreach (var team in teams)
+                foreach (var memberId in team.Members ?? [])
+                    rows.Add(new ExternalTechnicianAssignment(
+                        memberId.ToString(), team.Id.ToString(), team.Name, board.Id.ToString()));
+        }
+        return rows;
     }
 
     public async Task<PaginatedResult<UnifiedTicket>> GetTicketsAsync(TicketFilter filter, CancellationToken ct = default)
@@ -159,7 +189,8 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         var notes = await GetListAsync<CwTicketNote>($"service/tickets/{ticketId}/notes", new() { ["pageSize"] = "1000" }, ct);
         return notes.Where(n => !n.InternalAnalysisFlag)
             .Select(n => new UnifiedTicketNote(
-                n.Id.ToString(), n.Member?.Name ?? "ConnectWise", n.Text ?? "", IsPublic: true, n.DateCreated ?? clock.GetUtcNow()))
+                // Empty author = provider-generated note; the sync layer treats that as a system note.
+                n.Id.ToString(), n.Member?.Name ?? n.Contact?.Name ?? "", n.Text ?? "", IsPublic: true, n.DateCreated ?? clock.GetUtcNow()))
             .ToList();
     }
 
@@ -176,20 +207,87 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         return new CreateNoteResult(true, created!.Id.ToString(), null);
     }
 
-    public Task<IReadOnlyList<UnifiedAttachment>> GetAttachmentsAsync(string ticketId, CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<UnifiedAttachment>>([]);
+    public async Task<IReadOnlyList<UnifiedAttachment>> GetAttachmentsAsync(string ticketId, CancellationToken ct = default)
+    {
+        var docs = await GetListAsync<CwDocument>("system/documents",
+            new() { ["recordType"] = "Ticket", ["recordId"] = ticketId, ["pageSize"] = "1000" }, ct);
+        return docs.Select(ToUnified).ToList();
+    }
+
+    /// <summary>
+    /// ConnectWise indexes documents by the record they hang off, with no tenant-wide "changed since"
+    /// query, so there is nothing to sweep. Inbound files are therefore read per ticket rather than
+    /// in one dated pass — returning empty here keeps the runner from claiming a sweep happened.
+    /// </summary>
+    public Task<IReadOnlyList<ProviderAttachmentRef>> GetRecentAttachmentsAsync(DateTimeOffset? since, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<ProviderAttachmentRef>>([]);
+
+    public async Task<DownloadedAttachment?> DownloadAttachmentAsync(string ticketId, string attachmentId, CancellationToken ct = default)
+    {
+        // Content comes from a dedicated endpoint that returns raw bytes, not JSON.
+        var (bytes, contentType, fileName) = await GetBytesAsync($"system/documents/{attachmentId}/download", ct);
+        if (bytes is null || bytes.Length == 0) return null;
+
+        // The download response names the file inconsistently, so fall back to the document record.
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            var doc = await GetOneAsync<CwDocument>($"system/documents/{attachmentId}", ct);
+            fileName = doc?.FileName ?? doc?.Title ?? $"attachment-{attachmentId}";
+        }
+        // The download endpoint labels everything application/octet-stream, so a PNG imported from
+        // ConnectWise would never render inline and a PDF would not open in a viewer. Derive the
+        // type from the file name and only fall back to the header when it says something specific.
+        var resolved = contentType is null or "application/octet-stream"
+            ? GuessContentType(fileName)
+            : contentType;
+        return new DownloadedAttachment(fileName, resolved, bytes);
+    }
 
     public async Task<CreateAttachmentResult> AddAttachmentAsync(string ticketId, SecureAttachment attachment, CancellationToken ct = default)
     {
-        var body = new
+        // Documents are a multipart upload, not JSON: posting the metadata alone is rejected outright
+        // (415, "media type 'application/json' is not supported"), so the bytes travel with it.
+        using var form = new MultipartFormDataContent
         {
-            recordType = "Ticket",
-            recordId = long.Parse(ticketId),
-            title = attachment.FileName,
+            { new StringContent("Ticket"), "recordType" },
+            { new StringContent(ticketId), "recordId" },
+            { new StringContent(attachment.FileName), "title" },
         };
-        var created = await SendAsync<CwRef>(HttpMethod.Post, "system/documents", body, ct);
+        var file = new ByteArrayContent(attachment.Content);
+        file.Headers.ContentType = new MediaTypeHeaderValue(attachment.ContentType);
+        form.Add(file, "file", attachment.FileName);
+
+        var created = await SendContentAsync<CwDocument>(HttpMethod.Post, "system/documents", form, ct);
         return new CreateAttachmentResult(true, created!.Id.ToString(), null);
     }
+
+    private static UnifiedAttachment ToUnified(CwDocument d) =>
+        new(d.Id.ToString(),
+            d.FileName ?? d.Title ?? $"attachment-{d.Id}",
+            // ConnectWise reports a document TYPE ("txt"), not a media type, so derive one from the
+            // file name and keep the provider's value out of the Content-Type header entirely.
+            GuessContentType(d.FileName ?? d.Title),
+            d.Size ?? 0)
+        {
+            CreatedAt = d.CreatedOnDate,
+            AuthorName = d.Owner,
+        };
+
+    private static string GuessContentType(string? fileName) =>
+        Path.GetExtension(fileName ?? "").ToLowerInvariant() switch
+        {
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            ".pdf" => "application/pdf",
+            ".txt" or ".log" => "text/plain",
+            ".csv" => "text/csv",
+            ".json" => "application/json",
+            ".xml" => "application/xml",
+            ".zip" => "application/zip",
+            _ => "application/octet-stream",
+        };
 
     public async Task<IReadOnlyList<UnifiedTimeEntry>> GetTimeEntriesAsync(string ticketId, CancellationToken ct = default)
     {
@@ -198,7 +296,18 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         return items.Select(e => new UnifiedTimeEntry(
             e.Id.ToString(), e.Member?.Id.ToString() ?? "", e.ActualHours ?? 0m,
             !string.Equals(e.BillableOption, "DoNotBill", StringComparison.OrdinalIgnoreCase),
-            e.TimeStart ?? clock.GetUtcNow(), e.Notes)).ToList();
+            e.TimeStart ?? clock.GetUtcNow(), e.Notes)
+        {
+            // CW already nests the member and work type as {id, name}, so no extra lookup is needed.
+            TechnicianName = e.Member?.Name,
+            WorkType = e.WorkType?.Name,
+            BillableOption = e.BillableOption switch
+            {
+                "DoNotBill" => BillableOption.DoNotBill,
+                "NoCharge" => BillableOption.NoCharge,
+                _ => Desk.PsaCore.Models.BillableOption.Billable,
+            },
+        }).ToList();
     }
 
     public async Task<CreateTimeEntryResult> AddTimeEntryAsync(string ticketId, UnifiedTimeEntryCreateRequest entry, CancellationToken ct = default)
@@ -407,6 +516,56 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
             throw MapError(resp);
 
         return await resp.Content.ReadFromJsonAsync<T>(JsonOpts, ct);
+    }
+
+    /// <summary>Sends prepared content (e.g. multipart) rather than a JSON-serialized body.</summary>
+    private async Task<T?> SendContentAsync<T>(HttpMethod method, string path, HttpContent content, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(method, path);
+        Authorize(req);
+        req.Content = content;
+
+        HttpResponseMessage resp;
+        try { resp = await http.SendAsync(req, ct); }
+        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        { throw new ConnectorException(ConnectorFailureKind.Timeout, "ConnectWise request timed out."); }
+        catch (HttpRequestException ex)
+        { throw new ConnectorException(ConnectorFailureKind.Timeout, "ConnectWise request failed.", ex); }
+
+        if (!resp.IsSuccessStatusCode) throw MapError(resp);
+        return await resp.Content.ReadFromJsonAsync<T>(JsonOpts, ct);
+    }
+
+    /// <summary>Reads a raw (non-JSON) response, used for document downloads.</summary>
+    private async Task<(byte[]? Bytes, string? ContentType, string? FileName)> GetBytesAsync(string path, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, path);
+        Authorize(req);
+
+        HttpResponseMessage resp;
+        try { resp = await http.SendAsync(req, ct); }
+        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        { throw new ConnectorException(ConnectorFailureKind.Timeout, "ConnectWise request timed out."); }
+        catch (HttpRequestException ex)
+        { throw new ConnectorException(ConnectorFailureKind.Timeout, "ConnectWise request failed.", ex); }
+
+        using (resp)
+        {
+            if (resp.StatusCode == HttpStatusCode.NotFound) return (null, null, null);
+            if (!resp.IsSuccessStatusCode) throw MapError(resp);
+            return (await resp.Content.ReadAsByteArrayAsync(ct),
+                    resp.Content.Headers.ContentType?.MediaType,
+                    resp.Content.Headers.ContentDisposition?.FileNameStar
+                        ?? resp.Content.Headers.ContentDisposition?.FileName?.Trim('"'));
+        }
+    }
+
+    private void Authorize(HttpRequestMessage req)
+    {
+        var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes(
+            $"{config.Credentials.CompanyId}+{config.Credentials.PublicKey}:{config.Credentials.PrivateKey}"));
+        req.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
+        req.Headers.Add("clientId", config.Credentials.ClientId);
     }
 
     /// <summary>Send a request that returns no body (e.g. DELETE → 204). Same auth/error handling.</summary>

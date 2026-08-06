@@ -1,8 +1,11 @@
+using Desk.Application.Attachments;
 using Desk.Application.Common;
 using Desk.Application.Connectors;
 using Desk.Application.Sync;
 using Desk.Domain.Enums;
 using Desk.Domain.Tenancy;
+using Desk.Domain.Tickets;
+using Desk.PsaCore.Contracts;
 using Desk.Infrastructure.Persistence;
 using Desk.PsaCore.Models;
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +22,8 @@ public sealed class ConnectionSyncRunner(
     DeskDbContext db,
     IConnectorResolver resolver,
     ITicketSyncService sync,
+    IObjectStorage storage,
+    IMalwareScanner scanner,
     TimeProvider clock) : IConnectionSyncRunner
 {
     private const int MaxPages = 50; // safety cap so a runaway cursor can't loop forever
@@ -34,11 +39,15 @@ public sealed class ConnectionSyncRunner(
             return new SyncRunResult(0, 0, 0, 0, 0);
 
         var connector = await resolver.ResolveAsync(psaConnectionId, ct);
+        // Asked once per run, not per ticket: it decides whether time aggregates are worth pulling.
+        var capabilities = await connector.GetCapabilitiesAsync(ct);
         var rules = await db.FieldMappings.AsNoTracking()
             .Where(m => m.Provider == connection.Provider && m.IsActive)
             .ToListAsync(ct);
 
-        int fetched = 0, created = 0, updated = 0, skipped = 0, pages = 0;
+        int fetched = 0, created = 0, updated = 0, skipped = 0, pages = 0, notes = 0, notesRemoved = 0, files = 0, filesRemoved = 0;
+        // External ids seen this run, for providers whose attachments can only be read per ticket.
+        var touched = new List<string>();
         string? cursor = null;
         try
         {
@@ -66,16 +75,48 @@ public sealed class ConnectionSyncRunner(
                     if (!connection.AutoImportNewTickets && !await KnownAsync(psaConnectionId, ticket.ExternalId, ct))
                     { skipped++; continue; }
                     fetched++;
+                    touched.Add(ticket.ExternalId);
                     switch (await sync.UpsertFromProviderAsync(psaConnectionId, ticket, rules, ct))
                     {
                         case TicketSyncOutcome.Created: created++; break;
                         case TicketSyncOutcome.Updated: updated++; break;
                         default: skipped++; break;
                     }
+
+                    if (connection.ImportNotes)
+                    {
+                        var (addedNotes, removedNotes) = await ImportNotesAsync(connection, connector, ticket.ExternalId, ct);
+                        notes += addedNotes;
+                        notesRemoved += removedNotes;
+                    }
+                    await ResolveAssigneeNameAsync(psaConnectionId, connector, ticket.ExternalId, ct);
+
+                    // Time logged provider-side never reaches the portal's stored totals otherwise:
+                    // they were only rewritten when time was logged from here, so a technician's own
+                    // entry left the dashboards under-reporting.
+                    //
+                    // Keyed off the ticket being fetched at all, NOT off the upsert outcome: adding a
+                    // time entry bumps the provider's activity date (so an incremental page returns
+                    // the ticket) but changes none of the fields in the update hash, so the upsert
+                    // reports "unchanged" and a stricter guard here skipped every refresh.
+                    if (capabilities.SupportsTimeEntries)
+                        await RefreshTimeTotalsAsync(psaConnectionId, connector, ticket.ExternalId, ct);
                 }
                 cursor = page.NextCursor;
                 if (!page.HasMore) break;
             } while (cursor is not null && pages < MaxPages);
+
+            // Attachments are swept separately, and deliberately outside the ticket loop: providers
+            // do not reliably touch a ticket's modified timestamp when a file is attached, so an
+            // incremental ticket page would miss them entirely. One dated query covers the tenant.
+            //
+            // Providers that cannot answer that query — ConnectWise indexes documents per record —
+            // fall back to reading the tickets this run actually touched. That misses files added to
+            // a quiet ticket, which is why the sweep is preferred wherever it exists.
+            if (connection.SyncAttachments && capabilities.SupportsAttachmentDownload)
+                (files, filesRemoved) = capabilities.SupportsAttachmentSweep
+                    ? await ImportAttachmentsAsync(connection, connector, full ? null : connection.LastSuccessfulSyncAt, ct)
+                    : await ImportAttachmentsPerTicketAsync(connection, connector, touched, ct);
 
             connection.LastSuccessfulSyncAt = clock.GetUtcNow();
             connection.LastHealthCheckAt = clock.GetUtcNow();
@@ -92,7 +133,334 @@ public sealed class ConnectionSyncRunner(
             throw;
         }
 
-        return new SyncRunResult(fetched, created, updated, skipped, pages);
+        return new SyncRunResult(fetched, created, updated, skipped, pages, notes, files, filesRemoved, notesRemoved);
+    }
+
+    /// <summary>
+    /// Mirrors the provider's PUBLIC notes into the portal thread. Deduplication is by the provider's
+    /// own note id, which doubles as echo suppression: a reply written in the portal already stored
+    /// that id when the provider accepted it, so it is recognised rather than duplicated.
+    /// Internal notes never reach here — the connector's GetPublicNotesAsync filters them out, so a
+    /// private note cannot leak into a customer-visible thread.
+    /// </summary>
+    private async Task<(int Added, int Removed)> ImportNotesAsync(PsaConnection connection, IServiceManagementConnector connector, string externalTicketId, CancellationToken ct)
+    {
+        var ticket = await db.Tickets.FirstOrDefaultAsync(
+            t => t.PsaConnectionId == connection.Id && t.ExternalTicketId == externalTicketId, ct);
+        if (ticket is null) return (0, 0);
+
+        IReadOnlyList<UnifiedTicketNote> incoming;
+        // A read that throws leaves an UNKNOWN list, not an empty one — returning here also means
+        // nothing is reconciled, so a rate-limited ticket never loses its thread.
+        try { incoming = await connector.GetPublicNotesAsync(externalTicketId, ct); }
+        catch (ConnectorException) { return (0, 0); } // one ticket's notes must not fail the whole run
+
+        var existing = await db.TicketNotes
+            .Where(n => n.TicketId == ticket.Id && n.ExternalNoteId != null)
+            .Select(n => n.ExternalNoteId!)
+            .ToListAsync(ct);
+        var known = new HashSet<string>(existing);
+
+        var added = 0;
+        foreach (var n in incoming)
+        {
+            if (string.IsNullOrEmpty(n.ExternalId) || known.Contains(n.ExternalId)) continue;
+            // Machine-generated notes have no human author; skip unless explicitly wanted.
+            if (!connection.ImportSystemNotes && string.IsNullOrWhiteSpace(n.AuthorName)) continue;
+
+            db.TicketNotes.Add(new TicketNote
+            {
+                MspOrganizationId = ticket.MspOrganizationId,
+                TicketId = ticket.Id,
+                ExternalNoteId = n.ExternalId,
+                // An empty author means the provider generated the note itself (workflow/SLA); name it
+                // after the provider rather than leaving a blank byline in the thread.
+                AuthorName = string.IsNullOrWhiteSpace(n.AuthorName) ? $"{connection.Provider} automation" : n.AuthorName,
+                AuthoredByClient = false,
+                Body = n.Body,
+                IsPublic = true,
+                NoteCreatedAt = n.CreatedAt,
+            });
+            known.Add(n.ExternalId);
+            added++;
+        }
+
+        var removed = await ReconcileDeletedNotesAsync(ticket.Id, incoming, ct);
+        if (added > 0 || removed > 0) await db.SaveChangesAsync(ct);
+        return (added, removed);
+    }
+
+    /// <summary>
+    /// Drops imported notes the provider no longer returns. Unlike attachments there is no dated
+    /// sweep to get wrong: notes are always read one ticket at a time, so a successful read is the
+    /// complete public thread for that ticket and anything missing from it has been deleted.
+    ///
+    /// Replies written in the portal are never removed. They carry a provider note id from being
+    /// pushed out, but the portal is where they originated — erasing a customer's own message
+    /// because a technician deleted the PSA's copy would destroy the only record of it.
+    /// The comparison uses every note the provider returned, not the filtered subset, so a note
+    /// skipped by the system-note setting is never mistaken for a deleted one.
+    /// </summary>
+    private async Task<int> ReconcileDeletedNotesAsync(Guid ticketId, IReadOnlyList<UnifiedTicketNote> incoming, CancellationToken ct)
+    {
+        var stillPresent = incoming
+            .Select(n => n.ExternalId)
+            .Where(id => !string.IsNullOrEmpty(id))
+            .ToHashSet();
+
+        var orphans = await db.TicketNotes
+            .Where(n => n.TicketId == ticketId
+                        && n.ExternalNoteId != null
+                        // Provider-origin: every imported note is stamped this way, and every portal
+                        // reply the opposite, so this separates the two without a redundant column.
+                        && !n.AuthoredByClient
+                        && !stillPresent.Contains(n.ExternalNoteId))
+            .ToListAsync(ct);
+        if (orphans.Count == 0) return 0;
+
+        db.TicketNotes.RemoveRange(orphans);
+        return orphans.Count;
+    }
+
+    /// <summary>
+    /// Drops imported files the provider no longer has. Only rows that CAME from the provider are
+    /// touched: a portal upload is the customer's own copy and the portal is its origin, so removing
+    /// it because a technician deleted the PSA's copy would destroy data nothing else holds.
+    /// </summary>
+    private async Task<int> ReconcileDeletionsAsync(IReadOnlyList<Guid> ticketIds, HashSet<string> stillPresent, CancellationToken ct)
+    {
+        if (ticketIds.Count == 0) return 0;
+
+        var orphans = await db.TicketAttachments
+            .Where(a => ticketIds.Contains(a.TicketId)
+                        && a.ImportedFromProvider
+                        && a.ExternalAttachmentId != null
+                        && !stillPresent.Contains(a.ExternalAttachmentId))
+            .ToListAsync(ct);
+        if (orphans.Count == 0) return 0;
+
+        foreach (var orphan in orphans)
+        {
+            // Drop the bytes as well as the row: leaving them would keep a withdrawn document
+            // retrievable by anyone who kept a signed URL.
+            if (!string.IsNullOrEmpty(orphan.StorageObjectKey))
+            {
+                try { await storage.DeleteAsync(orphan.StorageObjectKey, ct); }
+                catch (Exception) { /* the row still goes, so the file stops being reachable */ }
+            }
+            db.TicketAttachments.Remove(orphan);
+        }
+        return orphans.Count;
+    }
+
+    // Resolved once per run and reused: the provider's resource list does not change mid-sync, and
+    // a per-ticket lookup would cost a request for every row.
+    private Dictionary<string, string>? _technicianNames;
+
+    /// <summary>
+    /// Puts a readable name against the provider's assignee id, so the ticket can say who is working
+    /// on it rather than showing a bare numeric resource id.
+    /// </summary>
+    private async Task ResolveAssigneeNameAsync(Guid connectionId, IServiceManagementConnector connector, string externalTicketId, CancellationToken ct)
+    {
+        var ticket = await db.Tickets.FirstOrDefaultAsync(
+            t => t.PsaConnectionId == connectionId && t.ExternalTicketId == externalTicketId, ct);
+        if (ticket?.AssignedTechnicianExternalId is not { Length: > 0 } assignee)
+        {
+            if (ticket is not null && ticket.AssignedTechnicianName is not null)
+            {
+                ticket.AssignedTechnicianName = null; // unassigned provider-side: drop the stale name
+                await db.SaveChangesAsync(ct);
+            }
+            return;
+        }
+
+        if (_technicianNames is null)
+        {
+            _technicianNames = [];
+            try
+            {
+                foreach (var t in await connector.GetTechniciansAsync(ct))
+                    _technicianNames[t.ExternalId] = t.DisplayName;
+            }
+            catch (ConnectorException) { /* the id still shows; the name is the nicety */ }
+        }
+
+        var name = _technicianNames.GetValueOrDefault(assignee);
+        if (name == ticket.AssignedTechnicianName) return;
+        ticket.AssignedTechnicianName = name;
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Rewrites one ticket's worked/billable totals from the PSA, which owns the truth.</summary>
+    private async Task RefreshTimeTotalsAsync(Guid connectionId, IServiceManagementConnector connector, string externalTicketId, CancellationToken ct)
+    {
+        var ticket = await db.Tickets.FirstOrDefaultAsync(
+            t => t.PsaConnectionId == connectionId && t.ExternalTicketId == externalTicketId, ct);
+        if (ticket is null) return;
+
+        IReadOnlyList<UnifiedTimeEntry> entries;
+        try { entries = await connector.GetTimeEntriesAsync(externalTicketId, ct); }
+        catch (ConnectorException) { return; } // one ticket's time must not fail the whole run
+
+        ticket.TimeWorkedHours = entries.Sum(e => e.Hours);
+        ticket.BillableHours = entries.Where(e => e.Billable).Sum(e => e.Hours);
+        ticket.NonBillableHours = entries.Where(e => !e.Billable).Sum(e => e.Hours);
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Per-ticket attachment import, for providers with no dated tenant-wide query. Reuses the same
+    /// dedup, scan and storage path as the sweep by handing it the rows it would have produced.
+    /// </summary>
+    private async Task<(int Added, int Removed)> ImportAttachmentsPerTicketAsync(PsaConnection connection, IServiceManagementConnector connector, IReadOnlyList<string> externalTicketIds, CancellationToken ct)
+    {
+        var refs = new List<ProviderAttachmentRef>();
+        // Only tickets that were actually read successfully may be reconciled: a ticket whose read
+        // threw has an unknown file list, and treating that as "no files" would delete every one.
+        var complete = new List<string>();
+        foreach (var externalTicketId in externalTicketIds.Distinct())
+        {
+            try
+            {
+                foreach (var file in await connector.GetAttachmentsAsync(externalTicketId, ct))
+                    refs.Add(new ProviderAttachmentRef(externalTicketId, file));
+                complete.Add(externalTicketId);
+            }
+            catch (ConnectorException) { /* one ticket's files must not fail the run */ }
+        }
+        if (complete.Count == 0) return (0, 0);
+        return await StoreAttachmentsAsync(connection, connector, refs, complete, ct);
+    }
+
+    /// <summary>
+    /// Mirrors the provider's attachments into the portal, bytes included. Deduplication is by the
+    /// provider's own attachment id, which — exactly as with notes — also suppresses the echo of a
+    /// portal upload that was already pushed out and recorded with that id.
+    ///
+    /// Imported bytes are scanned before they are stored, on the same footing as a customer upload:
+    /// a PSA is not a trusted source, and a technician can attach anything to a ticket.
+    /// </summary>
+    private async Task<(int Added, int Removed)> ImportAttachmentsAsync(PsaConnection connection, IServiceManagementConnector connector, DateTimeOffset? since, CancellationToken ct)
+    {
+        IReadOnlyList<ProviderAttachmentRef> incoming;
+        try { incoming = await connector.GetRecentAttachmentsAsync(since, ct); }
+        catch (ConnectorException) { return (0, 0); } // files must not fail the whole run
+
+        // A DATED sweep returns only recent files, so a file's absence from it says nothing about
+        // whether it still exists — reconciling against that would delete the entire back catalogue.
+        // Only a full sweep sees everything, and only then can deletions be inferred.
+        IReadOnlyList<string>? reconcilable = since is null
+            ? await db.Tickets
+                .Where(t => t.PsaConnectionId == connection.Id && t.ExternalTicketId != null)
+                .Select(t => t.ExternalTicketId!)
+                .ToListAsync(ct)
+            : null;
+
+        if (incoming.Count == 0 && reconcilable is null) return (0, 0);
+        return await StoreAttachmentsAsync(connection, connector, incoming, reconcilable, ct);
+    }
+
+    /// <summary>
+    /// Dedups, downloads, scans and stores a set of provider attachments, then reconciles deletions.
+    ///
+    /// <paramref name="reconcilableTicketIds"/> names the tickets whose incoming list is COMPLETE.
+    /// For those, an imported file the provider no longer reports has been deleted there and is
+    /// removed here too — otherwise a document withdrawn in the PSA stays downloadable by the
+    /// customer indefinitely. Null means nothing may be reconciled.
+    /// </summary>
+    private async Task<(int Added, int Removed)> StoreAttachmentsAsync(
+        PsaConnection connection,
+        IServiceManagementConnector connector,
+        IReadOnlyList<ProviderAttachmentRef> incoming,
+        IReadOnlyList<string>? reconcilableTicketIds,
+        CancellationToken ct)
+    {
+        // Only tickets this connection already projects. A file on a ticket we do not import is not
+        // ours to store, and the sweep is deliberately tenant-wide.
+        var wanted = incoming.Select(r => r.TicketExternalId)
+            .Concat(reconcilableTicketIds ?? [])
+            .Distinct().ToList();
+        var tickets = await db.Tickets
+            .Where(t => t.PsaConnectionId == connection.Id && t.ExternalTicketId != null && wanted.Contains(t.ExternalTicketId))
+            .Select(t => new { t.Id, t.ExternalTicketId, t.MspOrganizationId })
+            .ToListAsync(ct);
+        if (tickets.Count == 0) return (0, 0);
+        var byExternalId = tickets.ToDictionary(t => t.ExternalTicketId!, t => t);
+
+        var ticketIds = tickets.Select(t => t.Id).ToList();
+        // Provider note id -> portal note, so an imported file lands under the reply it belongs to
+        // instead of in an undifferentiated pile at the bottom of the ticket.
+        var noteIdByExternalId = await db.TicketNotes
+            .Where(n => ticketIds.Contains(n.TicketId) && n.ExternalNoteId != null)
+            .ToDictionaryAsync(n => n.ExternalNoteId!, n => n.Id, ct);
+
+        var known = new HashSet<string>(await db.TicketAttachments
+            .Where(a => ticketIds.Contains(a.TicketId) && a.ExternalAttachmentId != null)
+            .Select(a => a.ExternalAttachmentId!)
+            .ToListAsync(ct));
+
+        var added = 0;
+        foreach (var (externalTicketId, file) in incoming.Select(r => (r.TicketExternalId, r.Attachment)))
+        {
+            if (string.IsNullOrEmpty(file.ExternalId) || known.Contains(file.ExternalId)) continue;
+            if (!byExternalId.TryGetValue(externalTicketId, out var ticket)) continue;
+
+            DownloadedAttachment? payload;
+            try { payload = await connector.DownloadAttachmentAsync(externalTicketId, file.ExternalId, ct); }
+            catch (ConnectorException) { continue; }
+            // No bytes means the provider cannot serve this file. Recording metadata alone would put
+            // an undownloadable row in the customer's list, so skip it and retry on the next run.
+            if (payload is null || payload.Content.Length == 0) continue;
+
+            var scan = await scanner.ScanAsync(payload.Content, payload.FileName, ct);
+            var record = new TicketAttachment
+            {
+                MspOrganizationId = ticket.MspOrganizationId,
+                TicketId = ticket.Id,
+                ExternalAttachmentId = file.ExternalId,
+                TicketNoteId = file.ExternalNoteId is { } n && noteIdByExternalId.TryGetValue(n, out var localNote)
+                    ? localNote
+                    : null,
+                OriginalFileName = payload.FileName,
+                ContentType = payload.ContentType,
+                SizeBytes = payload.Content.LongLength,
+                StorageObjectKey = string.Empty,
+                UploadedAt = file.CreatedAt ?? clock.GetUtcNow(),
+                AuthorName = string.IsNullOrWhiteSpace(file.AuthorName) ? $"{connection.Provider} automation" : file.AuthorName,
+                ImportedFromProvider = true,
+            };
+
+            if (scan.IsClean)
+            {
+                var key = $"att/{ticket.Id}/{Guid.NewGuid():N}{Path.GetExtension(payload.FileName)}";
+                await storage.PutAsync(key, payload.Content, payload.ContentType, ct);
+                record.StorageObjectKey = key;
+                record.ScanStatus = AttachmentScanStatus.Clean;
+            }
+            else
+            {
+                record.ScanStatus = AttachmentScanStatus.Quarantined;
+                record.ScanDetail = scan.Detail;
+            }
+
+            db.TicketAttachments.Add(record);
+            known.Add(file.ExternalId);
+            added++;
+        }
+
+        var reconcilable = tickets
+            .Where(t => reconcilableTicketIds?.Contains(t.ExternalTicketId!) == true)
+            .Select(t => t.Id)
+            .ToList();
+        var stillPresent = incoming
+            .Select(r => r.Attachment.ExternalId)
+            .Where(id => !string.IsNullOrEmpty(id))
+            .ToHashSet();
+        var removed = await ReconcileDeletionsAsync(reconcilable, stillPresent!, ct);
+
+        if (added > 0 || removed > 0) await db.SaveChangesAsync(ct);
+        return (added, removed);
     }
 
     private static IReadOnlyList<string> Csv(string? raw)

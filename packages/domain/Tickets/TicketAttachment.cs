@@ -12,6 +12,13 @@ public class TicketAttachment : TenantEntity
     public Guid TicketId { get; set; }
     public Ticket? Ticket { get; set; }
 
+    /// <summary>
+    /// The conversation entry this file was posted with, when it is known. Files belong to a message,
+    /// not to a ticket-wide bucket — a reader needs to see which reply carried which document.
+    /// Null for files uploaded on their own, and for provider files with no note association.
+    /// </summary>
+    public Guid? TicketNoteId { get; set; }
+
     public string? ExternalAttachmentId { get; set; }
     public required string OriginalFileName { get; set; }
     public required string ContentType { get; set; }
@@ -23,4 +30,13 @@ public class TicketAttachment : TenantEntity
     public AttachmentScanStatus ScanStatus { get; set; } = AttachmentScanStatus.Pending;
     public string? ScanDetail { get; set; }
     public DateTimeOffset UploadedAt { get; set; }
+
+    /// <summary>Who attached it. Null for portal uploads, the provider-side name for imports.</summary>
+    public string? AuthorName { get; set; }
+
+    /// <summary>True when this row came from the provider rather than a portal upload.</summary>
+    public bool ImportedFromProvider { get; set; }
+
+    /// <summary>Set when a portal upload has been pushed to the provider, so it is never re-sent.</summary>
+    public DateTimeOffset? PushedToProviderAt { get; set; }
 }

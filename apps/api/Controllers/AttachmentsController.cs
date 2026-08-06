@@ -29,7 +29,7 @@ public sealed class AttachmentsController(
     [RequirePermission(Permissions.TicketsAddPublicNote)]
     [HttpPost("tickets/{ticketId:guid}/attachments")]
     [RequestSizeLimit(25 * 1024 * 1024)]
-    public async Task<IActionResult> Upload(Guid ticketId, IFormFile file, CancellationToken ct)
+    public async Task<IActionResult> Upload(Guid ticketId, IFormFile file, [FromQuery] Guid? noteId, CancellationToken ct)
     {
         if (file is null || file.Length == 0) return BadRequest("No file provided.");
         var access = await AccessAsync(ct);
@@ -39,7 +39,7 @@ public sealed class AttachmentsController(
         await file.CopyToAsync(ms, ct);
 
         var dto = await attachments.UploadAsync(new UploadAttachmentInput(
-            ticketId, access.MspOrganizationId, file.FileName, file.ContentType, ms.ToArray()), ct);
+            ticketId, access.MspOrganizationId, file.FileName, file.ContentType, ms.ToArray(), noteId), ct);
 
         return Ok(dto);
     }
@@ -67,7 +67,6 @@ public sealed class AttachmentsController(
         [FromServices] AttachmentStorageOptions options,
         [FromServices] IObjectStorage storage,
         [FromServices] TimeProvider clock,
-        [FromServices] ISettableTenantContext tenant,
         CancellationToken ct)
     {
         if (!InMemoryObjectStorage.VerifySignature(key, exp, sig, options.SigningKey, clock.GetUtcNow()))
@@ -76,9 +75,13 @@ public sealed class AttachmentsController(
         var bytes = await storage.GetAsync(key, ct);
         if (bytes is null) return NotFound();
 
-        // Look up metadata by the (unguessable, signed) storage key for content type + filename.
-        tenant.SetPlatformScope();
-        var meta = await db.TicketAttachments.AsNoTracking().FirstOrDefaultAsync(a => a.StorageObjectKey == key, ct);
+        // Look up metadata by the (unguessable, signature-verified) storage key for content type +
+        // filename. The tenant filter is bypassed rather than re-scoped: the scope is deliberately
+        // immutable once a request establishes it, so calling SetPlatformScope here threw on every
+        // download. Only the display name and content type are read, and the signed key is already
+        // proof of authorization.
+        var meta = await db.TicketAttachments.AsNoTracking().IgnoreQueryFilters()
+            .FirstOrDefaultAsync(a => a.StorageObjectKey == key, ct);
         var contentType = meta?.ContentType ?? "application/octet-stream";
         var fileName = meta?.OriginalFileName ?? "download";
 

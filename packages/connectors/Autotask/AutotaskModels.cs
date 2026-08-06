@@ -18,6 +18,16 @@ public sealed class AutotaskConnectorConfig
     public int PublicPublishValue { get; init; } = 1;
     /// <summary>publish value used for internal-only notes (never mirrored to the portal).</summary>
     public int InternalPublishValue { get; init; } = 2;
+
+    /// <summary>
+    /// Resource that owns time logged from the portal. Autotask rejects its own API-only user here,
+    /// and requires a resource on every ticket time entry, so a real technician must be configured
+    /// on the connection before time logging works.
+    /// </summary>
+    public long? DefaultTimeEntryResourceId { get; init; }
+
+    /// <summary>Role to bill the time under. Resolved from the resource's own roles when unset.</summary>
+    public long? DefaultTimeEntryRoleId { get; init; }
 }
 
 // ---- wire DTOs (subset of the Autotask REST schema the connector uses) ----
@@ -93,6 +103,10 @@ internal sealed class AtTicketNote
     [JsonPropertyName("description")] public string? Description { get; set; }
     [JsonPropertyName("publish")] public int Publish { get; set; }
     [JsonPropertyName("createDateTime")] public DateTimeOffset? CreateDateTime { get; set; }
+    // Autotask names the note author "creatorResourceID" (Tickets use "creatorResourceID" too);
+    // "createdByContactID" is set instead when the author was a customer contact.
+    [JsonPropertyName("creatorResourceID")] public long? CreatorResourceId { get; set; }
+    [JsonPropertyName("createdByContactID")] public long? CreatedByContactId { get; set; }
 }
 
 internal sealed class AtFieldInfoResult
@@ -111,4 +125,62 @@ internal sealed class AtPicklistValue
     [JsonPropertyName("value")] public string? Value { get; set; }
     [JsonPropertyName("label")] public string? Label { get; set; }
     [JsonPropertyName("isActive")] public bool IsActive { get; set; }
+}
+
+internal sealed class AtTicketAttachment
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("parentID")] public long? ParentId { get; set; }
+    [JsonPropertyName("title")] public string? Title { get; set; }
+    [JsonPropertyName("fullPath")] public string? FullPath { get; set; }
+    [JsonPropertyName("contentType")] public string? ContentType { get; set; }
+    // Autotask serialises this as a decimal (e.g. 70.0), so it cannot bind to a long.
+    [JsonPropertyName("fileSize")] public double? FileSize { get; set; }
+    [JsonPropertyName("attachDate")] public DateTimeOffset? AttachDate { get; set; }
+    [JsonPropertyName("attachedByResourceID")] public long? AttachedByResourceId { get; set; }
+    [JsonPropertyName("attachedByContactID")] public long? AttachedByContactId { get; set; }
+    [JsonPropertyName("ticketNoteID")] public long? TicketNoteId { get; set; }
+    // Only returned on a get-by-id; the query projection omits it to keep list reads small.
+    [JsonPropertyName("data")] public string? Data { get; set; }
+}
+
+internal sealed class AtTimeEntry
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("ticketID")] public long? TicketId { get; set; }
+    [JsonPropertyName("resourceID")] public long? ResourceId { get; set; }
+    [JsonPropertyName("hoursWorked")] public decimal? HoursWorked { get; set; }
+    [JsonPropertyName("hoursToBill")] public decimal? HoursToBill { get; set; }
+    [JsonPropertyName("isNonBillable")] public bool? IsNonBillable { get; set; }
+    [JsonPropertyName("showOnInvoice")] public bool? ShowOnInvoice { get; set; }
+    [JsonPropertyName("billingCodeID")] public long? BillingCodeId { get; set; }
+    [JsonPropertyName("roleID")] public long? RoleId { get; set; }
+    [JsonPropertyName("dateWorked")] public DateTimeOffset? DateWorked { get; set; }
+    [JsonPropertyName("summaryNotes")] public string? SummaryNotes { get; set; }
+    [JsonPropertyName("internalNotes")] public string? InternalNotes { get; set; }
+}
+
+internal sealed class AtResourceRole
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("resourceID")] public long ResourceId { get; set; }
+    [JsonPropertyName("roleID")] public long RoleId { get; set; }
+    [JsonPropertyName("queueID")] public long? QueueId { get; set; }
+    [JsonPropertyName("isActive")] public bool IsActive { get; set; }
+}
+
+internal sealed class AtRole
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("isActive")] public bool IsActive { get; set; }
+}
+
+internal sealed class AtBillingCode
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("description")] public string? Description { get; set; }
+    [JsonPropertyName("isActive")] public bool IsActive { get; set; }
+    [JsonPropertyName("useType")] public int? UseType { get; set; }
 }

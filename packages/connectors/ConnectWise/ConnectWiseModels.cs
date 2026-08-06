@@ -71,6 +71,28 @@ internal sealed class CwTicketNote
     [JsonPropertyName("customerUpdatedFlag")] public bool CustomerUpdatedFlag { get; set; }
     [JsonPropertyName("dateCreated")] public DateTimeOffset? DateCreated { get; set; }
     [JsonPropertyName("member")] public CwRef? Member { get; set; }
+    // Set instead of "member" when a customer contact wrote the note (portal/email replies).
+    [JsonPropertyName("contact")] public CwRef? Contact { get; set; }
+}
+
+internal sealed class CwDocument
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("title")] public string? Title { get; set; }
+    [JsonPropertyName("fileName")] public string? FileName { get; set; }
+    [JsonPropertyName("size")] public long? Size { get; set; }
+    [JsonPropertyName("owner")] public string? Owner { get; set; }
+    [JsonPropertyName("createdOnDate")] public DateTimeOffset? CreatedOnDate { get; set; }
+    [JsonPropertyName("documentType")] public CwRef? DocumentType { get; set; }
+}
+
+internal sealed class CwBoardTeam
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("boardId")] public long? BoardId { get; set; }
+    // Member ids only — the board-scoped route returns these; the bulk /service/teams route does not.
+    [JsonPropertyName("members")] public List<long>? Members { get; set; }
 }
 
 internal sealed class CwTimeEntry
@@ -81,6 +103,7 @@ internal sealed class CwTimeEntry
     [JsonPropertyName("billableOption")] public string? BillableOption { get; set; }
     [JsonPropertyName("timeStart")] public DateTimeOffset? TimeStart { get; set; }
     [JsonPropertyName("notes")] public string? Notes { get; set; }
+    [JsonPropertyName("workType")] public CwRef? WorkType { get; set; }
 }
 
 internal sealed class CwConfiguration

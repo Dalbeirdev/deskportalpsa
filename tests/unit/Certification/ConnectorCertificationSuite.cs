@@ -121,6 +121,50 @@ public abstract class ConnectorCertificationSuite
         var notes = await c.GetPublicNotesAsync(t.ExternalId!);
         notes.Should().NotBeEmpty();
         notes.Should().OnlyContain(n => n.IsPublic);
+        // Every connector must attribute a human-written note, so the portal thread never shows a
+        // reply bylined with the provider's name instead of its actual author.
+        notes.Should().OnlyContain(n => !string.IsNullOrWhiteSpace(n.AuthorName));
+    }
+
+    [Fact]
+    public async Task Attachment_round_trips_with_its_bytes_and_file_name()
+    {
+        var c = CreateConnector();
+        // Providers that cannot serve bytes back declare it; inbound attachment sync is off for them.
+        if (!(await c.GetCapabilitiesAsync()).SupportsAttachmentDownload) return;
+        var t = await c.CreateTicketAsync(new UnifiedTicketCreateRequest { Title = "T", ExternalCompanyId = SeededOrganizationId, IdempotencyKey = "att" });
+        byte[] content = [0x89, (byte)'P', (byte)'N', (byte)'G', 1, 2, 3, 4];
+
+        var created = await c.AddAttachmentAsync(t.ExternalId!,
+            new SecureAttachment("report.png", "image/png", content.LongLength, "att/internal-key.png", content));
+        created.Success.Should().BeTrue();
+
+        var listed = await c.GetAttachmentsAsync(t.ExternalId!);
+        var file = listed.Should().ContainSingle().Subject;
+        // The portal's randomized storage key must never surface as the provider-side file name.
+        file.FileName.Should().Be("report.png");
+        file.SizeBytes.Should().Be(content.Length);
+
+        var payload = await c.DownloadAttachmentAsync(t.ExternalId!, created.ExternalId!);
+        payload.Should().NotBeNull();
+        payload!.Content.Should().Equal(content); // bytes survive the round trip, not just metadata
+    }
+
+    [Fact]
+    public async Task Attachment_sweep_finds_a_file_without_the_ticket_being_touched()
+    {
+        var c = CreateConnector();
+        // Providers with no dated tenant-wide query declare it; sync reads their files per ticket.
+        if (!(await c.GetCapabilitiesAsync()).SupportsAttachmentSweep) return;
+        var t = await c.CreateTicketAsync(new UnifiedTicketCreateRequest { Title = "T", ExternalCompanyId = SeededOrganizationId, IdempotencyKey = "sweep" });
+        byte[] content = [1, 2, 3];
+        await c.AddAttachmentAsync(t.ExternalId!, new SecureAttachment("a.bin", "application/octet-stream", 3, "k", content));
+
+        var swept = await c.GetRecentAttachmentsAsync(null);
+
+        // Providers do not reliably bump a ticket's modified date when a file is attached, so sync
+        // depends on this dated sweep rather than on the ticket page.
+        swept.Should().Contain(r => r.TicketExternalId == t.ExternalId && r.Attachment.FileName == "a.bin");
     }
 
     // ---- field discovery ----

@@ -113,7 +113,17 @@ public static class DependencyInjection
             PublicBaseUrl = config["Attachments:PublicBaseUrl"] ?? "http://localhost:5080",
         });
         services.AddSingleton(new AttachmentPolicy());
-        services.AddSingleton<IObjectStorage, InMemoryObjectStorage>();
+        if (localMode)
+        {
+            // Disk-backed so files survive a restart, matching the SQLite DB and the file secret store.
+            var blobRoot = config.GetValue<string>("LocalMode:AttachmentsPath") ?? "desk-local-files";
+            services.AddSingleton<IObjectStorage>(sp => new FileObjectStorage(
+                sp.GetRequiredService<AttachmentStorageOptions>(), sp.GetRequiredService<TimeProvider>(), blobRoot));
+        }
+        else
+        {
+            services.AddSingleton<IObjectStorage, InMemoryObjectStorage>();
+        }
         services.AddSingleton<IMalwareScanner, HeuristicMalwareScanner>();
         services.AddScoped<IAttachmentService, AttachmentService>();
 

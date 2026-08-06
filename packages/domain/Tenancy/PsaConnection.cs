@@ -71,6 +71,15 @@ public class PsaConnection : TenantEntity
     public string? DefaultIssueType { get; set; }
     public string? DefaultSubIssueType { get; set; }
 
+    /// <summary>
+    /// Provider resource that owns time logged from the portal. Autotask requires one on every
+    /// ticket time entry and rejects its own API-only user, so time logging needs this configured.
+    /// </summary>
+    public string? DefaultTimeEntryResourceId { get; set; }
+
+    /// <summary>Work role billed against. Resolved from the resource's own roles when unset.</summary>
+    public string? DefaultTimeEntryRoleId { get; set; }
+
     // Rate-limit + retry configuration (provider defaults may override).
     public int RateLimitPerMinute { get; set; } = 60;
     public int MaxRetries { get; set; } = 5;

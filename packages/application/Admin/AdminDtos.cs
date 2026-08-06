@@ -106,11 +106,17 @@ public sealed record ConnectionFieldsDto(
     IReadOnlyList<FieldOptionDto> Priorities,
     IReadOnlyList<FieldOptionDto> Categories,
     IReadOnlyList<FieldOptionDto> WorkTypes,
-    IReadOnlyList<FieldOptionDto> WorkRoles);
+    IReadOnlyList<FieldOptionDto> WorkRoles,
+    IReadOnlyList<FieldOptionDto> Technicians,
+    IReadOnlyList<TechnicianCoverageDto> TechnicianCoverage);
+
+/// <summary>A technician's role on one queue/board. Repeated per queue they cover.</summary>
+public sealed record TechnicianCoverageDto(string TechnicianId, string? RoleId, string? RoleName, string? QueueOrBoardId);
 
 /// <summary>Per-connection sync behaviour + import filters (what flows, and which tickets are ours).</summary>
 public sealed record ConnectionSettingsDto(
     bool TwoWaySync, bool AutoImportNewTickets, bool ImportNotes, bool ImportSystemNotes, bool SyncAttachments,
     bool ImportOpenTickets, bool ImportClosedTickets,
     string? FilterCompanyIds, string? FilterQueueIds, string? FilterResourceIds, int? FilterActiveWithinDays,
-    string? DefaultQueueOrBoardId, string? DefaultTicketType, string? DefaultIssueType, string? DefaultSubIssueType);
+    string? DefaultQueueOrBoardId, string? DefaultTicketType, string? DefaultIssueType, string? DefaultSubIssueType,
+    string? DefaultTimeEntryResourceId, string? DefaultTimeEntryRoleId);

@@ -176,6 +176,8 @@ public sealed class ConnectionAdminService(
         c.DefaultTicketType = Clean(input.DefaultTicketType);
         c.DefaultIssueType = Clean(input.DefaultIssueType);
         c.DefaultSubIssueType = Clean(input.DefaultSubIssueType);
+        c.DefaultTimeEntryResourceId = Clean(input.DefaultTimeEntryResourceId);
+        c.DefaultTimeEntryRoleId = Clean(input.DefaultTimeEntryRoleId);
 
         await db.SaveChangesAsync(ct);
         await audit.WriteAsync("connection.settings.updated", "PsaConnection", connectionId.ToString(),
@@ -187,7 +189,8 @@ public sealed class ConnectionAdminService(
         c.TwoWaySync, c.AutoImportNewTickets, c.ImportNotes, c.ImportSystemNotes, c.SyncAttachments,
         c.ImportOpenTickets, c.ImportClosedTickets,
         c.FilterCompanyIds, c.FilterQueueIds, c.FilterResourceIds, c.FilterActiveWithinDays,
-        c.DefaultQueueOrBoardId, c.DefaultTicketType, c.DefaultIssueType, c.DefaultSubIssueType);
+        c.DefaultQueueOrBoardId, c.DefaultTicketType, c.DefaultIssueType, c.DefaultSubIssueType,
+        c.DefaultTimeEntryResourceId, c.DefaultTimeEntryRoleId);
 
     /// <summary>Normalizes a comma-separated id list; empty becomes null (= no restriction).</summary>
     private static string? Clean(string? raw)
@@ -218,7 +221,35 @@ public sealed class ConnectionAdminService(
         var categories = await SafeAsync(() => connector.GetCategoriesAsync(ct));
         var workTypes = await SafeAsync(() => connector.GetWorkTypesAsync(ct));
         var workRoles = await SafeAsync(() => connector.GetWorkRolesAsync(ct));
-        return new ConnectionFieldsDto(Map(boards), Map(statuses), Map(priorities), Map(categories), Map(workTypes), Map(workRoles));
+        // Only active technicians: an admin picking a default should not be offered a leaver.
+        var technicians = await SafeTechniciansAsync(connector, ct);
+        var coverage = await SafeCoverageAsync(connector, ct);
+        return new ConnectionFieldsDto(
+            Map(boards), Map(statuses), Map(priorities), Map(categories), Map(workTypes), Map(workRoles),
+            technicians, coverage);
+    }
+
+    private static async Task<IReadOnlyList<FieldOptionDto>> SafeTechniciansAsync(IServiceManagementConnector connector, CancellationToken ct)
+    {
+        try
+        {
+            var techs = await connector.GetTechniciansAsync(ct);
+            return techs.Where(t => t.IsActive && !string.IsNullOrWhiteSpace(t.DisplayName))
+                .Select(t => new FieldOptionDto(t.ExternalId, t.DisplayName))
+                .ToList();
+        }
+        catch (ConnectorException) { return []; }
+    }
+
+    private static async Task<IReadOnlyList<TechnicianCoverageDto>> SafeCoverageAsync(IServiceManagementConnector connector, CancellationToken ct)
+    {
+        try
+        {
+            var rows = await connector.GetTechnicianAssignmentsAsync(ct);
+            return rows.Select(a => new TechnicianCoverageDto(
+                a.TechnicianExternalId, a.RoleId, a.RoleName, a.QueueOrBoardId)).ToList();
+        }
+        catch (ConnectorException) { return []; }
     }
 
     private async Task TryCacheFieldsAsync(Guid connectionId, CancellationToken ct)
