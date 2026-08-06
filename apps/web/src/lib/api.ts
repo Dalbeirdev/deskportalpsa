@@ -128,7 +128,12 @@ export const api = {
   attachmentDownloadUrl: (ticketId: string, attachmentId: string) =>
     request(`/api/tickets/${ticketId}/attachments/${attachmentId}/download`, z.object({ url: z.string() })),
   notifications: () => request('/api/notifications', z.array(NotificationSchema)) as Promise<Notification[]>,
+  me: () => request('/api/me', MeSchema),
+  storageUsage: () =>
+    request('/api/admin/storage', z.object({ usedBytes: z.number(), fileCount: z.number(), ticketCount: z.number() })),
   profile: () => request('/api/profile', ProfileSchema) as Promise<Profile>,
+  updateProfile: (body: { displayName: string; email: string }) =>
+    request('/api/profile', ProfileSchema, { method: 'PUT', body: JSON.stringify(body) }) as Promise<Profile>,
 
   technicianMetrics: () => request('/api/dashboard/technician', TechnicianResponseSchema) as Promise<TechnicianResponse>,
   teamMetrics: (fromIso?: string) =>

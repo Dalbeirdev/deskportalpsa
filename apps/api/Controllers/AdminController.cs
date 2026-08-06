@@ -199,6 +199,23 @@ public sealed class AdminReadController(
     public async Task<IActionResult> Audit([FromQuery] string? action, [FromQuery] int take = 100, CancellationToken ct = default)
         => Ok(await auditQuery.ListAsync(take, action, ct));
 
+    /// <summary>
+    /// Real attachment-storage usage. The sidebar used to show a hardcoded "6.8 GB of 10 GB" —
+    /// decoration presented as fact. Only CLEAN files count: quarantined uploads keep no bytes.
+    /// </summary>
+    [HttpGet("storage")]
+    [RequirePermission(Permissions.IntegrationHealthView)]
+    public async Task<IActionResult> Storage([FromServices] DeskDbContext db, CancellationToken ct)
+    {
+        var clean = db.TicketAttachments.Where(a => a.ScanStatus == Desk.Domain.Enums.AttachmentScanStatus.Clean);
+        return Ok(new
+        {
+            usedBytes = await clean.SumAsync(a => (long?)a.SizeBytes, ct) ?? 0L,
+            fileCount = await clean.CountAsync(ct),
+            ticketCount = await clean.Select(a => a.TicketId).Distinct().CountAsync(ct),
+        });
+    }
+
     [HttpGet("users")]
     [RequirePermission(Permissions.UsersManage)]
     public async Task<IActionResult> Users(CancellationToken ct) => Ok(await users.ListAsync(ct));
