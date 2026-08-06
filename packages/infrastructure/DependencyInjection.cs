@@ -134,6 +134,7 @@ public static class DependencyInjection
         services.AddScoped<IMappingAdminService, MappingAdminService>();
         services.AddScoped<IJobMonitorService, JobMonitorService>();
         services.AddScoped<IIntegrationHealthService, IntegrationHealthService>();
+        services.AddScoped<ITicketResyncService, Sync.TicketResyncService>();
         services.AddScoped<IAuditQueryService, AuditQueryService>();
         services.AddScoped<IUserAdminService, UserAdminService>();
 

@@ -3,9 +3,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   RefreshCw, ChevronDown, Filter, Clock, Mail, AlertOctagon, CheckCircle2, Layers,
-  Plus, ArrowRight, AlertTriangle, Activity,
+  Plus, ArrowRight, AlertTriangle, Activity, RotateCw, Check,
 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { useMutation } from '@tanstack/react-query';
+import { useState } from 'react';
+import { api, type UnsyncedTicket } from '@/lib/api';
 import type { Health } from '@/lib/types';
 
 const PROVIDER: Record<number, { name: string; abbr: string; color: string }> = {
@@ -192,10 +194,94 @@ export default function HealthPage() {
         </div>
       )}
 
+      <UnsyncedPanel />
+
       <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
         <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-white text-[11px] font-bold">i</span>
         Integration health is calculated from synchronization status, error rates, and pending job counts.
       </div>
+    </div>
+  );
+}
+
+/**
+ * Tickets the portal holds that never reached the PSA. Before this existed a rejected create threw
+ * away the customer's ticket entirely, so there was nothing to count and nothing to retry.
+ *
+ * Resync is per ticket on purpose: each retry hits the provider and can fail for its own reason,
+ * and a single bulk button would bury which ones did.
+ */
+function UnsyncedPanel() {
+  const qc = useQueryClient();
+  const [done, setDone] = useState<Record<string, string>>({});
+  const { data, isLoading } = useQuery({
+    queryKey: ['unsynced-tickets'],
+    queryFn: () => api.unsyncedTickets(),
+    retry: false,
+  });
+
+  const resync = useMutation({
+    mutationFn: (ticketId: string) => api.resyncTicket(ticketId),
+    onSuccess: (r) => {
+      setDone((d) => ({ ...d, [r.ticketId]: r.success ? `Synced as ${r.externalTicketId}` : (r.error ?? 'Rejected again') }));
+      if (r.success) {
+        ['unsynced-tickets', 'tickets', 'health'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+      }
+    },
+  });
+
+  if (isLoading) return null;
+  const tickets: UnsyncedTicket[] = data?.tickets ?? [];
+
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+      <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--faint)]">
+          <AlertOctagon size={15} className={tickets.length ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'} />
+          Not synced to the PSA
+          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${tickets.length
+            ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+            : 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300'}`}>
+            {data?.count ?? 0}
+          </span>
+        </h2>
+        <span className="text-xs text-[var(--muted)]">Resync applies this connection&apos;s current mappings and board defaults.</span>
+      </div>
+
+      {tickets.length === 0 ? (
+        <p className="px-5 py-4 text-sm text-[var(--muted)]">
+          Every ticket the portal holds exists in its PSA.
+        </p>
+      ) : (
+        <ul className="divide-y divide-[var(--border)]">
+          {tickets.map((t) => (
+            <li key={t.ticketId} className="px-5 py-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="font-mono text-xs text-[var(--faint)]" title="Desk Portal ticket ID">{t.ticketId.slice(0, 8)}</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">{t.title}</span>
+                {t.customerName && <span className="hidden shrink-0 text-xs text-[var(--muted)] sm:inline">{t.customerName}</span>}
+                <span className="shrink-0 rounded bg-[var(--bg)] px-1.5 py-0.5 text-[11px] text-[var(--muted)]">{t.connectionName}</span>
+                <span className="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950 dark:text-red-300">{t.syncStatus}</span>
+                <span className="shrink-0 text-xs text-[var(--faint)]">{ago(t.createdAt)}</span>
+                <button
+                  onClick={() => resync.mutate(t.ticketId)}
+                  disabled={resync.isPending}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium hover:bg-[var(--bg)] disabled:opacity-50">
+                  <RotateCw size={13} /> Resync
+                </button>
+              </div>
+              {t.syncError && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{t.syncError}</p>
+              )}
+              {done[t.ticketId] && (
+                <p className="mt-1 inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-400">
+                  <Check size={12} /> {done[t.ticketId]}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

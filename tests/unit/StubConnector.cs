@@ -104,7 +104,17 @@ public sealed class StubConnector(ProviderType provider = ProviderType.AutotaskP
     public Task<IReadOnlyList<ExternalTechnicianAssignment>> GetTechnicianAssignmentsAsync(CancellationToken ct = default) => No<IReadOnlyList<ExternalTechnicianAssignment>>();
     public Task<IReadOnlyList<ExternalDevice>> GetDevicesAsync(string organizationId, CancellationToken ct = default) => No<IReadOnlyList<ExternalDevice>>();
     public Task<UnifiedTicket?> GetTicketAsync(string ticketId, CancellationToken ct = default) => No<UnifiedTicket?>();
-    public Task<CreateTicketResult> CreateTicketAsync(UnifiedTicketCreateRequest ticket, CancellationToken ct = default) => No<CreateTicketResult>();
+    /// <summary>What the provider answers to the next create; default is acceptance.</summary>
+    public CreateTicketResult NextCreateResult { get; set; } = new(true, "9001", null);
+
+    /// <summary>Every create request the caller built, so a test can assert what was actually sent.</summary>
+    public List<UnifiedTicketCreateRequest> CreateRequests { get; } = [];
+
+    public Task<CreateTicketResult> CreateTicketAsync(UnifiedTicketCreateRequest ticket, CancellationToken ct = default)
+    {
+        CreateRequests.Add(ticket);
+        return Task.FromResult(NextCreateResult);
+    }
     public Task<UpdateTicketResult> UpdateTicketAsync(string ticketId, UnifiedTicketUpdate update, CancellationToken ct = default) => No<UpdateTicketResult>();
     public Task<CreateNoteResult> AddPublicNoteAsync(string ticketId, UnifiedTicketNoteCreateRequest note, CancellationToken ct = default) => No<CreateNoteResult>();
     /// <summary>Time entries per external ticket id.</summary>

@@ -172,8 +172,24 @@ public sealed class JobMonitorController(IJobMonitorService svc) : ControllerBas
 public sealed class AdminReadController(
     IIntegrationHealthService health,
     IAuditQueryService auditQuery,
+    ITicketResyncService resync,
     IUserAdminService users) : ControllerBase
 {
+    /// <summary>Tickets the portal holds that never reached the PSA — the count and which they are.</summary>
+    [HttpGet("tickets/unsynced")]
+    [RequirePermission(Permissions.IntegrationHealthView)]
+    public async Task<IActionResult> Unsynced([FromQuery] Guid? connectionId, CancellationToken ct)
+        => Ok(await resync.ListAsync(connectionId, ct));
+
+    /// <summary>
+    /// Pushes one outstanding ticket again. Deliberately one at a time: each retry hits the provider
+    /// and can fail for its own reason, and a bulk button would bury which ones did.
+    /// </summary>
+    [HttpPost("tickets/{id:guid}/resync")]
+    [RequirePermission(Permissions.ConnectionsManage)]
+    public async Task<IActionResult> Resync(Guid id, CancellationToken ct)
+        => Ok(await resync.ResyncAsync(id, ct));
+
     [HttpGet("health")]
     [RequirePermission(Permissions.IntegrationHealthView)]
     public async Task<IActionResult> Health(CancellationToken ct) => Ok(await health.SnapshotAsync(ct));
