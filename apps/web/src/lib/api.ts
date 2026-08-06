@@ -128,7 +128,12 @@ export const api = {
   attachmentDownloadUrl: (ticketId: string, attachmentId: string) =>
     request(`/api/tickets/${ticketId}/attachments/${attachmentId}/download`, z.object({ url: z.string() })),
   notifications: () => request('/api/notifications', z.array(NotificationSchema)) as Promise<Notification[]>,
+  me: () => request('/api/me', MeSchema),
+  storageUsage: () =>
+    request('/api/admin/storage', z.object({ usedBytes: z.number(), fileCount: z.number(), ticketCount: z.number() })),
   profile: () => request('/api/profile', ProfileSchema) as Promise<Profile>,
+  updateProfile: (body: { displayName: string; email: string }) =>
+    request('/api/profile', ProfileSchema, { method: 'PUT', body: JSON.stringify(body) }) as Promise<Profile>,
 
   technicianMetrics: () => request('/api/dashboard/technician', TechnicianResponseSchema) as Promise<TechnicianResponse>,
   teamMetrics: (fromIso?: string) =>
@@ -177,6 +182,10 @@ export const api = {
   deleteMapping: (ruleId: string) =>
     request(`/api/admin/mappings/${ruleId}`, z.unknown(), { method: 'DELETE' }),
   health: () => request('/api/admin/health', z.array(HealthSchema)) as Promise<Health[]>,
+  unsyncedTickets: (connectionId?: string) =>
+    request(`/api/admin/tickets/unsynced${connectionId ? `?connectionId=${connectionId}` : ''}`, UnsyncedTicketsSchema),
+  resyncTicket: (ticketId: string) =>
+    request(`/api/admin/tickets/${ticketId}/resync`, ResyncResultSchema, { method: 'POST' }),
   jobs: (status?: number) =>
     request(`/api/admin/jobs${status != null ? `?status=${status}` : ''}`, z.array(JobSchema)) as Promise<Job[]>,
   reprocessJob: (id: string) =>
@@ -353,6 +362,27 @@ const AssigneeOptionsSchema = z.object({
   })),
 });
 export type AssigneeOptions = z.infer<typeof AssigneeOptionsSchema>;
+
+const UnsyncedTicketSchema = z.object({
+  ticketId: z.string(),
+  psaConnectionId: z.string(),
+  connectionName: z.string(),
+  title: z.string(),
+  customerName: z.string().nullable(),
+  syncStatus: z.string(),
+  syncError: z.string().nullable(),
+  createdAt: z.string(),
+  lastAttemptAt: z.string().nullable(),
+});
+const UnsyncedTicketsSchema = z.object({ count: z.number(), tickets: z.array(UnsyncedTicketSchema) });
+export type UnsyncedTicket = z.infer<typeof UnsyncedTicketSchema>;
+
+const ResyncResultSchema = z.object({
+  success: z.boolean(),
+  ticketId: z.string(),
+  externalTicketId: z.string().nullable(),
+  error: z.string().nullable(),
+});
 
 const TimeEntrySchema = z.object({
   externalId: z.string(),

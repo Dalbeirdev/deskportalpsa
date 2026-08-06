@@ -1,51 +1,17 @@
-import Link from 'next/link';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { QueryProvider } from '@/components/QueryProvider';
 import { UserMenu } from '@/components/UserMenu';
 import { TimerProvider, TimerWidget } from '@/components/TimerProvider';
 import { NotificationsBell } from '@/components/NotificationsBell';
-import {
-  LayoutDashboard, Ticket, Plug, Bell, User, BarChart3, Activity, ListChecks, ShieldCheck,
-  SlidersHorizontal, FileText, Search, HelpCircle, HardDrive, ChevronLeft, Rocket,
-} from 'lucide-react';
+import { FileText, Search, HelpCircle, ChevronLeft } from 'lucide-react';
+import { SidebarNav, MobileNav, StorageUsage } from '@/components/SidebarNav';
 
-const navGroups = [
-  {
-    label: null,
-    items: [
-      { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
-      { href: '/dashboard/tickets', label: 'Tickets', icon: Ticket },
-      { href: '/dashboard/analytics', label: 'Productivity', icon: BarChart3 },
-    ],
-  },
-  {
-    label: 'Integrations',
-    items: [
-      { href: '/dashboard/connections', label: 'PSA Connections', icon: Plug },
-      { href: '/dashboard/mappings', label: 'Field Mapping', icon: SlidersHorizontal },
-      { href: '/dashboard/health', label: 'Integration Health', icon: Activity },
-    ],
-  },
-  {
-    label: 'Management',
-    items: [
-      { href: '/dashboard/jobs', label: 'Background Jobs', icon: ListChecks },
-      { href: '/dashboard/audit', label: 'Audit Log', icon: ShieldCheck },
-      { href: '/dashboard/notifications', label: 'Notifications', icon: Bell },
-      { href: '/dashboard/profile', label: 'Profile', icon: User },
-    ],
-  },
-  {
-    label: 'Client-facing',
-    items: [
-      { href: '/control-panel', label: 'Control Panel', icon: Rocket },
-    ],
-  },
-];
-const flatNav = navGroups.flatMap((g) => g.items);
+
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
+    <QueryProvider>
+    <TimerProvider>
     <div className="flex min-h-screen">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)] p-4 md:flex">
         <div className="mb-6 flex items-center gap-2.5 px-2">
@@ -55,43 +21,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="text-[10px] text-[var(--muted)]">Multi-tenant PSA Portal</div>
           </div>
         </div>
-        <nav className="flex-1 space-y-5">
-          {navGroups.map((g, gi) => (
-            <div key={gi} className="space-y-1">
-              {g.label && (
-                <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--faint)]">{g.label}</div>
-              )}
-              {g.items.map(({ href, label, icon: Icon }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--muted)] transition-colors hover:bg-[var(--bg)] hover:text-[var(--fg)]"
-                >
-                  <Icon size={18} />
-                  {label}
-                </Link>
-              ))}
-            </div>
-          ))}
-        </nav>
+        <SidebarNav />
 
-        <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-3">
-          <div className="flex items-center justify-between text-xs">
-            <span className="flex items-center gap-1.5 font-medium"><HardDrive size={13} /> Storage Usage</span>
-            <span className="font-semibold">68%</span>
-          </div>
-          <div className="mt-2 h-1.5 rounded-full bg-[var(--surface)]">
-            <div className="h-full rounded-full bg-brand" style={{ width: '68%' }} />
-          </div>
-          <div className="mt-1.5 text-[11px] text-[var(--muted)]">6.8 GB of 10 GB used</div>
-        </div>
+        <StorageUsage />
         <button className="mt-2 flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--fg)]">
           <ChevronLeft size={15} /> Collapse
         </button>
       </aside>
 
-      <QueryProvider>
-      <TimerProvider>
       <div className="flex flex-1 flex-col">
         <header className="flex h-14 items-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 sm:px-6">
           <div className="relative hidden max-w-xl flex-1 md:block">
@@ -114,18 +51,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
 
         {/* Mobile navigation — the sidebar is hidden below md. */}
-        <nav aria-label="Primary" className="flex gap-1 overflow-x-auto border-b border-[var(--border)] bg-[var(--surface)] px-2 py-2 md:hidden">
-          {flatNav.map(({ href, label, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--fg)]"
-            >
-              <Icon size={15} />
-              {label}
-            </Link>
-          ))}
-        </nav>
+        <MobileNav />
 
         <main className="flex-1 bg-[var(--bg)] p-4 sm:p-6">{children}</main>
 
@@ -136,8 +62,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </a>
         </footer>
       </div>
-      </TimerProvider>
-      </QueryProvider>
     </div>
+    </TimerProvider>
+    </QueryProvider>
   );
 }

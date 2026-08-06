@@ -92,6 +92,7 @@ public static class DependencyInjection
 
         // Client portal (Phase 6)
         services.AddScoped<IClientAccessResolver, ClientAccessResolver>();
+        services.AddScoped<IProfileService, ProfileService>();
         services.AddScoped<ITicketReadService, TicketReadService>();
         services.AddScoped<ITicketCommandService, TicketCommandService>();
 
@@ -134,6 +135,7 @@ public static class DependencyInjection
         services.AddScoped<IMappingAdminService, MappingAdminService>();
         services.AddScoped<IJobMonitorService, JobMonitorService>();
         services.AddScoped<IIntegrationHealthService, IntegrationHealthService>();
+        services.AddScoped<ITicketResyncService, Sync.TicketResyncService>();
         services.AddScoped<IAuditQueryService, AuditQueryService>();
         services.AddScoped<IUserAdminService, UserAdminService>();
 

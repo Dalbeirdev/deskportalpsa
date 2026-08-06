@@ -7,6 +7,7 @@ using Desk.Domain.Enums;
 using Desk.Domain.Mapping;
 using Desk.Domain.Tickets;
 using Desk.Infrastructure.Persistence;
+using Desk.PsaCore.Contracts;
 using Desk.PsaCore.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -45,7 +46,10 @@ public sealed class TicketCommandService(
 
         var idempotencyKey = Guid.NewGuid().ToString("N");
         var connector = await connectors.ResolveAsync(connection.Id, ct);
-        var created = await connector.CreateTicketAsync(new UnifiedTicketCreateRequest
+        CreateTicketResult created;
+        try
+        {
+            created = await connector.CreateTicketAsync(new UnifiedTicketCreateRequest
         {
             Title = input.Title,
             Description = input.Description,
@@ -67,10 +71,13 @@ public sealed class TicketCommandService(
             RequesterExternalId = requester.ExternalContactId,
             RequesterEmail = requester.Email,
             IdempotencyKey = idempotencyKey,
-        }, ct);
-
-        if (!created.Success)
-            throw new ValidationFailedException(created.Error ?? "The PSA rejected the ticket.");
+            }, ct);
+        }
+        catch (ConnectorException ex)
+        {
+            // An unreachable or rate-limited PSA is not the customer's problem to retype.
+            created = new CreateTicketResult(false, null, ex.Message);
+        }
 
         var now = clock.GetUtcNow();
         var ticket = new Ticket
@@ -89,13 +96,25 @@ public sealed class TicketCommandService(
             PortalPriority = input.Priority ?? "NORMAL",
             PortalCategory = input.Category,
             QueueOrBoard = input.QueueOrBoard,
-            SyncStatus = TicketSyncStatus.Synced,
-            LastSyncedAt = now,
+            // Recorded either way. A rejected create used to throw before anything was written, so
+            // the customer's ticket vanished with nothing to retry from and no count of what was
+            // lost. It is kept here as Error, listed for staff, and resyncable.
+            SyncStatus = created.Success ? TicketSyncStatus.Synced : TicketSyncStatus.Error,
+            SyncError = created.Success ? null : created.Error,
+            LastSyncedAt = created.Success ? now : null,
             CorrelationId = Guid.NewGuid(),
         };
         ticket.UpdateHash = HashOf(ticket);
         db.Tickets.Add(ticket);
         await db.SaveChangesAsync(ct);
+
+        if (!created.Success)
+        {
+            // Still surfaced as a failure: the customer must not be told it reached the PSA when it
+            // did not. The row exists so the work can be recovered rather than retyped.
+            await RecordPortalEventAsync(access.MspOrganizationId, connection.Id, ticket, idempotencyKey, "ticket.create_failed", ct);
+            throw new ValidationFailedException(created.Error ?? "The PSA rejected the ticket.");
+        }
 
         await RecordPortalEventAsync(access.MspOrganizationId, connection.Id, ticket, idempotencyKey, "ticket.created", ct);
         return new CreateTicketResultDto(ticket.Id, created.ExternalId);

@@ -76,3 +76,15 @@ public interface IUserAdminService
     Task AssignRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default);
     Task RemoveRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default);
 }
+
+/// <summary>
+/// Tickets the portal holds that never reached the PSA: how many, which, and pushing them again.
+/// </summary>
+public interface ITicketResyncService
+{
+    /// <summary>Outstanding tickets, newest first, optionally for one connection.</summary>
+    Task<UnsyncedTicketsDto> ListAsync(Guid? connectionId = null, CancellationToken ct = default);
+
+    /// <summary>Re-attempts one ticket, rebuilding the request from current mappings and defaults.</summary>
+    Task<ResyncResultDto> ResyncAsync(Guid ticketId, CancellationToken ct = default);
+}

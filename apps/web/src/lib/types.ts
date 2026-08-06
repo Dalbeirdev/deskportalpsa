@@ -206,9 +206,15 @@ export const AuditEntrySchema = z.object({
 export type AuditEntry = z.infer<typeof AuditEntrySchema>;
 
 export const ProfileSchema = z.object({
-  displayName: z.string().nullable(),
-  email: z.string().nullable(),
-  clientCompanyId: z.string(),
+  /** "staff" (technician/manager/MSP admin) or "client" (portal user). */
+  kind: z.enum(['staff', 'client']),
+  displayName: z.string(),
+  email: z.string(),
+  roles: z.array(z.string()),
+  memberSince: z.string(),
+  companyName: z.string().nullable(),
   isCompanyAdministrator: z.boolean(),
+  /** Sign-in is IdP-bound: editing the contact email does not change login. */
+  signInManaged: z.boolean(),
 });
 export type Profile = z.infer<typeof ProfileSchema>;

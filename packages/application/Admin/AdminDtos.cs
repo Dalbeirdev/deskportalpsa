@@ -84,6 +84,24 @@ public sealed record ConnectionHealthDto(
     int FailedSyncEvents,
     string? LastError);
 
+/// <summary>A ticket the portal holds that never reached the PSA.</summary>
+public sealed record UnsyncedTicketDto(
+    Guid TicketId,
+    Guid PsaConnectionId,
+    string ConnectionName,
+    string Title,
+    string? CustomerName,
+    string SyncStatus,
+    string? SyncError,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? LastAttemptAt);
+
+/// <summary>How many are outstanding, and which they are.</summary>
+public sealed record UnsyncedTicketsDto(int Count, IReadOnlyList<UnsyncedTicketDto> Tickets);
+
+/// <summary>Outcome of a single resync attempt.</summary>
+public sealed record ResyncResultDto(bool Success, Guid TicketId, string? ExternalTicketId, string? Error);
+
 public sealed record UserSummary(Guid Id, string Email, string DisplayName, bool IsActive, IReadOnlyList<string> Roles);
 
 public sealed record ConnectionTestResultDto(bool Success, string? Message, double LatencyMs);
