@@ -1,6 +1,9 @@
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- Lets a PackageVersion entry override a version reached only transitively, which is how the
+         SQLitePCLRaw advisory below is remediated without forking EF Core's own dependency. -->
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup>
     <!-- Web / API -->
@@ -13,6 +16,17 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.0" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.0" />
+    <!--
+      Pinned above what EF Core 9.0.0 pulls in (2.1.10), which carries a High-severity advisory in
+      the bundled native SQLite (GHSA-2m69-gcr7-jv3q). 2.1.11 is still covered by it — only 2.1.12
+      clears the scan. Transitive pinning applies the bump everywhere the package is reached, so EF
+      Core itself stays on its tested version.
+      Drop this once the EF Core dependency references 2.1.12 or later on its own.
+    -->
+    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.12" />
+    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12" />
+    <PackageVersion Include="SQLitePCLRaw.core" Version="2.1.12" />
+    <PackageVersion Include="SQLitePCLRaw.provider.e_sqlite3" Version="2.1.12" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.2" />
     <!-- MediatR / validation -->
     <PackageVersion Include="MediatR" Version="12.4.1" />
