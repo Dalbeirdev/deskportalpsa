@@ -30,6 +30,26 @@ public sealed class DeskClaimsTransformation(DeskDbContext db) : Microsoft.AspNe
             .AsNoTracking()
             .Include(u => u.Roles)
             .SingleOrDefaultAsync(u => u.IdpSubject == subject && u.IsActive);
+
+        // First login for an invited user: no row carries this subject yet, but an active account
+        // created by an admin is waiting on the token's VERIFIED email. Bind the subject now, once —
+        // afterwards resolution is by subject alone, so a later email change cannot re-bind.
+        if (user is null)
+        {
+            var email = principal.FindFirstValue(ClaimTypes.Email) ?? principal.FindFirstValue("email");
+            if (!string.IsNullOrEmpty(email))
+            {
+                var invited = await db.AppUsers
+                    .Include(u => u.Roles)
+                    .SingleOrDefaultAsync(u => u.IdpSubject == null && u.IsActive && u.Email.ToLower() == email.ToLower());
+                if (invited is not null)
+                {
+                    invited.IdpSubject = subject;
+                    await db.SaveChangesAsync();
+                    user = invited;
+                }
+            }
+        }
         if (user is null)
             return principal;
 

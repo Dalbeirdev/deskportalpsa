@@ -219,4 +219,28 @@ public sealed class AdminReadController(
     [HttpGet("users")]
     [RequirePermission(Permissions.UsersManage)]
     public async Task<IActionResult> Users(CancellationToken ct) => Ok(await users.ListAsync(ct));
+
+    [HttpGet("roles")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> StaffRoles(CancellationToken ct) => Ok(await users.StaffRolesAsync(ct));
+
+    [HttpPost("users")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> CreateUser([FromBody] CreateStaffUserInput input, CancellationToken ct)
+        => Ok(await users.CreateAsync(input, ct));
+
+    [HttpPut("users/{id:guid}/active")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> SetUserActive(Guid id, [FromBody] bool active, CancellationToken ct)
+    { await users.SetActiveAsync(id, active, ct); return NoContent(); }
+
+    [HttpPost("users/{id:guid}/roles/{roleId:guid}")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> AssignRole(Guid id, Guid roleId, CancellationToken ct)
+    { await users.AssignRoleAsync(id, roleId, ct); return NoContent(); }
+
+    [HttpDelete("users/{id:guid}/roles/{roleId:guid}")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> RemoveRole(Guid id, Guid roleId, CancellationToken ct)
+    { await users.RemoveRoleAsync(id, roleId, ct); return NoContent(); }
 }

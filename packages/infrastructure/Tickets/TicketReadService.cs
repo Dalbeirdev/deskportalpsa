@@ -30,9 +30,33 @@ public sealed class TicketReadService(DeskDbContext db) : ITicketReadService
                 db.PsaConnections.Where(p => p.Id == t.PsaConnectionId).Select(p => p.Name).FirstOrDefault()))
             .ToListAsync(ct);
 
-    public async Task<TicketDetailDto?> GetDetailAsync(ClientAccess access, Guid ticketId, CancellationToken ct = default)
+    /// <summary>
+    /// Every ticket the tenant holds, across all connections and companies — the STAFF list. The
+    /// client-scoped list above shows one company's tickets; an MSP admin looking at that saw only
+    /// whichever company their login happened to be bound to, and concluded a whole PSA was missing.
+    /// Callers gate this on TicketsViewAll; the tenant filter on the DbContext bounds it to the org.
+    /// </summary>
+    public async Task<IReadOnlyList<TicketListItem>> ListAllAsync(CancellationToken ct = default)
+        => await db.Tickets
+            .AsNoTracking()
+            .OrderByDescending(t => t.CreatedAt)
+            .Select(t => new TicketListItem(
+                t.Id, t.ExternalTicketId, t.Provider, t.Title, t.PortalStatus, t.PortalPriority,
+                t.QueueOrBoard, t.CreatedAt, t.LastSyncedAt,
+                db.ClientCompanies.Where(c => c.Id == t.ClientCompanyId).Select(c => c.Name).FirstOrDefault(),
+                db.PsaConnections.Where(p => p.Id == t.PsaConnectionId).Select(p => p.Name).FirstOrDefault()))
+            .ToListAsync(ct);
+
+    public Task<TicketDetailDto?> GetDetailAsync(ClientAccess access, Guid ticketId, CancellationToken ct = default)
+        => DetailAsync(t => Visible(access), ticketId, ct);
+
+    /// <summary>Staff detail: any ticket in the tenant. Gate on TicketsViewAll.</summary>
+    public Task<TicketDetailDto?> GetDetailForStaffAsync(Guid ticketId, CancellationToken ct = default)
+        => DetailAsync(_ => db.Tickets, ticketId, ct);
+
+    private async Task<TicketDetailDto?> DetailAsync(Func<object?, IQueryable<Ticket>> scope, Guid ticketId, CancellationToken ct)
     {
-        var ticket = await Visible(access)
+        var ticket = await scope(null)
             .AsNoTracking()
             .Include(t => t.Notes)
             .Include(t => t.Attachments)

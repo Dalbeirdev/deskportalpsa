@@ -157,6 +157,43 @@ public sealed class TicketCommandService(
         return new TicketNoteDto(note.Id, note.AuthorName, true, note.Body, note.NoteCreatedAt);
     }
 
+    /// <summary>
+    /// A technician reply from the staff dashboard. Same provider push and echo bookkeeping as a
+    /// client comment; only the attribution differs — the staff display name, never a client flag.
+    /// </summary>
+    public async Task<TicketNoteDto> AddStaffCommentAsync(string authorName, Guid ticketId, string body, CancellationToken ct = default)
+    {
+        var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.Id == ticketId, ct)
+            ?? throw new NotFoundException("Ticket");
+        if (string.IsNullOrEmpty(ticket.ExternalTicketId))
+            throw new ValidationFailedException("This ticket is not yet synced to the PSA, so a reply cannot be posted.");
+
+        var idempotencyKey = Guid.NewGuid().ToString("N");
+        var connector = await connectors.ResolveAsync(ticket.PsaConnectionId, ct);
+        var result = await connector.AddPublicNoteAsync(
+            ticket.ExternalTicketId, new UnifiedTicketNoteCreateRequest(body, IsPublic: true, idempotencyKey), ct);
+        if (!result.Success)
+            throw new ValidationFailedException(result.Error ?? "The PSA rejected the comment.");
+
+        var note = new TicketNote
+        {
+            MspOrganizationId = ticket.MspOrganizationId,
+            TicketId = ticket.Id,
+            ExternalNoteId = result.ExternalId,
+            AuthorName = authorName,
+            AuthoredByClient = false,
+            Body = body,
+            IsPublic = true,
+            NoteCreatedAt = clock.GetUtcNow(),
+            OriginCorrelationId = ticket.CorrelationId,
+        };
+        db.TicketNotes.Add(note);
+        await db.SaveChangesAsync(ct);
+
+        await RecordPortalEventAsync(ticket.MspOrganizationId, ticket.PsaConnectionId, ticket, idempotencyKey, "note.created", ct);
+        return new TicketNoteDto(note.Id, note.AuthorName, false, note.Body, note.NoteCreatedAt);
+    }
+
     private async Task<List<FieldMapping>> LoadRulesAsync(Guid org, ProviderType provider, CancellationToken ct)
         => await db.FieldMappings.AsNoTracking()
             .Where(m => m.Provider == provider && m.IsActive)

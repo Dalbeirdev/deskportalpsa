@@ -182,6 +182,16 @@ export const api = {
   deleteMapping: (ruleId: string) =>
     request(`/api/admin/mappings/${ruleId}`, z.unknown(), { method: 'DELETE' }),
   health: () => request('/api/admin/health', z.array(HealthSchema)) as Promise<Health[]>,
+  staffUsers: () => request('/api/admin/users', z.array(StaffUserSchema)),
+  staffRoles: () => request('/api/admin/roles', z.array(RoleOptionSchema)),
+  createStaffUser: (body: { displayName: string; email: string; roleIds: string[] }) =>
+    request('/api/admin/users', StaffUserSchema, { method: 'POST', body: JSON.stringify(body) }),
+  setUserActive: (id: string, active: boolean) =>
+    request(`/api/admin/users/${id}/active`, z.undefined(), { method: 'PUT', body: JSON.stringify(active) }),
+  assignUserRole: (id: string, roleId: string) =>
+    request(`/api/admin/users/${id}/roles/${roleId}`, z.undefined(), { method: 'POST' }),
+  removeUserRole: (id: string, roleId: string) =>
+    request(`/api/admin/users/${id}/roles/${roleId}`, z.undefined(), { method: 'DELETE' }),
   unsyncedTickets: (connectionId?: string) =>
     request(`/api/admin/tickets/unsynced${connectionId ? `?connectionId=${connectionId}` : ''}`, UnsyncedTicketsSchema),
   resyncTicket: (ticketId: string) =>
@@ -362,6 +372,18 @@ const AssigneeOptionsSchema = z.object({
   })),
 });
 export type AssigneeOptions = z.infer<typeof AssigneeOptionsSchema>;
+
+const RoleOptionSchema = z.object({ id: z.string(), name: z.string() });
+const StaffUserSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  displayName: z.string(),
+  isActive: z.boolean(),
+  signInLinked: z.boolean(),
+  roles: z.array(RoleOptionSchema),
+});
+export type StaffUser = z.infer<typeof StaffUserSchema>;
+export type RoleOption = z.infer<typeof RoleOptionSchema>;
 
 const UnsyncedTicketSchema = z.object({
   ticketId: z.string(),

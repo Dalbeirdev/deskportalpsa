@@ -102,7 +102,18 @@ public sealed record UnsyncedTicketsDto(int Count, IReadOnlyList<UnsyncedTicketD
 /// <summary>Outcome of a single resync attempt.</summary>
 public sealed record ResyncResultDto(bool Success, Guid TicketId, string? ExternalTicketId, string? Error);
 
-public sealed record UserSummary(Guid Id, string Email, string DisplayName, bool IsActive, IReadOnlyList<string> Roles);
+/// <summary>A role a staff user can hold, by id (for assignment) and name (for display).</summary>
+public sealed record RoleOptionDto(Guid Id, string Name);
+
+/// <summary>
+/// SignInLinked distinguishes "can log in today" from "invited, binds on first login": a created
+/// user has no IdP subject until they first sign in and their verified email matches.
+/// </summary>
+public sealed record UserSummary(
+    Guid Id, string Email, string DisplayName, bool IsActive, bool SignInLinked,
+    IReadOnlyList<RoleOptionDto> Roles);
+
+public sealed record CreateStaffUserInput(string DisplayName, string Email, IReadOnlyList<Guid> RoleIds);
 
 public sealed record ConnectionTestResultDto(bool Success, string? Message, double LatencyMs);
 
