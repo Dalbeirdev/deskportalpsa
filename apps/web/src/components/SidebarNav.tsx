@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, Ticket, Plug, Bell, User, BarChart3, Activity, ListChecks, ShieldCheck,
-  SlidersHorizontal, HardDrive, Rocket, type LucideIcon,
+  SlidersHorizontal, HardDrive, Rocket, Users, type LucideIcon,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 
@@ -41,6 +41,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
   {
     label: 'Management',
     items: [
+      { href: '/dashboard/users', label: 'Users', icon: Users, permissions: ['users.manage'] },
       { href: '/dashboard/jobs', label: 'Background Jobs', icon: ListChecks, permissions: ['jobs.manage'] },
       { href: '/dashboard/audit', label: 'Audit Log', icon: ShieldCheck, permissions: ['audit.view'] },
       { href: '/dashboard/notifications', label: 'Notifications', icon: Bell },

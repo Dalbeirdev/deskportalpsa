@@ -80,7 +80,7 @@ public class SecurityIsolationTests
 
         var (db, tenant) = store.Tenant(OrgA);
         var audit = new AuditWriter(db, new TestCurrentUser(OrgA), tenant, new TestClock());
-        var users = await new UserAdminService(db, audit, tenant).ListAsync();
+        var users = await new UserAdminService(db, audit, tenant, new TestCurrentUser(OrgA)).ListAsync();
 
         users.Should().ContainSingle().Which.DisplayName.Should().Be("A User");
     }

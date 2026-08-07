@@ -69,8 +69,13 @@ public sealed class AuditQueryService(DeskDbContext db, ITenantContext tenant) :
     }
 }
 
-public sealed class UserAdminService(DeskDbContext db, IAuditWriter audit, ITenantContext tenant) : IUserAdminService
+public sealed class UserAdminService(DeskDbContext db, IAuditWriter audit, ITenantContext tenant, ICurrentUser currentUser) : IUserAdminService
 {
+    // Only roles this page may hand out. Client roles belong to client-user management; the
+    // platform role is cross-tenant and must never be assignable from inside a tenant.
+    private static readonly RoleType[] StaffRoleTypes =
+        [RoleType.MspAdministrator, RoleType.Manager, RoleType.Technician, RoleType.Auditor];
+
     public async Task<IReadOnlyList<UserSummary>> ListAsync(CancellationToken ct = default)
     {
         // AppUser is not tenant-filtered by the DbContext, so scope to the caller's org explicitly.
@@ -82,8 +87,78 @@ public sealed class UserAdminService(DeskDbContext db, IAuditWriter audit, ITena
             .ToDictionaryAsync(r => r.Id, r => r.Name, ct);
 
         return users.Select(u => new UserSummary(
-            u.Id, u.Email, u.DisplayName, u.IsActive,
-            u.Roles.Select(r => roleNames.GetValueOrDefault(r.RoleId, "?")).ToList())).ToList();
+            u.Id, u.Email, u.DisplayName, u.IsActive, u.IdpSubject != null,
+            u.Roles.Select(r => new RoleOptionDto(r.RoleId, roleNames.GetValueOrDefault(r.RoleId, "?"))).ToList())).ToList();
+    }
+
+    public async Task<IReadOnlyList<RoleOptionDto>> StaffRolesAsync(CancellationToken ct = default)
+        => await db.Roles.AsNoTracking()
+            .Where(r => r.BuiltInType != null && StaffRoleTypes.Contains(r.BuiltInType.Value))
+            .OrderBy(r => r.BuiltInType)
+            .Select(r => new RoleOptionDto(r.Id, r.Name))
+            .ToListAsync(ct);
+
+    public async Task<UserSummary> CreateAsync(CreateStaffUserInput input, CancellationToken ct = default)
+    {
+        var displayName = input.DisplayName.Trim();
+        var email = input.Email.Trim();
+        if (displayName.Length is < 2 or > 120)
+            throw new ValidationFailedException("Display name must be between 2 and 120 characters.");
+        if (email.Length > 254 || !email.Contains('@') || email.StartsWith('@') || email.EndsWith('@'))
+            throw new ValidationFailedException("That does not look like an email address.");
+        if (input.RoleIds.Count == 0)
+            throw new ValidationFailedException("Pick at least one role — a user with none can do nothing.");
+
+        // The email is the sign-in binding key, so a duplicate would make the binding ambiguous.
+        var emailTaken = await db.AppUsers.AnyAsync(u =>
+            u.MspOrganizationId == tenant.OrganizationId && u.Email.ToLower() == email.ToLower(), ct);
+        if (emailTaken)
+            throw new ValidationFailedException("A user with that email already exists.");
+
+        var validRoles = await db.Roles
+            .Where(r => input.RoleIds.Contains(r.Id)
+                        && r.BuiltInType != null && StaffRoleTypes.Contains(r.BuiltInType.Value))
+            .Select(r => new RoleOptionDto(r.Id, r.Name))
+            .ToListAsync(ct);
+        if (validRoles.Count != input.RoleIds.Distinct().Count())
+            throw new ValidationFailedException("One of those roles cannot be assigned to staff.");
+
+        var user = new Desk.Domain.Identity.AppUser
+        {
+            MspOrganizationId = tenant.OrganizationId,
+            DisplayName = displayName,
+            Email = email,
+            // Deliberately null: sign-in is IdP-managed, and the subject arrives the first time
+            // this person logs in with a token whose verified email matches. Until then the row is
+            // an invitation, and the UI says so.
+            IdpSubject = null,
+            IsActive = true,
+        };
+        foreach (var role in validRoles)
+            user.Roles.Add(new Desk.Domain.Identity.UserRole { RoleId = role.Id });
+        db.AppUsers.Add(user);
+        await db.SaveChangesAsync(ct);
+
+        await audit.WriteAsync("user.created", "AppUser", user.Id.ToString(),
+            new { displayName, email, roles = validRoles.Select(r => r.Name) }, ct);
+        return new UserSummary(user.Id, email, displayName, true, false, validRoles);
+    }
+
+    public async Task SetActiveAsync(Guid userId, bool active, CancellationToken ct = default)
+    {
+        var user = await db.AppUsers.FirstOrDefaultAsync(
+            u => u.Id == userId && u.MspOrganizationId == tenant.OrganizationId, ct)
+            ?? throw new NotFoundException("User");
+
+        // Locking yourself out is never what was meant, and in the worst case removes the last
+        // person able to undo it.
+        if (!active && user.IdpSubject == currentUser.Subject)
+            throw new ValidationFailedException("You cannot deactivate your own account.");
+
+        user.IsActive = active;
+        await db.SaveChangesAsync(ct);
+        await audit.WriteAsync(active ? "user.activated" : "user.deactivated", "AppUser", user.Id.ToString(),
+            new { user.Email }, ct);
     }
 
     public async Task AssignRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default)

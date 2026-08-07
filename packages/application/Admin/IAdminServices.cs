@@ -73,6 +73,16 @@ public interface IAuditQueryService
 public interface IUserAdminService
 {
     Task<IReadOnlyList<UserSummary>> ListAsync(CancellationToken ct = default);
+
+    /// <summary>Staff roles only — the ones this page may hand out. Client and platform roles are excluded.</summary>
+    Task<IReadOnlyList<RoleOptionDto>> StaffRolesAsync(CancellationToken ct = default);
+
+    /// <summary>Creates a technician/manager/admin account. Sign-in binds on their first IdP login by email.</summary>
+    Task<UserSummary> CreateAsync(CreateStaffUserInput input, CancellationToken ct = default);
+
+    /// <summary>Activate or deactivate. Deactivating also unbinds nothing — reactivation restores access.</summary>
+    Task SetActiveAsync(Guid userId, bool active, CancellationToken ct = default);
+
     Task AssignRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default);
     Task RemoveRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default);
 }
