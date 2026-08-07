@@ -23,14 +23,23 @@ public sealed class TicketsController(
     ITicketReadService reads,
     ITicketCommandService commands) : ControllerBase
 {
+    /// <summary>
+    /// Staff with tickets.view.all see the whole tenant — every company, every connection. Client
+    /// users see their company's tickets. Staff-first: the local dev admin is both, and an admin
+    /// looking at one company's slice concluded an entire PSA was missing from the portal.
+    /// </summary>
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
-        => Ok(await reads.ListAsync(await AccessAsync(ct), ct));
+        => user.HasPermission(Permissions.TicketsViewAll)
+            ? Ok(await reads.ListAllAsync(ct))
+            : Ok(await reads.ListAsync(await AccessAsync(ct), ct));
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Detail(Guid id, CancellationToken ct)
     {
-        var detail = await reads.GetDetailAsync(await AccessAsync(ct), id, ct);
+        var detail = user.HasPermission(Permissions.TicketsViewAll)
+            ? await reads.GetDetailForStaffAsync(id, ct)
+            : await reads.GetDetailAsync(await AccessAsync(ct), id, ct);
         return detail is null ? NotFound() : Ok(detail);
     }
 
@@ -43,10 +52,26 @@ public sealed class TicketsController(
         return CreatedAtAction(nameof(Detail), new { id = result.Id }, result);
     }
 
+    /// <summary>
+    /// A client replies to their own company's tickets; staff with view-all reply to any ticket in
+    /// the tenant, attributed as a technician. Client-scoped resolution is tried FIRST so the dual
+    /// dev identity still posts as the client on its own company's tickets.
+    /// </summary>
     [HttpPost("{id:guid}/comments")]
     [RequirePermission(Permissions.TicketsAddPublicNote)]
     public async Task<IActionResult> Comment(Guid id, [FromBody] AddCommentRequest req, CancellationToken ct)
-        => Ok(await commands.AddCommentAsync(await AccessAsync(ct), id, req.Body, ct));
+    {
+        var access = await accessResolver.ResolveAsync(user.Subject ?? "", ct);
+        if (access is not null)
+        {
+            try { return Ok(await commands.AddCommentAsync(access, id, req.Body, ct)); }
+            catch (NotFoundException) when (user.HasPermission(Permissions.TicketsViewAll))
+            { /* not their company's ticket — fall through to the staff path */ }
+        }
+        if (!user.HasPermission(Permissions.TicketsViewAll))
+            throw new ForbiddenException("This endpoint is for client portal users.");
+        return Ok(await commands.AddStaffCommentAsync(user.DisplayName ?? user.Email ?? "Staff", id, req.Body, ct));
+    }
 
     // Resolves the client identity or refuses the request — staff use the dashboard endpoints instead.
     private async Task<ClientAccess> AccessAsync(CancellationToken ct)
