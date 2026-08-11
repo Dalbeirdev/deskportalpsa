@@ -12,6 +12,10 @@ builder.Services.AddSerilog(cfg => cfg
 
 builder.Services.AddDeskInfrastructure(builder.Configuration);
 
+// A background process has no HTTP request to derive a caller from; audit rows it produces are
+// attributed to the system. Registered here, not in shared DI, so the API keeps its real resolver.
+builder.Services.AddScoped<Desk.Application.Abstractions.ICurrentUser, SystemCurrentUser>();
+
 // Job handlers
 builder.Services.AddScoped<IJobHandler, InboundEventJobHandler>();
 

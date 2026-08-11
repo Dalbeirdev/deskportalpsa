@@ -1,84 +1,85 @@
-using Desk.Application.Connectors;
+using Desk.Application.Sync;
 using Desk.Domain.Enums;
 using Desk.Infrastructure.Persistence;
 using Desk.Infrastructure.Tenancy;
-using Desk.PsaCore.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace Desk.Worker;
 
 /// <summary>
-/// Scheduled reconciliation poller. For each enabled connection it fetches tickets modified since
-/// the last successful sync (incremental via the provider cursor) — the safety net that catches
-/// anything missed by webhooks. Phase 3 wires the framework (resolve connector, page, update health);
-/// normalization + persistence of the fetched tickets is the Phase-4 sync engine.
+/// Scheduled reconciliation: runs the full inbound sync for every enabled connection on an
+/// interval, so provider-side changes reach the portal without anyone pressing a button.
+///
+/// This service predated the sync engine and used to fetch modified tickets and DISCARD them —
+/// while still stamping the connection Healthy. Every capability the engine gained (notes,
+/// attachments, time totals, deletion reconciliation, assignee names) therefore only ran on a
+/// manual sync. It now delegates to the same <see cref="IConnectionSyncRunner"/> the manual button
+/// uses, so the two paths cannot drift: whatever a manual sync does, the schedule does.
 /// </summary>
 public sealed class PollingSyncService(
     IServiceProvider services,
+    IConfiguration configuration,
     ILogger<PollingSyncService> logger) : BackgroundService
 {
-    private static readonly TimeSpan PollInterval = TimeSpan.FromMinutes(5);
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation("Polling sync service started; interval {Interval}m", PollInterval.TotalMinutes);
+        // Configurable so an MSP can trade freshness for provider API quota. Autotask meters
+        // requests per hour; five minutes is a sane default for both providers.
+        var interval = TimeSpan.FromMinutes(
+            Math.Max(0.1, configuration.GetValue("Sync:PollIntervalMinutes", 5.0)));
+        logger.LogInformation("Polling sync started; interval {Interval:0.#}m", interval.TotalMinutes);
 
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                await PollConnectionsAsync(stoppingToken);
+                await SyncAllConnectionsAsync(stoppingToken);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 logger.LogError(ex, "Polling cycle failed");
             }
 
-            await Task.Delay(PollInterval, stoppingToken);
+            try { await Task.Delay(interval, stoppingToken); }
+            catch (OperationCanceledException) { break; }
         }
     }
 
-    private async Task PollConnectionsAsync(CancellationToken ct)
+    private async Task SyncAllConnectionsAsync(CancellationToken ct)
     {
-        using var scope = services.CreateScope();
-        scope.ServiceProvider.GetRequiredService<TenantContext>().SetPlatformScope();
-
-        var db = scope.ServiceProvider.GetRequiredService<DeskDbContext>();
-        var resolver = scope.ServiceProvider.GetRequiredService<IConnectorResolver>();
-        var clock = scope.ServiceProvider.GetRequiredService<TimeProvider>();
-
-        var connections = await db.PsaConnections
-            .Where(c => c.IsEnabled && c.Status != ConnectionStatus.Failed)
-            .ToListAsync(ct);
-
-        foreach (var connection in connections)
+        // Connection ids are read in one short-lived scope; each connection then syncs in its own
+        // scope so one connection's failure (or a long run) cannot poison another's DbContext.
+        List<Guid> connectionIds;
+        using (var scope = services.CreateScope())
         {
-            try
-            {
-                var connector = await resolver.ResolveAsync(connection.Id, ct);
-                var filter = new TicketFilter
-                {
-                    ModifiedSince = connection.LastSuccessfulSyncAt,
-                    PageSize = connection.RateLimitPerMinute > 0 ? 100 : 50,
-                };
-
-                var page = await connector.GetTicketsAsync(filter, ct);
-                logger.LogInformation("Polled {Count} modified ticket(s) from {Connection}",
-                    page.Items.Count, connection.Name);
-
-                connection.LastHealthCheckAt = clock.GetUtcNow();
-                connection.Status = ConnectionStatus.Healthy;
-                connection.LastError = null;
-                // Persistence of normalized tickets is handled by the Phase-4 sync engine.
-            }
-            catch (Exception ex)
-            {
-                connection.Status = ConnectionStatus.Degraded;
-                connection.LastError = ex.Message;
-                logger.LogWarning(ex, "Polling failed for connection {Connection}", connection.Name);
-            }
+            scope.ServiceProvider.GetRequiredService<TenantContext>().SetPlatformScope();
+            var db = scope.ServiceProvider.GetRequiredService<DeskDbContext>();
+            connectionIds = await db.PsaConnections
+                .Where(c => c.IsEnabled && c.Status != ConnectionStatus.Failed)
+                .Select(c => c.Id)
+                .ToListAsync(ct);
         }
 
-        await db.SaveChangesAsync(ct);
+        foreach (var connectionId in connectionIds)
+        {
+            using var scope = services.CreateScope();
+            scope.ServiceProvider.GetRequiredService<TenantContext>().SetPlatformScope();
+            var runner = scope.ServiceProvider.GetRequiredService<IConnectionSyncRunner>();
+            try
+            {
+                var result = await runner.RunAsync(connectionId, full: false, ct);
+                if (result.Fetched + result.Notes + result.Attachments + result.AttachmentsRemoved + result.NotesRemoved > 0)
+                    logger.LogInformation(
+                        "Synced {Connection}: {Fetched} tickets ({Created} new, {Updated} updated), {Notes} notes (+{NotesRemoved} removed), {Files} files (+{FilesRemoved} removed)",
+                        connectionId, result.Fetched, result.Created, result.Updated,
+                        result.Notes, result.NotesRemoved, result.Attachments, result.AttachmentsRemoved);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // The runner already marked the connection Degraded with the reason; this log is
+                // for the operator reading worker output, not for state.
+                logger.LogWarning(ex, "Scheduled sync failed for connection {Connection}", connectionId);
+            }
+        }
     }
 }
