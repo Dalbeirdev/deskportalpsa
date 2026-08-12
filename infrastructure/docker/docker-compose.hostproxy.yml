@@ -1,0 +1,14 @@
+# Third exposure route: the Docker host's OWN web server (nginx/Apache) already holds
+# ports 80/443 for other sites. Publish web and Keycloak on localhost-only ports and let
+# that server proxy to them — the compose stack itself opens nothing to the outside.
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.hostproxy.yml \
+#     --env-file .env.prod up -d --build
+#
+# Pair with the vhost template in ../nginx/piomanage.conf. Do NOT also enable the
+# edge or tunnel profiles on this route.
+services:
+  web:
+    ports: ["127.0.0.1:${WEB_LOCAL_PORT:-3100}:3000"]
+  keycloak:
+    ports: ["127.0.0.1:${KEYCLOAK_LOCAL_PORT:-8181}:8081"]

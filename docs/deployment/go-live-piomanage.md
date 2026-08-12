@@ -15,6 +15,30 @@ shared server offers PHP only (no .NET, no Node, no Docker). You need one of:
   No open ports, no public IP, free; the trade-off is the portal is only up
   while that machine is.
 
+## Co-hosting route: a VPS whose nginx already serves other sites
+
+Used for the actual deployment: srv1830041.hstgr.cloud already serves
+piodeploy.com and piotask.com from nginx on 80/443, so the stack must not
+bring its own edge. The `docker-compose.hostproxy.yml` overlay publishes web
+on `127.0.0.1:3100` and Keycloak on `127.0.0.1:8181` (localhost only — the
+stack opens nothing public), and nginx proxies to them:
+
+```bash
+git clone https://github.com/Dalbeirdev/deskportalpsa.git /opt/deskportal && cd /opt/deskportal
+cp infrastructure/docker/.env.prod.example infrastructure/docker/.env.prod   # fill in
+docker compose -f infrastructure/docker/docker-compose.prod.yml \
+  -f infrastructure/docker/docker-compose.hostproxy.yml \
+  --env-file infrastructure/docker/.env.prod up -d --build
+cp infrastructure/nginx/piomanage.conf /etc/nginx/sites-available/piomanage
+ln -s /etc/nginx/sites-available/piomanage /etc/nginx/sites-enabled/piomanage
+nginx -t && systemctl reload nginx
+# once both A records resolve to this host:
+certbot --nginx -d piomanage.com -d auth.piomanage.com
+```
+
+Existing sites are untouched: only new vhost files are added, and certbot's
+`--nginx` edits are confined to the new server blocks.
+
 ## No-VPS route: this machine + Cloudflare Tunnel
 
 1. Create a free Cloudflare account and add `piomanage.com` as a site; change
