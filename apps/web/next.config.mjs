@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Self-contained server bundle for the Docker image: node_modules are traced in, so the runtime
+  // stage copies one folder instead of reinstalling dependencies.
+  output: 'standalone',
   reactStrictMode: true,
   poweredByHeader: false,
   async headers() {

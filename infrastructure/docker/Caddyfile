@@ -1,0 +1,12 @@
+# Caddy fronts everything and obtains/renews Let's Encrypt certificates automatically —
+# the only requirement is that both hostnames resolve to this machine before first start.
+
+{$PUBLIC_HOST} {
+	encode gzip
+	reverse_proxy web:3000
+}
+
+auth.{$PUBLIC_HOST} {
+	encode gzip
+	reverse_proxy keycloak:8081
+}

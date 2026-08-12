@@ -1,0 +1,117 @@
+# Desk Portal — the whole product on one Docker host, fronted by Caddy with automatic TLS.
+#
+#   cp infrastructure/docker/.env.prod.example infrastructure/docker/.env.prod   (fill it in)
+#   docker compose -f infrastructure/docker/docker-compose.prod.yml --env-file infrastructure/docker/.env.prod up -d --build
+#
+# Public hostnames (DNS A records must point at this host):
+#   ${PUBLIC_HOST}        -> web app (which proxies the API server-side)
+#   auth.${PUBLIC_HOST}   -> Keycloak (sign-in)
+#
+# Vault runs in dev mode here, which is acceptable for a TESTING deployment only: secrets are
+# real (PSA credentials) but the unseal story is not. Harden before customer data at scale.
+name: desk-portal-prod
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: desk_portal
+    volumes: ["desk_pg:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d desk_portal"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    # start (not start-dev): production mode behind Caddy, which terminates TLS.
+    command: ["start", "--import-realm", "--proxy-headers=xforwarded", "--http-enabled=true"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:?}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?}
+      KC_HOSTNAME: https://auth.${PUBLIC_HOST:?}
+      KC_HTTP_PORT: "8081"
+    volumes:
+      - ../keycloak:/opt/keycloak/data/import:ro
+    restart: unless-stopped
+
+  vault:
+    image: hashicorp/vault:1.18
+    cap_add: ["IPC_LOCK"]
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_TOKEN:?}
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+    restart: unless-stopped
+
+  api:
+    build: { context: ../.., dockerfile: apps/api/Dockerfile }
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: "Host=postgres;Database=desk_portal;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      RunMigrationsOnStartup: "true"
+      # Tokens are issued for the PUBLIC issuer URL, so validation must use it too. Keycloak is
+      # reached through Caddy on the public name — the containers resolve it via the proxy.
+      Keycloak__Authority: "https://auth.${PUBLIC_HOST}/realms/desk"
+      Vault__Address: "http://vault:8200"
+      Vault__Token: ${VAULT_TOKEN}
+      Attachments__StoragePath: /data/attachments
+      Attachments__SigningKey: ${ATTACHMENT_SIGNING_KEY:?}
+      Attachments__PublicBaseUrl: "https://${PUBLIC_HOST}"
+      Bootstrap__AdminEmail: ${BOOTSTRAP_ADMIN_EMAIL:?}
+      Bootstrap__AdminName: ${BOOTSTRAP_ADMIN_NAME:?}
+      Bootstrap__OrganizationName: ${BOOTSTRAP_ORG_NAME:?}
+      Bootstrap__OrganizationSlug: ${BOOTSTRAP_ORG_SLUG:?}
+      Connectors__BlockPrivateEgress: "true"
+    volumes: ["desk_attachments:/data/attachments"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: unless-stopped
+
+  worker:
+    build: { context: ../.., dockerfile: apps/worker/Dockerfile }
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      ConnectionStrings__Default: "Host=postgres;Database=desk_portal;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      Vault__Address: "http://vault:8200"
+      Vault__Token: ${VAULT_TOKEN}
+      Attachments__StoragePath: /data/attachments
+      Attachments__SigningKey: ${ATTACHMENT_SIGNING_KEY}
+      Attachments__PublicBaseUrl: "https://${PUBLIC_HOST}"
+      Sync__PollIntervalMinutes: ${SYNC_POLL_MINUTES:-5}
+    volumes: ["desk_attachments:/data/attachments"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: unless-stopped
+
+  web:
+    build: { context: ../.., dockerfile: apps/web/Dockerfile }
+    environment:
+      KEYCLOAK_ISSUER: "https://auth.${PUBLIC_HOST}/realms/desk"
+      KEYCLOAK_CLIENT_ID: desk-web
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-}
+      APP_URL: "https://${PUBLIC_HOST}"
+      DESK_API_BASE: "http://api:5080"
+    depends_on: [api]
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - desk_caddy_data:/data
+      - desk_caddy_config:/config
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST}
+    depends_on: [web, keycloak]
+    restart: unless-stopped
+
+volumes:
+  desk_pg:
+  desk_attachments:
+  desk_caddy_data:
+  desk_caddy_config:

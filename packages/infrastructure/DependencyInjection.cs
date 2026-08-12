@@ -114,17 +114,17 @@ public static class DependencyInjection
             PublicBaseUrl = config["Attachments:PublicBaseUrl"] ?? "http://localhost:5080",
         });
         services.AddSingleton(new AttachmentPolicy());
-        if (localMode)
-        {
-            // Disk-backed so files survive a restart, matching the SQLite DB and the file secret store.
-            var blobRoot = config.GetValue<string>("LocalMode:AttachmentsPath") ?? "desk-local-files";
+        // Disk-backed whenever a path is configured (a mounted volume in deployment), so attachment
+        // bytes survive restarts. In-memory is the last resort only — a portal that silently loses
+        // every file on redeploy is not a testing environment, it is a trap.
+        var blobRoot = localMode
+            ? config.GetValue<string>("LocalMode:AttachmentsPath") ?? "desk-local-files"
+            : config.GetValue<string>("Attachments:StoragePath");
+        if (!string.IsNullOrWhiteSpace(blobRoot))
             services.AddSingleton<IObjectStorage>(sp => new FileObjectStorage(
                 sp.GetRequiredService<AttachmentStorageOptions>(), sp.GetRequiredService<TimeProvider>(), blobRoot));
-        }
         else
-        {
             services.AddSingleton<IObjectStorage, InMemoryObjectStorage>();
-        }
         services.AddSingleton<IMalwareScanner, HeuristicMalwareScanner>();
         services.AddScoped<IAttachmentService, AttachmentService>();
 
