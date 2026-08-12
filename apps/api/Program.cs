@@ -132,6 +132,18 @@ else if (app.Environment.IsDevelopment() || config.GetValue("RunMigrationsOnStar
     var startupDb = startupScope.ServiceProvider.GetRequiredService<DeskDbContext>();
     await startupDb.Database.MigrateAsync();
     await DatabaseSeeder.SeedBuiltInRolesAsync(startupDb);
+
+    // First-admin bootstrap. A fresh non-local deployment has zero users, and sign-in binds an IdP
+    // subject to an existing row by email — so without this, no one can ever log in.
+    var bootstrapEmail = config["Bootstrap:AdminEmail"];
+    if (!string.IsNullOrWhiteSpace(bootstrapEmail))
+        await DatabaseSeeder.SeedBootstrapAdminAsync(
+            startupDb,
+            config["Bootstrap:OrganizationName"] ?? "MSP",
+            config["Bootstrap:OrganizationSlug"] ?? "msp",
+            bootstrapEmail,
+            config["Bootstrap:AdminName"] ?? bootstrapEmail);
+
     app.Logger.LogInformation("Database migrated and built-in roles seeded.");
 }
 

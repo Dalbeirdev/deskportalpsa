@@ -34,6 +34,47 @@ public static class DatabaseSeeder
         await db.SaveChangesAsync(ct);
     }
 
+    /// <summary>
+    /// Production bootstrap: the organization and its first MSP administrator, from configuration.
+    /// Without this a fresh deployment is a locked room — sign-in binds an IdP subject to an
+    /// EXISTING AppUser by email, so with zero rows nobody can ever get in. The admin is created
+    /// unlinked and binds on their first Keycloak login, exactly like an invited technician.
+    /// Idempotent: an existing user with the email (any casing) means nothing is written.
+    /// </summary>
+    public static async Task SeedBootstrapAdminAsync(
+        DeskDbContext db, string organizationName, string organizationSlug,
+        string adminEmail, string adminName, CancellationToken ct = default)
+    {
+        var email = adminEmail.Trim();
+        var exists = await db.AppUsers.IgnoreQueryFilters()
+            .AnyAsync(u => u.Email.ToLower() == email.ToLower(), ct);
+        if (exists) return;
+
+        var org = await db.MspOrganizations.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(o => o.Slug == organizationSlug, ct);
+        if (org is null)
+        {
+            org = new MspOrganization { Name = organizationName, Slug = organizationSlug };
+            db.MspOrganizations.Add(org);
+            await db.SaveChangesAsync(ct);
+        }
+
+        var user = new AppUser
+        {
+            MspOrganizationId = org.Id,
+            Email = email,
+            DisplayName = adminName.Trim(),
+            IdpSubject = null, // binds on first IdP login by verified email
+        };
+        db.AppUsers.Add(user);
+        await db.SaveChangesAsync(ct);
+
+        var mspAdmin = await db.Roles.IgnoreQueryFilters()
+            .FirstAsync(r => r.IsSystemRole && r.BuiltInType == RoleType.MspAdministrator, ct);
+        db.UserRoles.Add(new UserRole { AppUserId = user.Id, RoleId = mspAdmin.Id });
+        await db.SaveChangesAsync(ct);
+    }
+
     /// <summary>Local-mode subject the dev auto-login authenticates as.</summary>
     public const string DevAdminSubject = "dev-admin";
 
