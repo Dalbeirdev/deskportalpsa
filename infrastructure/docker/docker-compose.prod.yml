@@ -51,7 +51,7 @@ services:
     build: { context: ../.., dockerfile: apps/api/Dockerfile }
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__Default: "Host=postgres;Database=desk_portal;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      ConnectionStrings__Postgres: "Host=postgres;Database=desk_portal;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
       RunMigrationsOnStartup: "true"
       # Tokens are issued for the PUBLIC issuer URL, so validation must use it too. Keycloak is
       # reached through Caddy on the public name — the containers resolve it via the proxy.
@@ -75,7 +75,7 @@ services:
     build: { context: ../.., dockerfile: apps/worker/Dockerfile }
     environment:
       DOTNET_ENVIRONMENT: Production
-      ConnectionStrings__Default: "Host=postgres;Database=desk_portal;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      ConnectionStrings__Postgres: "Host=postgres;Database=desk_portal;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
       Vault__Address: "http://vault:8200"
       Vault__Token: ${VAULT_TOKEN}
       Attachments__StoragePath: /data/attachments
@@ -98,8 +98,21 @@ services:
     depends_on: [api]
     restart: unless-stopped
 
+  # Public exposure WITHOUT a VPS or open ports: a Cloudflare Tunnel running inside the compose
+  # network, reaching web/keycloak by service name. Enable with: --profile tunnel
+  # (requires TUNNEL_TOKEN from a remotely-managed tunnel; public-hostname routing lives in the
+  # Cloudflare dashboard: PUBLIC_HOST -> http://web:3000, auth.PUBLIC_HOST -> http://keycloak:8081).
+  # Caddy below is the alternative for a host with open 80/443 — use one or the other.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${TUNNEL_TOKEN:-}"]
+    depends_on: [web, keycloak]
+    restart: unless-stopped
+
   caddy:
     image: caddy:2-alpine
+    profiles: ["edge"]
     ports: ["80:80", "443:443"]
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro

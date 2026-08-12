@@ -7,12 +7,31 @@ certificates automatically.
 
 ## What the server must be
 
-**Hostinger shared hosting cannot run this** — the "All set to go" page you have
-today is shared hosting, which serves PHP/static files only. You need one of:
+**Hostinger shared hosting cannot run this** — verified directly over SSH: the
+shared server offers PHP only (no .NET, no Node, no Docker). You need one of:
 
-- a **Hostinger VPS** (KVM 1 is enough to start: 1 vCPU / 4 GB), or
-- any Linux box with Docker that is reachable from the internet on ports 80/443
-  (your own machine works if you forward those ports).
+- a **Hostinger VPS** (KVM 1 is enough to start: 1 vCPU / 4 GB) — cleanest, or
+- **any machine with Docker + a Cloudflare Tunnel** — including the dev PC.
+  No open ports, no public IP, free; the trade-off is the portal is only up
+  while that machine is.
+
+## No-VPS route: this machine + Cloudflare Tunnel
+
+1. Create a free Cloudflare account and add `piomanage.com` as a site; change
+   the domain's nameservers (at the registrar) to the pair Cloudflare shows.
+2. Zero Trust → Networks → Tunnels → *Create a tunnel* (Cloudflared). Copy the
+   **token**, put it in `.env.prod` as `TUNNEL_TOKEN`.
+3. In the tunnel's *Public hostnames* tab add two entries:
+   | Hostname | Service |
+   |---|---|
+   | `piomanage.com` | `http://web:3000` |
+   | `auth.piomanage.com` | `http://keycloak:8081` |
+4. Start the stack with the tunnel profile:
+   ```bash
+   docker compose -f infrastructure/docker/docker-compose.prod.yml      --env-file infrastructure/docker/.env.prod --profile tunnel up -d --build
+   ```
+Cloudflare terminates TLS; Caddy is not used on this route (it is the `edge`
+profile for hosts with open ports 80/443).
 
 ## One-time setup
 
