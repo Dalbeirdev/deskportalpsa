@@ -5,6 +5,7 @@ import { TimerProvider, TimerWidget } from '@/components/TimerProvider';
 import { NotificationsBell } from '@/components/NotificationsBell';
 import { FileText, Search, HelpCircle, ChevronLeft } from 'lucide-react';
 import { SidebarNav, MobileNav, StorageUsage } from '@/components/SidebarNav';
+import { BrandMark } from '@/components/BrandMark';
 
 
 
@@ -15,7 +16,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-screen">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)] p-4 md:flex">
         <div className="mb-6 flex items-center gap-2.5 px-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand font-bold text-brand-fg">D</div>
+          <BrandMark size={36} className="shrink-0 rounded-lg" />
           <div>
             <div className="font-semibold leading-tight">Desk Portal</div>
             <div className="text-[10px] text-[var(--muted)]">Multi-tenant PSA Portal</div>
