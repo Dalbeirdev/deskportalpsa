@@ -1,10 +1,9 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import {
-  ArrowRight, Ticket, RefreshCw, MessageSquare, Paperclip, CircleDot, Flag, UserCheck, Timer,
-  Trash2, BarChart3, Contact, CalendarClock, BadgeCheck, Building2, KeyRound, Vault,
-  ShieldCheck, Server, Lock, ScrollText, Fingerprint, Boxes, Mail, PhoneOff, Gauge, Eye,
-  Wrench, Users, Building, Headphones, Network, Play,
+  ArrowRight, Ticket, RefreshCw, MessageSquare, Paperclip, CircleDot, Bell, Wrench, Boxes,
+  ShieldCheck, Server, Lock, ScrollText, Fingerprint, Building2, Mail, PhoneOff, Gauge, Eye,
+  Users, Building, Headphones, Network, Play, ArrowDown,
 } from 'lucide-react';
 import { Shell, Band, SectionHead, FeatureCard, CapabilityTile, Step } from '@/components/marketing/blocks';
 import { Reveal } from '@/components/marketing/Reveal';
@@ -12,64 +11,60 @@ import { HeroStage } from '@/components/marketing/HeroStage';
 import { FlowRail } from '@/components/marketing/FlowRail';
 import { Compare } from '@/components/marketing/Compare';
 import { ProductTabs } from '@/components/marketing/ProductTabs';
-import { SyncLanes, IntegrationCards, IntegrationBadge } from '@/components/marketing/IntegrationSync';
+import { SyncLanes, IntegrationBadge } from '@/components/marketing/IntegrationSync';
+import { PsaEcosystem, PsaGrid, PsaStatusNote } from '@/components/marketing/PsaEcosystem';
 import { BrowserFrame, ProductScreen } from '@/components/marketing/ProductUI';
+import { PSA_PLATFORMS } from '@/lib/psaPlatforms';
 
 export const metadata: Metadata = {
-  title: 'Desk Portal — the client portal for Autotask and ConnectWise',
+  title: 'Desk Portal — one modern client portal for the PSA your MSP already runs',
   description:
-    'Give clients a modern way to raise tickets, reply, share files and track status, while your technicians keep working in Autotask or ConnectWise. Two-way sync, self-hosted, PSA stays the system of record.',
+    'Give clients a modern way to submit requests, follow updates and share files, while your technicians keep working in the PSA they already use. Multi-PSA by design.',
   openGraph: {
-    title: 'Desk Portal — the client portal for Autotask and ConnectWise',
+    title: 'Desk Portal — one modern client portal. Any PSA.',
     description:
-      'A modern client portal built around the PSA you already use. Two-way sync of tickets, replies, files and time.',
+      'A client experience platform that sits on top of your existing PSA. Two-way sync, multi-tenant, self-hosted.',
     type: 'website',
     siteName: 'Desk Portal',
   },
 };
 
 const FEATURES = [
-  { icon: Ticket, title: 'Ticket management', body: 'Clients raise requests in a form built for them, not a technician console. Every ticket lands on the board you nominate.' },
-  { icon: RefreshCw, title: 'Two-way synchronisation', body: 'Changes flow continuously in both directions, so the portal and the PSA never disagree about a ticket.' },
-  { icon: MessageSquare, title: 'Client conversations', body: 'One thread per ticket. Internal notes are filtered on the server and never reach a client.' },
-  { icon: Paperclip, title: 'Files and screenshots', body: 'Attachments upload from either side and arrive on the other, so evidence reaches the ticket instead of an inbox.' },
-  { icon: CircleDot, title: 'Ticket status', body: 'Portal statuses map to your own values, so a status means exactly what your board says it means.' },
-  { icon: Flag, title: 'Priority management', body: 'Priorities are mapped per connection and stay aligned whichever side changes them.' },
-  { icon: UserCheck, title: 'Technician assignment', body: 'Assign by role and by board, honouring the coverage your PSA already defines.' },
-  { icon: Timer, title: 'Time entries', body: 'Time logged in the portal reaches the PSA with the right work type and role, and time logged in the PSA comes back.' },
-  { icon: Trash2, title: 'Deletion reconciliation', body: 'A note or attachment withdrawn in the PSA disappears from the portal too, so clients never read something retracted.' },
-  { icon: BarChart3, title: 'SLA and reporting', body: 'Hours by ticket and technician, SLA compliance and resolution trends, drawn from the data your PSA already holds.' },
-  { icon: Contact, title: 'Client contacts', body: 'Client administrators manage their own people and who may raise or approve requests.' },
-  { icon: CalendarClock, title: 'Business hours and holidays', body: 'Each client keeps its own working calendar, so expectations match the agreement you actually signed.' },
-  { icon: BadgeCheck, title: 'Approvals', body: 'Named approvers and escalation levels per client account, configured by the client themselves.' },
-  { icon: Building2, title: 'Multi-tenant architecture', body: 'Every client company is isolated at the database level, not by a filter someone has to remember to write.' },
-  { icon: KeyRound, title: 'Identity provider and SSO', body: 'Sign-in is delegated to Keycloak, so password policy and multi-factor are governed where your other systems are.' },
-  { icon: Vault, title: 'Secure credential vault', body: 'PSA API keys live in a secrets vault, never in the database, and are never shown again after being entered.' },
+  { icon: Ticket, title: 'Client ticketing', body: 'A simple way for clients to submit and track support requests, in language written for them.' },
+  { icon: RefreshCw, title: 'Two-way sync', body: 'Client communication stays in step with your PSA, continuously and in both directions.' },
+  { icon: MessageSquare, title: 'Conversations', body: 'Support communication stays attached to the request. Internal notes remain internal.' },
+  { icon: Paperclip, title: 'File sharing', body: 'Clients share screenshots and documents that land on the request, not in an inbox.' },
+  { icon: CircleDot, title: 'Status visibility', body: 'Clear progress on every request, so nobody has to ask where something stands.' },
+  { icon: Bell, title: 'Notifications', body: 'Clients stay informed without a chain of forwarded emails.' },
+  { icon: Wrench, title: 'Technician workflow', body: 'Technicians carry on in the PSA they already use. Nothing new to learn or watch.' },
+  { icon: Boxes, title: 'Multi-PSA architecture', body: 'One client experience across different PSA platforms, built to add more.' },
 ];
 
 const BENEFITS = [
   { icon: Mail, title: 'Fewer inbound emails', body: 'Requests arrive in one place, in a shape your desk can act on immediately.' },
-  { icon: Eye, title: 'Clients can see for themselves', body: 'Status, priority and the latest reply are visible without anyone being asked.' },
-  { icon: Wrench, title: 'No workflow change for technicians', body: 'Nobody learns a second system. Work continues in Autotask or ConnectWise.' },
-  { icon: ShieldCheck, title: 'Your system of record is protected', body: 'The portal never becomes a second copy of the truth to reconcile.' },
-  { icon: PhoneOff, title: 'Less repetitive chasing', body: '“Any update?” is answered by the portal rather than by a technician.' },
-  { icon: Gauge, title: 'A support experience clients notice', body: 'A professional portal is a visible difference at renewal time.' },
+  { icon: Eye, title: 'Clients can see for themselves', body: 'Progress and responses are visible without anyone being asked.' },
+  { icon: Wrench, title: 'No workflow change', body: 'Your team keeps its PSA, its boards and its habits.' },
+  { icon: ShieldCheck, title: 'Your system of record is safe', body: 'The portal never becomes a second version of the truth.' },
+  { icon: PhoneOff, title: 'Less chasing', body: '“Any update?” is answered by the portal, not by a technician.' },
+  { icon: Gauge, title: 'An experience clients notice', body: 'A professional support portal is a visible difference at renewal.' },
 ];
 
 const SECURITY = [
-  { icon: Building2, title: 'Multi-tenant isolation', body: 'Enforced on every query at the database level, and covered by tests written to try to break it.' },
-  { icon: Fingerprint, title: 'Identity provider integration', body: 'Keycloak handles sign-in, so SSO and multi-factor are configured once, centrally.' },
-  { icon: Vault, title: 'Credentials in a vault', body: 'PSA API keys never touch the application database and are never returned by the API.' },
-  { icon: ScrollText, title: 'Append-only audit log', body: 'Administrative actions are recorded with the actor and a correlation id, and cannot be edited or deleted.' },
-  { icon: Lock, title: 'Role-based access', body: 'Administrators, managers, technicians, auditors and client users each see only their own slice.' },
-  { icon: Server, title: 'Your infrastructure', body: 'Self-host the whole stack on a machine you control. Client data need not sit with a vendor.' },
+  { icon: Building2, title: 'Multi-tenant architecture', body: 'Each client company is isolated from every other, enforced on every request.' },
+  { icon: Lock, title: 'Role-based access', body: 'Administrators, managers, technicians and client users each see only their own view.' },
+  { icon: Fingerprint, title: 'SSO and MFA', body: 'Sign-in runs through your identity provider, so existing policy applies unchanged.' },
+  { icon: ScrollText, title: 'Audit logging', body: 'Administrative activity is recorded and cannot be quietly altered afterwards.' },
+  { icon: ShieldCheck, title: 'Secure credentials', body: 'PSA credentials are held in a secrets vault, never in the application database.' },
+  { icon: Server, title: 'Deploy where you choose', body: 'Self-host the platform on infrastructure you control.' },
 ];
 
 const USE_CASES = [
-  { icon: Network, title: 'Managed service providers', body: 'Running Autotask or ConnectWise for many client companies at once.' },
-  { icon: Headphones, title: 'IT support companies', body: 'Fielding requests from clients who should not need a PSA login.' },
-  { icon: Building, title: 'Internal IT teams', body: 'Serving departments or sites that each need their own view.' },
-  { icon: Users, title: 'Help desk teams', body: 'Wanting one front door instead of an inbox, a phone and a chat window.' },
+  { icon: Network, title: 'MSPs', body: 'Deliver a professional client experience without changing your PSA.' },
+  { icon: Building, title: 'Growing IT service providers', body: 'Standardise client communication across every customer you serve.' },
+  { icon: Boxes, title: 'Multi-PSA MSPs', body: 'One consistent client experience across different PSA environments.' },
+  { icon: Headphones, title: 'IT support teams', body: 'Cut repetitive status requests and the chasing that comes with them.' },
+  { icon: Users, title: 'Help desk teams', body: 'One front door instead of an inbox, a phone line and a chat window.' },
+  { icon: Wrench, title: 'Service delivery leads', body: 'Keep technicians focused on resolving work rather than reporting on it.' },
 ];
 
 export default function HomePage() {
@@ -95,16 +90,16 @@ export default function HomePage() {
               className="dp-rise mt-5 text-[2.4rem] font-semibold leading-[1.06] tracking-tight sm:text-[3.1rem]"
               style={{ animationDelay: '80ms' }}
             >
-              The client portal built around the PSA{' '}
-              <span className="text-brand dark:text-brand-soft">you already use.</span>
+              The client portal that works with{' '}
+              <span className="text-brand dark:text-brand-soft">your PSA.</span>
             </h1>
             <p
               className="dp-rise mt-5 max-w-xl text-[17px] leading-relaxed text-[var(--muted)]"
               style={{ animationDelay: '150ms' }}
             >
-              Give clients a simple way to submit tickets, reply, share files and track status —
-              while your technicians carry on working inside Autotask or ConnectWise. Nothing is
-              migrated, and your PSA stays the system of record.
+              Give clients a modern way to submit requests, follow updates, share files and talk to
+              your support team — while your technicians continue working in the PSA they already
+              use. You should not have to replace your PSA to improve the client experience.
             </p>
             <div className="dp-rise mt-8 flex flex-wrap gap-3" style={{ animationDelay: '220ms' }}>
               <Link
@@ -114,14 +109,14 @@ export default function HomePage() {
                 Book a demo <ArrowRight size={15} aria-hidden="true" />
               </Link>
               <Link
-                href="#how-it-works"
+                href="#integrations"
                 className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-6 py-3.5 text-sm font-medium transition-transform hover:-translate-y-0.5"
               >
-                <Play size={14} aria-hidden="true" /> See how it works
+                <Play size={14} aria-hidden="true" /> Explore integrations
               </Link>
             </div>
             <p className="dp-rise mt-5 text-[12.5px] text-[var(--faint)]" style={{ animationDelay: '280ms' }}>
-              Self-hosted · your data stays on your infrastructure
+              {PSA_PLATFORMS.length} PSA platforms · self-hosted · your PSA stays the system of record
             </p>
           </div>
 
@@ -131,12 +126,26 @@ export default function HomePage() {
         </Shell>
       </section>
 
+      <Band id="integrations" tone="raised">
+        <Shell>
+          <SectionHead
+            eyebrow="Integrations"
+            title="Works with the tools your MSP already uses."
+            lead="You should not have to replace your PSA to deliver a better client experience. Desk Portal sits on top of the workflow your team already runs."
+            align="center"
+          />
+          <Reveal delay={80} className="mt-12"><PsaEcosystem /></Reveal>
+          <Reveal delay={120} className="mt-10 hidden lg:block"><PsaGrid /></Reveal>
+          <Reveal delay={160} className="mx-auto max-w-3xl text-center"><PsaStatusNote /></Reveal>
+        </Shell>
+      </Band>
+
       <Band>
         <Shell>
           <SectionHead
             eyebrow="The gap"
             title={<>Your PSA works for your technicians. <span className="text-[var(--muted)]">Does it work for your clients?</span></>}
-            lead="A PSA is built for the people who resolve tickets. Handing that interface to a client — or leaving them on email — is where visibility disappears."
+            lead="A PSA is built for the people who resolve work. Handing that interface to a client — or leaving them on email — is where visibility disappears."
           />
           <Reveal delay={80} className="mt-10"><Compare /></Reveal>
         </Shell>
@@ -147,15 +156,16 @@ export default function HomePage() {
           <SectionHead
             eyebrow="How it works"
             title="One request. Two experiences. One system of record."
-            lead="The client gets a portal. The technician keeps the PSA. Desk Portal keeps the two in step, continuously and in both directions."
+            lead="The client gets a portal. The technician keeps the PSA. Desk Portal keeps the two in step."
             align="center"
           />
           <Reveal delay={80} className="mt-12"><FlowRail /></Reveal>
 
-          <div className="mt-12 grid gap-5 sm:grid-cols-3">
-            <Reveal><Step n="01" title="Connect">Add your Autotask or ConnectWise credentials once. Boards, queues, statuses and work types are discovered from your instance.</Step></Reveal>
-            <Reveal delay={80}><Step n="02" title="Configure">Map statuses and priorities to your own language, choose default boards, and set who may see and do what.</Step></Reveal>
-            <Reveal delay={160}><Step n="03" title="Launch">Invite technicians and clients. They sign in through your identity provider — no separate password to manage.</Step></Reveal>
+          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <Reveal><Step n="01" title="Choose your PSA">Connect Desk Portal to the PSA your MSP already runs.</Step></Reveal>
+            <Reveal delay={70}><Step n="02" title="Configure the experience">Decide what clients see, how statuses read, and who may do what.</Step></Reveal>
+            <Reveal delay={140}><Step n="03" title="Invite your clients">Give each client access to their own support experience.</Step></Reveal>
+            <Reveal delay={210}><Step n="04" title="Start working">Clients use the portal. Technicians carry on in the PSA.</Step></Reveal>
           </div>
         </Shell>
       </Band>
@@ -165,7 +175,7 @@ export default function HomePage() {
           <SectionHead
             eyebrow="The product"
             title="See Desk Portal in action"
-            lead="Every screen below is the real interface. Move between them to see what your clients, your technicians and your administrators each work with."
+            lead="A look at the client experience: requests, conversation, shared files, progress, and the sync that keeps your PSA current."
           />
           <Reveal delay={80} className="mt-10"><ProductTabs /></Reveal>
         </Shell>
@@ -177,15 +187,15 @@ export default function HomePage() {
             <SectionHead
               eyebrow="For your clients"
               title="Make IT support feel simple."
-              lead="No PSA login, no training, no wondering where a request went. A client raises it, watches it move, and replies without leaving the page."
+              lead="No PSA login, no training, no wondering where a request went."
             />
             <ol className="mt-8 space-y-4">
               {[
                 'Submit a request in a form written for them, not for a technician.',
                 'Attach the screenshot that explains it in one drag.',
-                'Watch status, priority and assignment change in real time.',
-                'Reply in the same thread the technician is already using.',
-                'See the time logged against the work, if you choose to show it.',
+                'Follow progress without asking anyone for an update.',
+                'Reply in the same thread your team is already using.',
+                'Get told when something changes, without an email chain.',
               ].map((t, i) => (
                 <Reveal key={t} delay={i * 60}>
                   <li className="flex gap-3 text-[14.5px] leading-relaxed text-[var(--muted)]">
@@ -199,7 +209,7 @@ export default function HomePage() {
             </ol>
           </div>
           <Reveal delay={100}>
-            <BrowserFrame url="portal.yourmsp.com/acme"><ProductScreen view="client" /></BrowserFrame>
+            <BrowserFrame><ProductScreen view="requests" /></BrowserFrame>
           </Reveal>
         </Shell>
       </Band>
@@ -207,41 +217,39 @@ export default function HomePage() {
       <Band>
         <Shell className="grid items-center gap-12 lg:grid-cols-2">
           <Reveal className="order-2 lg:order-1">
-            <BrowserFrame url="portal.yourmsp.com/tickets/10482"><ProductScreen view="conversation" /></BrowserFrame>
+            <BrowserFrame url="Connected PSA"><ProductScreen view="sync" /></BrowserFrame>
           </Reveal>
           <div className="order-1 lg:order-2">
             <SectionHead
               eyebrow="For your technicians"
               title="Technicians keep working where they already work."
-              lead="Nobody is asked to learn a second system or watch a second queue. Replies written in Autotask or ConnectWise appear in the portal, and client replies land on the ticket already open in front of them."
+              lead="Nobody learns a second system or watches a second queue. Replies written in your PSA reach the client, and client replies land on the request already in front of your team."
             />
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
               <FeatureCard icon={RefreshCw} title="No second inbox">The portal is a surface, not a destination. There is nothing extra to check.</FeatureCard>
-              <FeatureCard icon={ShieldCheck} title="No risk to the record">Every change is written back to the PSA, which remains the single source of truth.</FeatureCard>
+              <FeatureCard icon={ShieldCheck} title="No risk to the record">Every change is written back, so the PSA stays the single source of truth.</FeatureCard>
             </div>
           </div>
         </Shell>
       </Band>
 
-      <Band id="integrations" tone="raised">
+      <Band tone="raised">
         <Shell>
           <SectionHead
-            eyebrow="Integrations"
-            title="Built around the PSA your team already trusts."
-            lead="Both connectors run against live instances today, each with its own mappings, defaults and sync settings — an Autotask tenant and a ConnectWise tenant can run side by side."
+            eyebrow="Two-way sync"
+            title="Everything stays in step, both directions."
+            lead="Whichever PSA you connect, the same things move — and they move continuously rather than on demand."
             align="center"
           />
-          <Reveal delay={80} className="mt-10"><IntegrationCards /></Reveal>
-          <Reveal delay={140} className="mt-6"><SyncLanes /></Reveal>
+          <Reveal delay={80} className="mt-10"><SyncLanes /></Reveal>
         </Shell>
       </Band>
 
       <Band id="features">
         <Shell>
           <SectionHead
-            eyebrow="Capabilities"
-            title="What Desk Portal actually does"
-            lead="Sixteen things the product does today. Not a roadmap — if something here matters to you, ask us to show it running."
+            eyebrow="Features"
+            title="Everything your clients need. Nothing your technicians need to relearn."
           />
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {FEATURES.map((f, i) => (
@@ -257,8 +265,8 @@ export default function HomePage() {
         <Shell>
           <SectionHead
             eyebrow="Security"
-            title="Built for MSP environments. Designed for control."
-            lead="You are holding other companies' data. The architecture assumes that from the first query rather than adding it later."
+            title="Enterprise-grade control without enterprise-level complexity."
+            lead="You are holding other companies' data. The platform is built that way from the first request rather than hardened later."
             align="center"
             onInk
           />
@@ -280,11 +288,11 @@ export default function HomePage() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <CapabilityTile value="24/7" label="Client self-service access" />
               <CapabilityTile value="Two-way" label="Continuous PSA sync" />
-              <CapabilityTile value="100%" label="PSA remains system of record" />
-              <CapabilityTile value="Multi-tenant" label="Isolation at the database level" />
+              <CapabilityTile value="Multi-PSA" label="One experience, many platforms" />
+              <CapabilityTile value="Multi-tenant" label="Client isolation by design" />
             </div>
             <p className="mt-4 text-center text-[12px] text-white/40">
-              Capability statements describing how the product is built — not customer metrics.
+              Capability statements describing how the platform is built — not customer metrics.
             </p>
           </Reveal>
         </Shell>
@@ -293,29 +301,25 @@ export default function HomePage() {
       <Band>
         <Shell>
           <SectionHead
-            eyebrow="Deployment"
-            title="Your data. Your infrastructure. Your control."
-            lead="The whole stack — portal, API, background worker, database and sign-in — runs from a single Docker host you own."
+            eyebrow="Built to grow"
+            title="More PSAs. One client experience."
+            lead="Whether your MSP runs ConnectWise, Autotask, HaloPSA, Syncro, SuperOps or another supported platform, your clients get the same experience — and your team keeps its own."
           />
           <div className="mt-10 grid gap-4 lg:grid-cols-3">
-            <Reveal><FeatureCard icon={Server} title="Your infrastructure">One modest virtual server is enough to start, and it can sit alongside sites you already run.</FeatureCard></Reveal>
-            <Reveal delay={80}><FeatureCard icon={Fingerprint} title="Your identity">Sign-in goes through your own Keycloak realm, so SSO and MFA follow the policy you already set.</FeatureCard></Reveal>
-            <Reveal delay={160}><FeatureCard icon={Boxes} title="Your credentials">PSA keys stay in your vault, on your machine, and never leave it.</FeatureCard></Reveal>
+            <Reveal><FeatureCard icon={Boxes} title="A shared connector layer">Every platform reuses the same sync, mapping and portal, so a new one behaves like the last.</FeatureCard></Reveal>
+            <Reveal delay={80}><FeatureCard icon={Server} title="Deploy on your terms">Run the platform on infrastructure you control, alongside what you already host.</FeatureCard></Reveal>
+            <Reveal delay={160}><FeatureCard icon={Fingerprint} title="Your identity, your rules">Sign-in follows the policy your organisation already enforces.</FeatureCard></Reveal>
           </div>
         </Shell>
       </Band>
 
       <Band tone="raised">
         <Shell>
-          <SectionHead
-            eyebrow="Why MSPs use it"
-            title="Built for MSPs. Designed around how your team actually works."
-            align="center"
-          />
+          <SectionHead eyebrow="Who it is for" title="Where Desk Portal fits" align="center" />
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {BENEFITS.map((b, i) => (
-              <Reveal key={b.title} delay={(i % 3) * 70}>
-                <FeatureCard icon={b.icon} title={b.title}>{b.body}</FeatureCard>
+            {USE_CASES.map((u, i) => (
+              <Reveal key={u.title} delay={(i % 3) * 70}>
+                <FeatureCard icon={u.icon} title={u.title}>{u.body}</FeatureCard>
               </Reveal>
             ))}
           </div>
@@ -324,11 +328,11 @@ export default function HomePage() {
 
       <Band>
         <Shell>
-          <SectionHead eyebrow="Who it is for" title="Where Desk Portal fits" align="center" />
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {USE_CASES.map((u, i) => (
-              <Reveal key={u.title} delay={(i % 4) * 60}>
-                <FeatureCard icon={u.icon} title={u.title}>{u.body}</FeatureCard>
+          <SectionHead eyebrow="Why MSPs use it" title="Designed around how your team actually works." align="center" />
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {BENEFITS.map((b, i) => (
+              <Reveal key={b.title} delay={(i % 3) * 70}>
+                <FeatureCard icon={b.icon} title={b.title}>{b.body}</FeatureCard>
               </Reveal>
             ))}
           </div>
@@ -343,10 +347,11 @@ export default function HomePage() {
               <div className="dp-aurora h-72 w-72 bg-brand-accent/20" style={{ bottom: '-8rem', left: '-3rem', animationDelay: '-5s' }} />
             </div>
             <h2 className="max-w-2xl text-[1.8rem] font-semibold leading-tight tracking-tight sm:text-[2.4rem]">
-              Give your clients a better way to work with your IT team.
+              Keep your PSA. Upgrade your client experience.
             </h2>
             <p className="mt-4 max-w-xl text-[16px] leading-relaxed text-brand-fg/75">
-              Keep your PSA. Keep your technician workflow. Upgrade the client experience.
+              Desk Portal gives your clients a modern support experience while your team continues
+              working in the PSA they already know.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
@@ -356,10 +361,10 @@ export default function HomePage() {
                 Book a demo <ArrowRight size={15} aria-hidden="true" />
               </Link>
               <Link
-                href="/contact"
-                className="rounded-xl border border-brand-fg/30 px-6 py-3.5 text-sm font-medium transition-colors hover:bg-brand-fg/10"
+                href="#integrations"
+                className="inline-flex items-center gap-2 rounded-xl border border-brand-fg/30 px-6 py-3.5 text-sm font-medium transition-colors hover:bg-brand-fg/10"
               >
-                Talk to us
+                Explore integrations <ArrowDown size={15} aria-hidden="true" />
               </Link>
             </div>
           </div>

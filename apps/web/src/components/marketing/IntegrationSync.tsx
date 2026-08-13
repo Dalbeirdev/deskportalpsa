@@ -1,6 +1,6 @@
 import {
   Ticket, MessageSquare, Paperclip, CircleDot, Flag, UserCheck, Timer, StickyNote,
-  ArrowLeftRight, ArrowRight, Plug, CheckCircle2,
+  ArrowLeftRight, ArrowRight,
 } from 'lucide-react';
 
 const LANES = [
@@ -34,7 +34,7 @@ export function SyncLanes() {
           continuous, both directions
         </span>
         <span className="flex items-center gap-2 text-right">
-          Autotask · ConnectWise
+          Your PSA
           <span className="h-2 w-2 rounded-full bg-brand-mid" aria-hidden="true" />
         </span>
       </div>
@@ -68,61 +68,8 @@ export function SyncLanes() {
 
       <p className="mt-5 text-[12.5px] text-[var(--muted)]">
         Changes made in the PSA appear in the portal, and changes made in the portal are written
-        back. Your PSA stays the system of record throughout.
+        back — the same behaviour whichever PSA you connect. Your PSA stays the system of record.
       </p>
-    </div>
-  );
-}
-
-const CARD_ITEMS = ['Tickets', 'Notes', 'Files', 'Time', 'Status', 'Priority'];
-
-function IntegrationCard({ name, detail }: { name: string; detail: string }) {
-  return (
-    <div className="dp-lift rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-tint text-brand-deep dark:bg-brand/25 dark:text-brand-soft">
-            <Plug size={19} aria-hidden="true" />
-          </span>
-          <div>
-            <h3 className="text-[15px] font-semibold">{name}</h3>
-            <p className="text-[12.5px] text-[var(--muted)]">{detail}</p>
-          </div>
-        </div>
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-brand-tint px-2.5 py-1 text-[11px] font-medium text-brand-deep dark:bg-brand/25 dark:text-brand-soft">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 dp-pulse" aria-hidden="true" />
-          Connected
-        </span>
-      </div>
-
-      <div className="relative my-5 h-7 overflow-hidden rounded-full bg-[var(--bg)]" aria-hidden="true">
-        <span className="absolute inset-x-3 top-1/2 h-px -translate-y-1/2 bg-[var(--border)]" />
-        <span className="dp-lane absolute inset-y-0 left-0 w-full">
-          <span className="absolute left-2.5 top-1/2 flex h-5 -translate-y-1/2 items-center rounded-full bg-brand px-2 text-[10px] font-semibold text-brand-fg">
-            sync
-          </span>
-        </span>
-      </div>
-
-      <ul className="flex flex-wrap gap-1.5">
-        {CARD_ITEMS.map((i) => (
-          <li
-            key={i}
-            className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-2.5 py-1 text-[11.5px] text-[var(--muted)]"
-          >
-            <CheckCircle2 size={11} className="text-brand-mid" aria-hidden="true" /> {i}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-export function IntegrationCards() {
-  return (
-    <div className="grid gap-5 lg:grid-cols-2">
-      <IntegrationCard name="Datto Autotask PSA" detail="REST API · boards, queues, work types" />
-      <IntegrationCard name="ConnectWise Manage" detail="REST API · service boards, members" />
     </div>
   );
 }
@@ -131,9 +78,9 @@ export function IntegrationCards() {
 export function IntegrationBadge() {
   return (
     <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)]/80 px-3 py-1.5 text-[11.5px] font-medium text-[var(--muted)] backdrop-blur">
-      <span className="font-semibold text-[var(--fg)]">Autotask</span>
+      <span className="font-semibold text-[var(--fg)]">One client portal</span>
       <ArrowRight size={11} className="text-brand-mid" aria-hidden="true" />
-      <span className="font-semibold text-[var(--fg)]">ConnectWise</span>
+      <span className="font-semibold text-[var(--fg)]">any PSA</span>
       <span className="hidden sm:inline">· two-way sync</span>
     </span>
   );

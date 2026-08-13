@@ -6,7 +6,7 @@ import { Hero } from '@/components/marketing/Hero';
 export const metadata: Metadata = {
   title: 'About us — Desk Portal',
   description:
-    'Desk Portal is built by TechPio for managed service providers who already run Autotask or ConnectWise.',
+    'Desk Portal is built by TechPIO Services LLP for managed service providers, on top of the PSA they already run.',
 };
 
 export default function AboutPage() {
@@ -53,8 +53,8 @@ export default function AboutPage() {
       <Section title="How we approach it" className="border-y border-[var(--border)] bg-[var(--surface)]">
         <div className="grid gap-4 sm:grid-cols-3">
           <Card title="Your PSA is not the enemy">
-            We are not trying to replace Autotask or ConnectWise, or to become a second place your
-            team has to check. Whatever the PSA says, wins.
+            We are not trying to replace your PSA, or to become a second place your team has to check.
+            Whatever the PSA says, wins.
           </Card>
           <Card title="Self-hosted by default">
             You run it, on infrastructure you control, with your own identity provider. Your clients&apos;
@@ -70,8 +70,8 @@ export default function AboutPage() {
       <Section title="Who it is for">
         <div className="grid gap-4 sm:grid-cols-2">
           <Card title="Managed service providers">
-            Running Autotask or ConnectWise, with clients who keep asking for status updates, and a
-            desk that would rather be fixing things than reporting on them.
+            Whichever PSA you run, with clients who keep asking for status updates and a desk that
+            would rather be fixing things than reporting on them.
           </Card>
           <Card title="Internal IT teams">
             Running a PSA for an organisation with several sites or departments, who need each one to
@@ -84,9 +84,9 @@ export default function AboutPage() {
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
           <h2 className="text-[15px] font-semibold">A note on where the product is</h2>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--muted)]">
-            Desk Portal is actively being built and deployed. Both the Autotask and ConnectWise
-            connectors are working against live instances, and two-way sync of conversation,
-            attachments and time is in place. We would rather tell you plainly what it does today
+            Desk Portal is actively being built and deployed. ConnectWise and Autotask connectors are
+            working against live instances today, with further PSA platforms on the roadmap, and
+            two-way sync of conversation, attachments and time is in place. We would rather tell you plainly what it does today
             than describe a roadmap as though it had already shipped — so if you have a specific
             requirement, ask, and we will tell you whether it exists yet.
           </p>
