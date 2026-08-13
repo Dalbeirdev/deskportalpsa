@@ -1,68 +1,150 @@
 import Link from 'next/link';
-import { Mail } from 'lucide-react';
+import { Mail, ArrowUpRight, RefreshCw, ServerCog, ShieldCheck } from 'lucide-react';
 import { BrandMark } from '@/components/BrandMark';
 
 /** The one address a visitor can actually reach a human on. */
 export const CONTACT_EMAIL = 'proapps@techpio.com';
 
+const PRODUCT = [
+  { href: '/', label: 'Overview' },
+  { href: '/faq', label: 'FAQ' },
+  { href: '/book', label: 'Book a meeting' },
+  { href: '/login', label: 'Sign in' },
+];
+
+const COMPANY = [
+  { href: '/about', label: 'About us' },
+  { href: '/contact', label: 'Contact us' },
+  { href: '/privacy', label: 'Privacy policy' },
+  { href: '/terms', label: 'Terms of service' },
+];
+
+/** Claims made here are true of this build. No badges, counts, or certifications it has not earned. */
+const PROOF = [
+  { icon: RefreshCw, text: 'Two-way sync with Autotask and ConnectWise' },
+  { icon: ServerCog, text: 'Self-hosted — runs on your infrastructure' },
+  { icon: ShieldCheck, text: 'Credentials in a vault, actions in an audit log' },
+];
+
+function FooterLink({ href, label }: { href: string; label: string }) {
+  return (
+    <li>
+      <Link
+        href={href}
+        className="group inline-flex items-center gap-1 text-sm text-brand-fg/70 transition-colors hover:text-brand-fg"
+      >
+        {label}
+        <ArrowUpRight
+          size={13}
+          aria-hidden="true"
+          className="opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100"
+        />
+      </Link>
+    </li>
+  );
+}
+
 /**
- * Public-site footer. Deliberately holds only claims that are true of this deployment — no badges,
- * counts, or certifications the product has not earned.
+ * A brand band, not a sitemap.
+ *
+ * Sits on the product's own forest with the mark in cream, so the page ends on the brand rather
+ * than fading into another sheet of white. The aurora is contained by overflow-hidden — a blurred
+ * blob that escapes its box adds a horizontal scrollbar on phones.
  */
 export function MarketingFooter() {
   const year = new Date().getFullYear();
   return (
-    <footer className="mt-20 border-t border-[var(--border)] bg-[var(--surface)]">
-      <div className="mx-auto grid max-w-6xl gap-10 px-5 py-12 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="lg:col-span-2">
-          <div className="flex items-center gap-2.5">
-            <BrandMark size={34} className="rounded-lg" />
-            <span className="text-[15px] font-semibold tracking-tight">Desk Portal</span>
-          </div>
-          <p className="mt-3 max-w-sm text-sm leading-relaxed text-[var(--muted)]">
-            A client ticket portal that sits on top of the PSA you already run. Autotask and
-            ConnectWise stay the system of record — nothing is migrated, nothing is replaced.
-          </p>
-          <p className="mt-4 text-sm text-[var(--muted)]">
-            Built by <span className="font-medium text-[var(--fg)]">TechPio</span>
-          </p>
-        </div>
+    <footer className="relative isolate mt-20 overflow-hidden bg-brand text-brand-fg">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
+        <div
+          className="dp-aurora h-[24rem] w-[24rem] bg-brand-soft/25"
+          style={{ top: '-8rem', left: '-4rem' }}
+        />
+        <div
+          className="dp-aurora h-[20rem] w-[20rem] bg-brand-accent/20"
+          style={{ bottom: '-9rem', right: '-3rem', animationDelay: '-7s', animationDuration: '19s' }}
+        />
+        <div
+          className="absolute inset-0 opacity-[0.12]"
+          style={{
+            backgroundImage:
+              'linear-gradient(to right, #FDF6E3 1px, transparent 1px), linear-gradient(to bottom, #FDF6E3 1px, transparent 1px)',
+            backgroundSize: '56px 56px',
+            maskImage: 'radial-gradient(ellipse 70% 70% at 20% 0%, #000 30%, transparent 100%)',
+            WebkitMaskImage: 'radial-gradient(ellipse 70% 70% at 20% 0%, #000 30%, transparent 100%)',
+          }}
+        />
+      </div>
 
-        <div>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--faint)]">Product</h2>
-          <ul className="space-y-2 text-sm">
-            <li><Link href="/" className="text-[var(--muted)] hover:text-[var(--fg)]">Overview</Link></li>
-            <li><Link href="/faq" className="text-[var(--muted)] hover:text-[var(--fg)]">FAQ</Link></li>
-            <li><Link href="/login" className="text-[var(--muted)] hover:text-[var(--fg)]">Sign in</Link></li>
-          </ul>
-        </div>
+      <div className="mx-auto max-w-6xl px-5 py-14">
+        <div className="grid gap-10 lg:grid-cols-[1.6fr_1fr_1fr]">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <BrandMark size={38} variant="inverse" className="rounded-lg" />
+              <span className="text-base font-semibold tracking-tight">Desk Portal</span>
+            </div>
 
-        <div>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--faint)]">Company</h2>
-          <ul className="space-y-2 text-sm">
-            <li><Link href="/about" className="text-[var(--muted)] hover:text-[var(--fg)]">About us</Link></li>
-            <li><Link href="/contact" className="text-[var(--muted)] hover:text-[var(--fg)]">Contact us</Link></li>
-            <li><Link href="/book" className="text-[var(--muted)] hover:text-[var(--fg)]">Book a meeting</Link></li>
-            <li>
+            <p className="mt-4 max-w-sm text-sm leading-relaxed text-brand-fg/70">
+              A client ticket portal that sits on top of the PSA you already run. Your technicians
+              keep working where they always have.
+            </p>
+
+            <ul className="mt-5 space-y-2">
+              {PROOF.map(({ icon: Icon, text }) => (
+                <li key={text} className="flex items-start gap-2 text-xs text-brand-fg/70">
+                  <Icon size={14} aria-hidden="true" className="mt-0.5 shrink-0 text-brand-soft" />
+                  {text}
+                </li>
+              ))}
+            </ul>
+
+            <div className="mt-6 flex flex-wrap gap-2.5">
+              <Link
+                href="/book"
+                className="rounded-lg bg-brand-fg px-4 py-2.5 text-sm font-medium text-brand transition-transform hover:-translate-y-0.5"
+              >
+                Book a meeting
+              </Link>
               <a
                 href={`mailto:${CONTACT_EMAIL}`}
-                className="inline-flex items-center gap-1.5 text-[var(--muted)] hover:text-[var(--fg)]"
+                className="inline-flex items-center gap-2 rounded-lg border border-brand-fg/30 px-4 py-2.5 text-sm font-medium transition-colors hover:bg-brand-fg/10"
               >
-                <Mail size={13} aria-hidden="true" /> {CONTACT_EMAIL}
+                <Mail size={14} aria-hidden="true" /> Email us
               </a>
-            </li>
-          </ul>
+            </div>
+          </div>
+
+          <nav aria-label="Product">
+            <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-brand-soft">
+              Product
+            </h2>
+            <ul className="space-y-2.5">
+              {PRODUCT.map((l) => <FooterLink key={l.href} {...l} />)}
+            </ul>
+          </nav>
+
+          <nav aria-label="Company">
+            <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-brand-soft">
+              Company
+            </h2>
+            <ul className="space-y-2.5">
+              {COMPANY.map((l) => <FooterLink key={l.href} {...l} />)}
+            </ul>
+            <a
+              href={`mailto:${CONTACT_EMAIL}`}
+              className="mt-4 inline-block break-all text-sm text-brand-fg/70 transition-colors hover:text-brand-fg"
+            >
+              {CONTACT_EMAIL}
+            </a>
+          </nav>
         </div>
       </div>
 
-      <div className="border-t border-[var(--border)]">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-5 text-xs text-[var(--faint)]">
+      <div className="border-t border-brand-fg/15">
+        {/* /75, not /60: composited against the forest, 60% opacity lands at 4.1:1 and misses AA. */}
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-5 text-xs text-brand-fg/75">
           <span>© {year} TechPio. All rights reserved.</span>
-          <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <Link href="/privacy" className="hover:text-[var(--fg)]">Privacy policy</Link>
-            <Link href="/terms" className="hover:text-[var(--fg)]">Terms of service</Link>
-            <span>Self-hosted · your data stays on your infrastructure</span>
-          </span>
+          <span>Built for managed service providers.</span>
         </div>
       </div>
     </footer>
