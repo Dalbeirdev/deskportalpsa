@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { BrandMark } from '@/components/BrandMark';
 
 /** Login entry. Uses Keycloak OIDC (auth-code + PKCE); in local demo mode it skips straight in. */
 export default function LoginPage() {
@@ -11,7 +12,7 @@ export default function LoginPage() {
       </div>
       <div className="w-full max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-8 shadow-sm">
         <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-brand-fg font-bold">D</div>
+          <BrandMark size={40} className="shrink-0 rounded-xl" />
           <div>
             <h1 className="text-lg font-semibold">Desk Portal</h1>
             <p className="text-sm text-[var(--muted)]">{localMode ? 'Local demo mode' : 'Sign in to continue'}</p>
