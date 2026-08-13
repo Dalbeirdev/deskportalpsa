@@ -5,8 +5,9 @@
  * inline SVG rather than an image file so it inherits crispness at every size, costs no request,
  * and can be recoloured by variant instead of shipping a second asset.
  *
- * `primary` (forest owl on cream) is the mark. `inverse` exists for dark or coloured surfaces,
- * where a cream badge would vanish — same geometry, so the two are never out of step.
+ * `primary` (cream owl on forest) is the mark: against the app's white surfaces a cream badge had
+ * no presence, so the deep green carries it. `inverse` exists for dark or green surfaces where the
+ * forest badge would disappear — same geometry, so the two are never out of step.
  */
 type BrandVariant = 'primary' | 'inverse';
 
@@ -15,13 +16,13 @@ const PALETTE: Record<BrandVariant, {
   ticket: string; ticketEdge: string; edge: string;
 }> = {
   primary: {
+    bg: '#14532D', body: '#FDF6E3', wing: '#86EFAC', beak: '#F97316', pupil: '#14532D',
+    ticket: '#FDF6E3', ticketEdge: 'none', edge: 'none',
+  },
+  inverse: {
     bg: '#FDF6E3', body: '#14532D', wing: '#86EFAC', beak: '#EA580C', pupil: '#14532D',
     // Cream on a white page needs a hairline, or the badge has no edge at all.
     ticket: '#FFFFFF', ticketEdge: '#14532D', edge: '#14532D',
-  },
-  inverse: {
-    bg: '#14532D', body: '#FDF6E3', wing: '#86EFAC', beak: '#F97316', pupil: '#14532D',
-    ticket: '#FDF6E3', ticketEdge: 'none', edge: 'none',
   },
 };
 
