@@ -12,7 +12,7 @@ import { FlowRail } from '@/components/marketing/FlowRail';
 import { Compare } from '@/components/marketing/Compare';
 import { ProductTabs } from '@/components/marketing/ProductTabs';
 import { SyncLanes, IntegrationBadge } from '@/components/marketing/IntegrationSync';
-import { PsaEcosystem, PsaGrid, PsaStatusNote } from '@/components/marketing/PsaEcosystem';
+import { PsaEcosystem, PsaGrid } from '@/components/marketing/PsaEcosystem';
 import { BrowserFrame, ProductScreen } from '@/components/marketing/ProductUI';
 import { PSA_PLATFORMS } from '@/lib/psaPlatforms';
 
@@ -130,13 +130,12 @@ export default function HomePage() {
         <Shell>
           <SectionHead
             eyebrow="Integrations"
-            title="Works with the tools your MSP already uses."
-            lead="You should not have to replace your PSA to deliver a better client experience. Desk Portal sits on top of the workflow your team already runs."
+            title="One portal. Multiple PSA platforms."
+            lead="Connect your PSA environment to Desk Portal and give clients a consistent experience across your service desk ecosystem."
             align="center"
           />
-          <Reveal delay={80} className="mt-12"><PsaEcosystem /></Reveal>
-          <Reveal delay={120} className="mt-10 hidden lg:block"><PsaGrid /></Reveal>
-          <Reveal delay={160} className="mx-auto max-w-3xl text-center"><PsaStatusNote /></Reveal>
+          <Reveal delay={80} className="mt-14"><PsaEcosystem /></Reveal>
+          <Reveal delay={120} className="mt-12 hidden lg:block"><PsaGrid /></Reveal>
         </Shell>
       </Band>
 

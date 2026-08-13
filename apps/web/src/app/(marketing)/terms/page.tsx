@@ -33,8 +33,7 @@ const SECTIONS: LegalSection[] = [
       <>
         <p>
           Desk Portal is a client-facing ticket portal that synchronises with a professional services
-          automation system you already operate. ConnectWise and Autotask are supported today, with
-          further platforms planned.
+          automation system you already operate.
         </p>
         <p>
           Your PSA remains the system of record. The portal reads from it and writes back to it. We

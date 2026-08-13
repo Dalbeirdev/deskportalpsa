@@ -17,8 +17,9 @@ export const MARKETING_NAV = [
 
 /**
  * Public-site header. Sticky, because the two things a visitor needs — book a call, sign in —
- * should never be a scroll away. The nav collapses to a disclosure below md rather than a drawer:
- * five links do not warrant an overlay.
+ * should never be a scroll away. The nav collapses to a disclosure below lg rather than a drawer:
+ * six links do not warrant an overlay, and at md they no longer fit beside the logo and both
+ * calls to action once a scrollbar takes its share of the viewport.
  */
 export function MarketingHeader() {
   const pathname = usePathname();
@@ -32,7 +33,7 @@ export function MarketingHeader() {
           <span className="text-[15px] font-semibold tracking-tight">Desk Portal</span>
         </Link>
 
-        <nav className="ml-6 hidden items-center gap-1 md:flex">
+        <nav className="ml-6 hidden items-center gap-1 lg:flex">
           {MARKETING_NAV.map((item) => {
             const active = item.href.startsWith('/#') ? false : pathname === item.href;
             return (
@@ -68,7 +69,7 @@ export function MarketingHeader() {
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-label={open ? 'Close menu' : 'Open menu'}
-            className="rounded-lg p-2 text-[var(--muted)] hover:bg-[var(--bg)] md:hidden"
+            className="rounded-lg p-2 text-[var(--muted)] hover:bg-[var(--bg)] lg:hidden"
           >
             {open ? <X size={18} /> : <Menu size={18} />}
           </button>
@@ -76,7 +77,7 @@ export function MarketingHeader() {
       </div>
 
       {open && (
-        <nav className="border-t border-[var(--border)] px-5 py-2 md:hidden">
+        <nav className="border-t border-[var(--border)] px-5 py-2 lg:hidden">
           {[...MARKETING_NAV, { href: '/login', label: 'Sign in' }].map((item) => (
             <Link
               key={item.href}
