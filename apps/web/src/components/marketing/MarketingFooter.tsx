@@ -56,9 +56,13 @@ export function MarketingFooter() {
       </div>
 
       <div className="border-t border-[var(--border)]">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-5 py-5 text-xs text-[var(--faint)]">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-5 text-xs text-[var(--faint)]">
           <span>© {year} TechPio. All rights reserved.</span>
-          <span>Self-hosted · your data stays on your infrastructure</span>
+          <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <Link href="/privacy" className="hover:text-[var(--fg)]">Privacy policy</Link>
+            <Link href="/terms" className="hover:text-[var(--fg)]">Terms of service</Link>
+            <span>Self-hosted · your data stays on your infrastructure</span>
+          </span>
         </div>
       </div>
     </footer>
