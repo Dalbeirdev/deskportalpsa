@@ -8,12 +8,17 @@ using Microsoft.AspNetCore.RateLimiting;
 
 namespace Desk.Api.Controllers;
 
+/// <summary>
+/// No validation attributes: on a positional record they land on the generated property, and MVC
+/// throws rather than binding — a 500 on the one endpoint anonymous visitors touch. Required-ness
+/// is enforced in the service, which owns the rules and returns a message worth reading.
+/// </summary>
 public sealed record PublicEnquiryRequest(
-    [property: System.ComponentModel.DataAnnotations.Required] string Name,
-    [property: System.ComponentModel.DataAnnotations.Required] string Email,
+    string Name,
+    string Email,
     string? Company,
     string? Phone,
-    [property: System.ComponentModel.DataAnnotations.Required] string Message,
+    string Message,
     string? PreferredTime,
     string? SourcePage,
     string? Website);
