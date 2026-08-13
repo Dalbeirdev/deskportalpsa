@@ -20,7 +20,7 @@ const GROUPS: { heading: string; items: { q: string; a: string }[] }[] = [
       },
       {
         q: 'Which PSA platforms are supported?',
-        a: 'ConnectWise PSA and Autotask PSA are available today and run against live instances. HaloPSA, Kaseya BMS, Syncro, SuperOps, N-able MSP Manager and Atera are on the roadmap. The connector layer is shared, so each new platform reuses the same sync, mapping and client experience — and we will tell you plainly which stage yours is at rather than implying it already exists.',
+        a: 'Desk Portal is built around the PSA ecosystem MSPs actually run: ConnectWise PSA, Autotask PSA, HaloPSA, Kaseya BMS, Syncro, SuperOps, N-able MSP Manager and Atera. The connector layer is shared, so every platform reuses the same sync, mapping and client experience. Tell us which PSA you run and we will walk you through it on a call.',
       },
       {
         q: 'What syncs, and in which direction?',

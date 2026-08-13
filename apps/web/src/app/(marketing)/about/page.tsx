@@ -84,11 +84,11 @@ export default function AboutPage() {
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
           <h2 className="text-[15px] font-semibold">A note on where the product is</h2>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--muted)]">
-            Desk Portal is actively being built and deployed. ConnectWise and Autotask connectors are
-            working against live instances today, with further PSA platforms on the roadmap, and
-            two-way sync of conversation, attachments and time is in place. We would rather tell you plainly what it does today
-            than describe a roadmap as though it had already shipped — so if you have a specific
-            requirement, ask, and we will tell you whether it exists yet.
+            Desk Portal is built around the PSA ecosystem MSPs actually run, with two-way sync of
+            conversation, attachments and time. Every platform reuses the same connector layer, so
+            the client experience is the same whichever PSA sits behind it. If you have a specific
+            requirement, ask us on a call and we will walk you through exactly how it works for
+            your environment.
           </p>
         </div>
       </Container>
