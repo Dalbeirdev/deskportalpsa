@@ -23,17 +23,20 @@ export function PsaEcosystem() {
         role="img"
         aria-label={`Desk Portal connects to ${PSA_PLATFORMS.length} PSA platforms: ${PSA_PLATFORMS.map((p) => p.name).join(', ')}.`}
       >
-        <rect x={hubX - 130} y="18" width="260" height="68" rx="18" fill="var(--brand-line)" />
-        <text x={hubX} y="47" textAnchor="middle" fontSize="16" fontWeight="600" fill="var(--surface)">
+        {/* Two lines, not one. SVG text does not wrap, and as a single line this subtitle measured
+            ~250 units inside a 260-unit box — touching both edges. The break is therefore explicit. */}
+        <rect x={hubX - 140} y="12" width="280" height="86" rx="18" fill="var(--brand-line)" />
+        <text x={hubX} y="42" textAnchor="middle" fontSize="16" fontWeight="600" fill="var(--surface)">
           Desk Portal
         </text>
-        <text x={hubX} y="68" textAnchor="middle" fontSize="11" fill="var(--surface)" fillOpacity="0.78">
-          One client experience across your PSA ecosystem
+        <text x={hubX} textAnchor="middle" fontSize="11" fill="var(--surface)" fillOpacity="0.8">
+          <tspan x={hubX} y="63">One client experience</tspan>
+          <tspan x={hubX} y="79">across your PSA ecosystem</tspan>
         </text>
 
         {PSA_PLATFORMS.map((p, i) => {
           const x = slot * i + slot / 2;
-          const d = `M ${hubX} 86 C ${hubX} 152, ${x} 142, ${x} 198`;
+          const d = `M ${hubX} 98 C ${hubX} 158, ${x} 148, ${x} 198`;
           return (
             <g key={p.id}>
               <path d={d} fill="none" stroke="var(--brand-line)" strokeWidth="1.75" strokeOpacity="0.55" />
