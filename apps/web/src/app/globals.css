@@ -41,3 +41,60 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---- Marketing motion ----------------------------------------------------
+   Every animation here is decorative. The prefers-reduced-motion block below
+   already collapses durations globally, so honouring the setting costs nothing
+   at each call site — but reveal elements must also be forced visible there,
+   or a reader who asked for less motion would get a blank page instead. */
+
+@keyframes dp-fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes dp-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(4%, -6%, 0) scale(1.12); }
+}
+
+/* Dashes crawling along a path: the visual grammar of "this is moving". */
+@keyframes dp-flow { to { stroke-dashoffset: -240; } }
+
+@keyframes dp-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.35); }
+}
+
+.dp-rise { animation: dp-fade-up 0.75s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* Soft colour fields behind a hero. Blurred, low opacity, slow — atmosphere
+   rather than decoration competing with the text on top of it. */
+.dp-aurora {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(72px);
+  opacity: 0.5;
+  animation: dp-drift 14s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+.dark .dp-aurora { opacity: 0.32; }
+
+.dp-flow { stroke-dasharray: 10 14; animation: dp-flow 3s linear infinite; }
+.dp-pulse { animation: dp-pulse 2.6s ease-in-out infinite; transform-origin: center; }
+
+.dp-reveal { opacity: 0; transform: translateY(18px); }
+.dp-reveal-in {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Cards that answer the cursor. Kept to 2px so it reads as responsive, not springy. */
+.dp-lift { transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease; }
+.dp-lift:hover { transform: translateY(-2px); border-color: var(--brand-line); }
+
+@media (prefers-reduced-motion: reduce) {
+  .dp-reveal { opacity: 1; transform: none; }
+  .dp-aurora, .dp-flow, .dp-pulse { animation: none; }
+}
