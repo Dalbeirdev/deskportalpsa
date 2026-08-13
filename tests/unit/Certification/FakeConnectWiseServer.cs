@@ -14,6 +14,10 @@ public sealed class FakeConnectWiseServer(TimeProvider clock) : HttpMessageHandl
 {
     public HttpStatusCode? ForceStatus { get; set; }
 
+    /// <summary>Body returned with <see cref="ForceStatus"/>. Real instances do not always answer
+    /// in the documented error shape, so tests must be able to reproduce what they actually send.</summary>
+    public string? ForceBody { get; set; }
+
     private long _seq = 5000;
     // Documents keyed by id, holding what the real API stores: the record it hangs off, plus bytes.
     private readonly Dictionary<long, (long RecordId, string FileName, byte[] Content)> _documents = [];
@@ -22,7 +26,7 @@ public sealed class FakeConnectWiseServer(TimeProvider clock) : HttpMessageHandl
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
-        if (ForceStatus is { } forced) return Resp(forced, "{\"code\":\"forced\"}");
+        if (ForceStatus is { } forced) return Resp(forced, ForceBody ?? "{\"code\":\"forced\"}");
 
         // ConnectWise requires Basic auth + a clientId header on every call.
         if (request.Headers.Authorization?.Scheme != "Basic" || !request.Headers.Contains("clientId"))

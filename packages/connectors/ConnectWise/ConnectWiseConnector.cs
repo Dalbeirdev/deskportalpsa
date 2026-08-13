@@ -610,15 +610,24 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         {
             var raw = await resp.Content.ReadAsStringAsync(ct);
             if (string.IsNullOrWhiteSpace(raw)) return null;
-            using var doc = JsonDocument.Parse(raw);
-            var parts = new List<string>();
-            if (doc.RootElement.TryGetProperty("message", out var m) && m.GetString() is { Length: > 0 } msg)
-                parts.Add(msg);
-            if (doc.RootElement.TryGetProperty("errors", out var errs) && errs.ValueKind == JsonValueKind.Array)
-                foreach (var e in errs.EnumerateArray())
-                    if (e.TryGetProperty("message", out var em) && em.GetString() is { Length: > 0 } detail)
-                        parts.Add(detail);
-            return parts.Count > 0 ? string.Join(" ", parts) : null;
+            try
+            {
+                using var doc = JsonDocument.Parse(raw);
+                var parts = new List<string>();
+                if (doc.RootElement.TryGetProperty("message", out var m) && m.GetString() is { Length: > 0 } msg)
+                    parts.Add(msg);
+                if (doc.RootElement.TryGetProperty("errors", out var errs) && errs.ValueKind == JsonValueKind.Array)
+                    foreach (var e in errs.EnumerateArray())
+                        if (e.TryGetProperty("message", out var em) && em.GetString() is { Length: > 0 } detail)
+                            parts.Add(detail);
+                if (parts.Count > 0) return string.Join(" ", parts);
+            }
+            catch (JsonException) { /* not JSON — fall through to the raw text */ }
+            // Anything the provider said beats a bare status code. ConnectWise answers some
+            // rejections (bad clientId, wrong instance for these keys) with plain text or an
+            // undocumented shape, and discarding those left admins with nothing to act on.
+            var trimmed = raw.Trim();
+            return trimmed.Length > 400 ? trimmed[..400] : trimmed;
         }
         catch (Exception) { return null; } // an unreadable error body must not mask the real failure
     }
