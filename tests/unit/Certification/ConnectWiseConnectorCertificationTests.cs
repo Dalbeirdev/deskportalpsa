@@ -66,4 +66,23 @@ public sealed class ConnectWiseConnectorCertificationTests : ConnectorCertificat
         created.Success.Should().BeTrue();
         (await c.GetTicketAsync(created.ExternalId!))!.Status.Should().NotBeNull();
     }
+
+    /// <summary>
+    /// A rejection whose body is not the documented {message, errors[]} shape must still reach the
+    /// admin. Live ConnectWise answered a bad connection with plain text, the parser returned null,
+    /// and the UI showed only "ConnectWise rejected the request (400)" — a status code the admin
+    /// cannot act on, while the provider's actual reason was in hand the whole time.
+    /// </summary>
+    [Theory]
+    [InlineData("Invalid or missing clientId")]           // plain text, not JSON at all
+    [InlineData("{\"code\":\"InvalidCredentials\"}")]     // JSON, but no message/errors member
+    public async Task A_rejection_body_in_an_unexpected_shape_still_reaches_the_admin(string body)
+    {
+        var c = Build(new FakeConnectWiseServer(Clock) { ForceStatus = HttpStatusCode.BadRequest, ForceBody = body });
+
+        var act = async () => await c.TestConnectionAsync();
+
+        (await act.Should().ThrowAsync<ConnectorException>())
+            .Which.Message.Should().Contain(body);
+    }
 }
