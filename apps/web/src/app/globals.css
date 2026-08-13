@@ -98,3 +98,54 @@ body {
   .dp-reveal { opacity: 1; transform: none; }
   .dp-aurora, .dp-flow, .dp-pulse { animation: none; }
 }
+
+/* ---- Product-site motion ------------------------------------------------ */
+
+@keyframes dp-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}
+
+/* A packet travelling a connection line. offset-path follows the drawn curve
+   exactly, so the dot cannot drift away from the wire it is meant to be on. */
+@keyframes dp-travel {
+  from { offset-distance: 0%;   opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  to   { offset-distance: 100%; opacity: 0; }
+}
+
+@keyframes dp-sweep { to { transform: translateX(220%); } }
+
+.dp-float { animation: dp-float 6s ease-in-out infinite; }
+.dp-travel { animation: dp-travel 3.2s linear infinite; }
+
+/* Light passing over a surface — used once, on the hero frame. */
+.dp-sheen::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 -60%;
+  width: 45%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  animation: dp-sweep 7s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.dp-grid-bg {
+  background-image:
+    linear-gradient(to right, var(--border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* A packet crossing a lane. The runner is the full width of its track and the dot rides its
+   leading edge, so translateX(100%) equals exactly one lane — responsive at any width, and a
+   transform rather than `left`, so it stays on the compositor. */
+@keyframes dp-lane { from { transform: translateX(0); } to { transform: translateX(100%); } }
+.dp-lane { animation: dp-lane 3s linear infinite; }
+.dp-lane-back { animation: dp-lane 3.6s linear infinite reverse; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dp-float, .dp-travel, .dp-lane, .dp-lane-back { animation: none; }
+  .dp-sheen::after { display: none; }
+}

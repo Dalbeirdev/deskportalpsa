@@ -7,16 +7,24 @@ export const CONTACT_EMAIL = 'proapps@techpio.com';
 
 const PRODUCT = [
   { href: '/', label: 'Overview' },
+  { href: '/#features', label: 'Features' },
+  { href: '/#integrations', label: 'Integrations' },
+  { href: '/#security', label: 'Security' },
   { href: '/faq', label: 'FAQ' },
-  { href: '/book', label: 'Book a meeting' },
-  { href: '/login', label: 'Sign in' },
+  { href: '/book', label: 'Book a demo' },
 ];
 
 const COMPANY = [
-  { href: '/about', label: 'About us' },
-  { href: '/contact', label: 'Contact us' },
-  { href: '/privacy', label: 'Privacy policy' },
-  { href: '/terms', label: 'Terms of service' },
+  { href: '/about', label: 'About' },
+  { href: '/contact', label: 'Contact' },
+  { href: '/login', label: 'Sign in' },
+  { href: '/privacy', label: 'Privacy' },
+  { href: '/terms', label: 'Terms' },
+];
+
+const INTEGRATIONS = [
+  { href: '/#integrations', label: 'Datto Autotask PSA' },
+  { href: '/#integrations', label: 'ConnectWise Manage' },
 ];
 
 /** Claims made here are true of this build. No badges, counts, or certifications it has not earned. */
@@ -76,8 +84,8 @@ export function MarketingFooter() {
         />
       </div>
 
-      <div className="mx-auto max-w-6xl px-5 py-14">
-        <div className="grid gap-10 lg:grid-cols-[1.6fr_1fr_1fr]">
+      <div className="mx-auto max-w-shell px-5 py-14 sm:px-8">
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
           <div>
             <div className="flex items-center gap-2.5">
               <BrandMark size={38} variant="inverse" className="rounded-lg" />
@@ -98,7 +106,7 @@ export function MarketingFooter() {
               ))}
             </ul>
 
-            <div className="mt-6 flex flex-wrap gap-2.5">
+            <div className="flex flex-wrap gap-2.5">
               <Link
                 href="/book"
                 className="rounded-lg bg-brand-fg px-4 py-2.5 text-sm font-medium text-brand transition-transform hover:-translate-y-0.5"
@@ -119,7 +127,7 @@ export function MarketingFooter() {
               Product
             </h2>
             <ul className="space-y-2.5">
-              {PRODUCT.map((l) => <FooterLink key={l.href} {...l} />)}
+              {PRODUCT.map((l) => <FooterLink key={l.label} {...l} />)}
             </ul>
           </nav>
 
@@ -128,23 +136,35 @@ export function MarketingFooter() {
               Company
             </h2>
             <ul className="space-y-2.5">
-              {COMPANY.map((l) => <FooterLink key={l.href} {...l} />)}
+              {COMPANY.map((l) => <FooterLink key={l.label} {...l} />)}
             </ul>
+          </nav>
+
+          <div>
+            <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-brand-soft">
+              Integrations
+            </h2>
+            <ul className="space-y-2.5">
+              {INTEGRATIONS.map((l) => <FooterLink key={l.label} {...l} />)}
+            </ul>
+            <h2 className="mb-3 mt-6 text-xs font-semibold uppercase tracking-widest text-brand-soft">
+              Contact
+            </h2>
             <a
               href={`mailto:${CONTACT_EMAIL}`}
-              className="mt-4 inline-block break-all text-sm text-brand-fg/70 transition-colors hover:text-brand-fg"
+              className="inline-block break-all text-sm text-brand-fg/75 transition-colors hover:text-brand-fg"
             >
               {CONTACT_EMAIL}
             </a>
-          </nav>
+          </div>
         </div>
       </div>
 
       <div className="border-t border-brand-fg/15">
         {/* /75, not /60: composited against the forest, 60% opacity lands at 4.1:1 and misses AA. */}
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-5 text-xs text-brand-fg/75">
-          <span>© {year} TechPio. All rights reserved.</span>
-          <span>Built for managed service providers.</span>
+        <div className="mx-auto flex max-w-shell flex-wrap items-center justify-between gap-3 px-5 py-5 text-xs text-brand-fg/75 sm:px-8">
+          <span>© {year} TechPIO Services LLP. All rights reserved.</span>
+          <span>Desk Portal — built for managed service providers.</span>
         </div>
       </div>
     </footer>

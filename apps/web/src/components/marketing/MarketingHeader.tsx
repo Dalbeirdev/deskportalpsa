@@ -7,10 +7,11 @@ import { Menu, X } from 'lucide-react';
 import { BrandMark } from '@/components/BrandMark';
 
 export const MARKETING_NAV = [
-  { href: '/', label: 'Home' },
-  { href: '/about', label: 'About us' },
+  { href: '/#features', label: 'Features' },
+  { href: '/#integrations', label: 'Integrations' },
+  { href: '/#security', label: 'Security' },
   { href: '/faq', label: 'FAQ' },
-  { href: '/contact', label: 'Contact' },
+  { href: '/about', label: 'About' },
 ] as const;
 
 /**
@@ -23,8 +24,8 @@ export function MarketingHeader() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--surface)]/90 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center gap-3 px-5 py-3">
+    <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--surface)]/75 backdrop-blur-xl">
+      <div className="mx-auto flex max-w-shell items-center gap-3 px-5 py-3 sm:px-8">
         <Link href="/" className="flex shrink-0 items-center gap-2.5" onClick={() => setOpen(false)}>
           <BrandMark size={34} className="rounded-lg" />
           <span className="text-[15px] font-semibold tracking-tight">Desk Portal</span>
@@ -32,7 +33,7 @@ export function MarketingHeader() {
 
         <nav className="ml-6 hidden items-center gap-1 md:flex">
           {MARKETING_NAV.map((item) => {
-            const active = pathname === item.href;
+            const active = item.href.startsWith('/#') ? false : pathname === item.href;
             return (
               <Link
                 key={item.href}
@@ -57,9 +58,9 @@ export function MarketingHeader() {
           </Link>
           <Link
             href="/book"
-            className="rounded-lg bg-brand px-3.5 py-2 text-sm font-medium text-brand-fg hover:opacity-90"
+            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-fg transition-transform hover:-translate-y-0.5"
           >
-            Book a meeting
+            Book a demo
           </Link>
           <button
             type="button"
