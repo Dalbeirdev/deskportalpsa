@@ -12,7 +12,7 @@ import { User, LayoutDashboard, Database, Wrench, ArrowDown } from 'lucide-react
 const NODES = [
   { x: 95, label: 'Client', sub: 'Submits a request' },
   { x: 365, label: 'Desk Portal', sub: 'Client experience' },
-  { x: 635, label: 'Autotask / ConnectWise', sub: 'System of record' },
+  { x: 635, label: 'Your PSA', sub: 'System of record' },
   { x: 905, label: 'Technician', sub: 'Works where they always have' },
 ];
 
@@ -27,7 +27,7 @@ const PACKETS = [
 const MOBILE = [
   { icon: User, label: 'Client', sub: 'Submits a request, adds a screenshot, follows progress.' },
   { icon: LayoutDashboard, label: 'Desk Portal', sub: 'Receives it, shows status, keeps the conversation in one place.' },
-  { icon: Database, label: 'Autotask / ConnectWise', sub: 'The ticket is created and updated. Your PSA stays the system of record.' },
+  { icon: Database, label: 'Your PSA', sub: 'The ticket is created and updated. Your PSA stays the system of record.' },
   { icon: Wrench, label: 'Technician', sub: 'Replies from the PSA. The answer appears back in the portal.' },
 ];
 
@@ -38,7 +38,7 @@ export function FlowRail() {
         viewBox="0 0 1000 236"
         className="hidden h-auto w-full md:block"
         role="img"
-        aria-label="A request travels from the client into Desk Portal, on to Autotask or ConnectWise, and to the technician — with replies, attachments and status flowing back the same way."
+        aria-label="A request travels from the client into Desk Portal, on to whichever PSA the provider runs, and to the technician — with replies, attachments and status flowing back the same way."
       >
         <defs>
           <linearGradient id="railGrad" x1="0" x2="1">
@@ -77,7 +77,7 @@ export function FlowRail() {
             <circle cx={n.x} cy={92} r="15" fill="var(--brand-line)" fillOpacity="0.12" />
             <circle cx={n.x} cy={92} r="4.5" fill="var(--brand-line)" />
             <text x={n.x} y={131} textAnchor="middle" fontSize="12.5" fontWeight="600" fill="var(--fg)">
-              {n.label.length > 20 ? 'Autotask · ConnectWise' : n.label}
+              {n.label}
             </text>
             <text x={n.x} y={150} textAnchor="middle" fontSize="10.5" fill="var(--muted)">
               {n.sub.length > 26 ? `${n.sub.slice(0, 24)}…` : n.sub}

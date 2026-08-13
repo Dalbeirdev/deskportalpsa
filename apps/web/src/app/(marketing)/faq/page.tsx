@@ -7,7 +7,7 @@ import { Hero } from '@/components/marketing/Hero';
 export const metadata: Metadata = {
   title: 'FAQ — Desk Portal',
   description:
-    'Common questions about how Desk Portal syncs with Autotask and ConnectWise, hosting, security and access.',
+    'Common questions about how Desk Portal works with your PSA — sync, supported platforms, hosting, security and access.',
 };
 
 const GROUPS: { heading: string; items: { q: string; a: string }[] }[] = [
@@ -15,8 +15,12 @@ const GROUPS: { heading: string; items: { q: string; a: string }[] }[] = [
     heading: 'How it works',
     items: [
       {
-        q: 'Does this replace Autotask or ConnectWise?',
+        q: 'Does Desk Portal replace my PSA?',
         a: 'No. Your PSA stays the system of record and your technicians keep working in it. Desk Portal is a client-facing surface on top, kept current by two-way sync. Nothing is migrated out of your PSA.',
+      },
+      {
+        q: 'Which PSA platforms are supported?',
+        a: 'ConnectWise PSA and Autotask PSA are available today and run against live instances. HaloPSA, Kaseya BMS, Syncro, SuperOps, N-able MSP Manager and Atera are on the roadmap. The connector layer is shared, so each new platform reuses the same sync, mapping and client experience — and we will tell you plainly which stage yours is at rather than implying it already exists.',
       },
       {
         q: 'What syncs, and in which direction?',
@@ -53,7 +57,7 @@ const GROUPS: { heading: string; items: { q: string; a: string }[] }[] = [
       },
       {
         q: 'Can we use more than one PSA at once?',
-        a: 'Yes. Connections are configured separately, so an Autotask tenant and a ConnectWise tenant can run side by side, each with its own mappings and defaults.',
+        a: 'Yes. Connections are configured separately, so two different PSA tenants can run side by side, each with its own mappings and defaults.',
       },
     ],
   },
@@ -99,7 +103,7 @@ export default function FaqPage() {
       <Hero
         eyebrow="FAQ"
         title={<>Questions we are <span className="text-brand">actually asked.</span></>}
-        lead="Fifteen straight answers about how the sync works, what it costs to run, and who can see what. If yours is not here, ask it."
+        lead="Straight answers about which PSAs are supported, how the sync works, what it costs to run, and who can see what. If yours is not here, ask it."
         actions={
           <Link href="/contact" className="rounded-lg bg-brand px-5 py-3 text-sm font-medium text-brand-fg transition-transform hover:-translate-y-0.5 hover:opacity-90">
             Ask your question

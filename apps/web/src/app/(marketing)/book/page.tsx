@@ -6,7 +6,7 @@ import { EnquiryForm } from '@/components/marketing/EnquiryForm';
 
 export const metadata: Metadata = {
   title: 'Book a meeting — Desk Portal',
-  description: 'Half an hour against your own Autotask or ConnectWise instance, with the people who built it.',
+  description: 'Half an hour against your own PSA, with the people who built it.',
 };
 
 const AGENDA = [
@@ -24,7 +24,7 @@ export default function BookPage() {
         size="sm"
         eyebrow="Book a meeting"
         title={<>Thirty minutes, against <span className="text-brand">your own PSA.</span></>}
-        lead="Not a scripted demo. Bring your Autotask or ConnectWise instance and the problem you are actually trying to solve."
+        lead="Not a scripted demo. Bring the PSA you run and the problem you are actually trying to solve."
       />
 
       <Container className="grid gap-8 pt-12 pb-10 lg:grid-cols-[1.4fr_1fr]">

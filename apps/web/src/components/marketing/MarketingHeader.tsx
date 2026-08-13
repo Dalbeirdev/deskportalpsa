@@ -7,6 +7,7 @@ import { Menu, X } from 'lucide-react';
 import { BrandMark } from '@/components/BrandMark';
 
 export const MARKETING_NAV = [
+  { href: '/', label: 'Home' },
   { href: '/#features', label: 'Features' },
   { href: '/#integrations', label: 'Integrations' },
   { href: '/#security', label: 'Security' },

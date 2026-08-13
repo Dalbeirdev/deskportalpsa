@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Mail, ArrowUpRight, RefreshCw, ServerCog, ShieldCheck } from 'lucide-react';
 import { BrandMark } from '@/components/BrandMark';
+import { PSA_PLATFORMS } from '@/lib/psaPlatforms';
 
 /** The one address a visitor can actually reach a human on. */
 export const CONTACT_EMAIL = 'proapps@techpio.com';
@@ -22,14 +23,12 @@ const COMPANY = [
   { href: '/terms', label: 'Terms' },
 ];
 
-const INTEGRATIONS = [
-  { href: '/#integrations', label: 'Datto Autotask PSA' },
-  { href: '/#integrations', label: 'ConnectWise Manage' },
-];
+// Driven by the same list the rest of the site uses, so a new platform appears here for free.
+const INTEGRATIONS = PSA_PLATFORMS.map((p) => ({ href: '/#integrations', label: p.name }));
 
 /** Claims made here are true of this build. No badges, counts, or certifications it has not earned. */
 const PROOF = [
-  { icon: RefreshCw, text: 'Two-way sync with Autotask and ConnectWise' },
+  { icon: RefreshCw, text: `Two-way sync across ${PSA_PLATFORMS.length} PSA platforms` },
   { icon: ServerCog, text: 'Self-hosted — runs on your infrastructure' },
   { icon: ShieldCheck, text: 'Credentials in a vault, actions in an audit log' },
 ];
@@ -93,8 +92,8 @@ export function MarketingFooter() {
             </div>
 
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-brand-fg/70">
-              A client ticket portal that sits on top of the PSA you already run. Your technicians
-              keep working where they always have.
+              One modern client portal for the PSA your MSP already runs. Your technicians keep
+              working where they always have.
             </p>
 
             <ul className="mt-5 space-y-2">
