@@ -24,7 +24,12 @@ async function request<T>(path: string, schema: z.ZodType<T>, init?: RequestInit
     },
     cache: 'no-store',
   });
-  if (res.status === 401) throw new ApiError(401, 'Not authenticated');
+  if (res.status === 401) {
+    // The session is over and the BFF has already cleared the dead cookies. Send the user back
+    // through sign-in: without this they sit on a rendered page where every action fails.
+    if (typeof window !== 'undefined') window.location.assign('/api/auth/login');
+    throw new ApiError(401, 'Your session expired — signing you back in.');
+  }
   if (!res.ok) {
     // Surface the API's problem-details message when present so users see the real reason
     // (e.g. which statuses the PSA's board actually allows), not just a status code.

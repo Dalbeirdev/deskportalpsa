@@ -55,23 +55,28 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
   let upstream = await call(access);
 
   let refreshed: { access: string; refresh?: string; maxAge?: number } | null = null;
+  let sessionDead = false;
   if (upstream.status === 401) {
     const rt = req.cookies.get(ck.refresh)?.value;
-    if (rt) {
-      const t = await refresh(rt);
-      if (t) {
-        access = t.access_token;
-        refreshed = { access: t.access_token, refresh: t.refresh_token, maxAge: t.expires_in };
-        upstream = await call(access);
-      }
+    const t = rt ? await refresh(rt) : null;
+    if (t) {
+      access = t.access_token;
+      refreshed = { access: t.access_token, refresh: t.refresh_token, maxAge: t.expires_in };
+      upstream = await call(access);
     }
+    // The session cannot be revived — no refresh token, the IdP rejected it, or even the fresh
+    // token was refused. The cookies must go: the dashboard guard admits anyone holding them, so
+    // leaving them behind produces a zombie session where the UI renders but every call 401s.
+    if (!t || upstream.status === 401) sessionDead = true;
   }
 
   const out = new NextResponse(Buffer.from(await upstream.arrayBuffer()), {
     status: upstream.status,
     headers: passthroughHeaders(upstream),
   });
-  if (refreshed) {
+  if (sessionDead) {
+    for (const name of [ck.access, ck.refresh, ck.idToken]) out.cookies.delete(name);
+  } else if (refreshed) {
     out.cookies.set(ck.access, refreshed.access, {
       httpOnly: true, secure: isProd, sameSite: 'lax', path: '/', maxAge: refreshed.maxAge ?? 300,
     });
