@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Mail, Clock, ShieldCheck } from 'lucide-react';
-import { PageHeader, Container } from '@/components/marketing/ui';
+import { Container } from '@/components/marketing/ui';
+import { Hero } from '@/components/marketing/Hero';
 import { EnquiryForm } from '@/components/marketing/EnquiryForm';
 import { CONTACT_EMAIL } from '@/components/marketing/MarketingFooter';
 
@@ -13,13 +14,14 @@ export const metadata: Metadata = {
 export default function ContactPage() {
   return (
     <>
-      <PageHeader
+      <Hero
+        size="sm"
         eyebrow="Contact us"
-        title="Tell us what you need it to do."
+        title={<>Tell us what you <span className="text-brand">need it to do.</span></>}
         lead="A real question gets a real answer. If it does not do the thing you need, we would rather say so than take you through a demo first."
       />
 
-      <Container className="grid gap-8 pb-8 lg:grid-cols-[1.4fr_1fr]">
+      <Container className="grid gap-8 pt-12 pb-10 lg:grid-cols-[1.4fr_1fr]">
         <EnquiryForm kind="contact" sourcePage="/contact" />
 
         <aside className="space-y-4">

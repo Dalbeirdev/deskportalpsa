@@ -1,6 +1,8 @@
+import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ChevronDown } from 'lucide-react';
-import { PageHeader, Container, CtaBand } from '@/components/marketing/ui';
+import { Container, CtaBand } from '@/components/marketing/ui';
+import { Hero } from '@/components/marketing/Hero';
 
 export const metadata: Metadata = {
   title: 'FAQ — Desk Portal',
@@ -94,13 +96,18 @@ const GROUPS: { heading: string; items: { q: string; a: string }[] }[] = [
 export default function FaqPage() {
   return (
     <>
-      <PageHeader
+      <Hero
         eyebrow="FAQ"
-        title="Questions we are actually asked."
-        lead="If yours is not here, ask it — we would rather answer directly than have you guess."
+        title={<>Questions we are <span className="text-brand">actually asked.</span></>}
+        lead="Fifteen straight answers about how the sync works, what it costs to run, and who can see what. If yours is not here, ask it."
+        actions={
+          <Link href="/contact" className="rounded-lg bg-brand px-5 py-3 text-sm font-medium text-brand-fg transition-transform hover:-translate-y-0.5 hover:opacity-90">
+            Ask your question
+          </Link>
+        }
       />
 
-      <Container className="pb-4">
+      <Container className="pt-12 pb-4">
         {GROUPS.map((group) => (
           <section key={group.heading} className="mb-10">
             <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-[var(--faint)]">

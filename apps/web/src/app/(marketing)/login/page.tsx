@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { LogIn, HelpCircle } from 'lucide-react';
 import { Container } from '@/components/marketing/ui';
+import { Hero } from '@/components/marketing/Hero';
 import { CONTACT_EMAIL } from '@/components/marketing/MarketingFooter';
 
 export const metadata: Metadata = { title: 'Sign in — Desk Portal' };
@@ -16,10 +17,17 @@ export const metadata: Metadata = { title: 'Sign in — Desk Portal' };
 export default function LoginPage() {
   const localMode = process.env.NEXT_PUBLIC_LOCAL_MODE === 'true';
   return (
-    <Container className="flex min-h-[70vh] items-center justify-center py-16">
+    <>
+      <Hero
+        size="sm"
+        eyebrow="Sign in"
+        title={<>Welcome <span className="text-brand">back.</span></>}
+        lead="Your tickets, your clients’ conversations, and the time logged against them — all in one place."
+      />
+      <Container className="flex items-center justify-center py-14">
       <div className="w-full max-w-sm">
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-8">
-          <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
+          <h2 className="text-xl font-semibold tracking-tight">Sign in</h2>
           <p className="mt-1.5 text-sm text-[var(--muted)]">
             {localMode ? 'Local demo mode' : 'Continue to your ticket portal.'}
           </p>
@@ -69,6 +77,7 @@ export default function LoginPage() {
           </a>
         </p>
       </div>
-    </Container>
+      </Container>
+    </>
   );
 }

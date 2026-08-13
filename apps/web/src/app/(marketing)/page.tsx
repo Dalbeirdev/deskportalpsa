@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { ArrowRight, RefreshCw, ShieldCheck, Clock, Users, Paperclip, ListChecks } from 'lucide-react';
-import { Container, Section, Card, CtaBand } from '@/components/marketing/ui';
+import { ArrowRight, ShieldCheck, Clock, Users, Paperclip, ListChecks } from 'lucide-react';
+import { Section, Card, CtaBand } from '@/components/marketing/ui';
+import { Hero } from '@/components/marketing/Hero';
+import { SyncDiagram } from '@/components/marketing/SyncDiagram';
 
 export const metadata: Metadata = {
   title: 'Desk Portal — a client ticket portal for Autotask and ConnectWise',
@@ -27,34 +29,34 @@ const STEPS = [
 export default function HomePage() {
   return (
     <>
-      <Container className="pt-16 pb-6 sm:pt-24">
-        <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs font-medium text-[var(--muted)]">
-          <RefreshCw size={12} className="text-brand" aria-hidden="true" />
-          Works with Datto Autotask and ConnectWise Manage
-        </p>
-        <h1 className="max-w-3xl text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">
-          A client portal for the PSA you already run.
-        </h1>
-        <p className="mt-5 max-w-2xl text-lg leading-relaxed text-[var(--muted)]">
-          Your clients get somewhere clear to raise and follow tickets. Your technicians keep working
-          in Autotask or ConnectWise. Replies, files and time move between the two automatically —
-          nothing is migrated, and your PSA stays the system of record.
-        </p>
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Link
-            href="/book"
-            className="inline-flex items-center gap-2 rounded-lg bg-brand px-5 py-3 text-sm font-medium text-brand-fg hover:opacity-90"
-          >
-            Book a meeting <ArrowRight size={15} aria-hidden="true" />
-          </Link>
-          <Link
-            href="/contact"
-            className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-5 py-3 text-sm font-medium hover:bg-[var(--bg)]"
-          >
-            Ask a question
-          </Link>
-        </div>
-      </Container>
+      <Hero
+        size="lg"
+        eyebrow="Autotask · ConnectWise"
+        title={
+          <>
+            A client portal for the PSA{' '}
+            <span className="text-brand">you already run.</span>
+          </>
+        }
+        lead="Your clients get somewhere clear to raise and follow tickets. Your technicians keep working in Autotask or ConnectWise. Replies, files and time move between the two automatically — nothing is migrated, and your PSA stays the system of record."
+        visual={<SyncDiagram />}
+        actions={
+          <>
+            <Link
+              href="/book"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand px-5 py-3 text-sm font-medium text-brand-fg transition-transform hover:-translate-y-0.5 hover:opacity-90"
+            >
+              Book a meeting <ArrowRight size={15} aria-hidden="true" />
+            </Link>
+            <Link
+              href="/contact"
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-5 py-3 text-sm font-medium transition-transform hover:-translate-y-0.5 hover:bg-[var(--bg)]"
+            >
+              Ask a question
+            </Link>
+          </>
+        }
+      />
 
       <Section
         title="The gap this closes"

@@ -1,5 +1,7 @@
+import Link from 'next/link';
 import type { Metadata } from 'next';
-import { PageHeader, Section, Card, CtaBand, Container } from '@/components/marketing/ui';
+import { Section, Card, CtaBand, Container } from '@/components/marketing/ui';
+import { Hero } from '@/components/marketing/Hero';
 
 export const metadata: Metadata = {
   title: 'About us — Desk Portal',
@@ -10,10 +12,20 @@ export const metadata: Metadata = {
 export default function AboutPage() {
   return (
     <>
-      <PageHeader
+      <Hero
         eyebrow="About us"
-        title="Built by people who work in a PSA every day."
+        title={<>Built by people who <span className="text-brand">work in a PSA</span> every day.</>}
         lead="Desk Portal is made by TechPio. It exists because the gap between a managed service provider and its clients is usually filled with email, and email loses things."
+        actions={
+          <>
+            <Link href="/book" className="rounded-lg bg-brand px-5 py-3 text-sm font-medium text-brand-fg transition-transform hover:-translate-y-0.5 hover:opacity-90">
+              Talk to us
+            </Link>
+            <Link href="/faq" className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-5 py-3 text-sm font-medium transition-transform hover:-translate-y-0.5 hover:bg-[var(--bg)]">
+              Read the FAQ
+            </Link>
+          </>
+        }
       />
 
       <Section title="Why we built it">

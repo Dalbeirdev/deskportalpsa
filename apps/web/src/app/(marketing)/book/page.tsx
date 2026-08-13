@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Video, Check } from 'lucide-react';
-import { PageHeader, Container } from '@/components/marketing/ui';
+import { Container } from '@/components/marketing/ui';
+import { Hero } from '@/components/marketing/Hero';
 import { EnquiryForm } from '@/components/marketing/EnquiryForm';
 
 export const metadata: Metadata = {
@@ -19,13 +20,14 @@ const AGENDA = [
 export default function BookPage() {
   return (
     <>
-      <PageHeader
+      <Hero
+        size="sm"
         eyebrow="Book a meeting"
-        title="Thirty minutes, against your own PSA."
+        title={<>Thirty minutes, against <span className="text-brand">your own PSA.</span></>}
         lead="Not a scripted demo. Bring your Autotask or ConnectWise instance and the problem you are actually trying to solve."
       />
 
-      <Container className="grid gap-8 pb-8 lg:grid-cols-[1.4fr_1fr]">
+      <Container className="grid gap-8 pt-12 pb-10 lg:grid-cols-[1.4fr_1fr]">
         <EnquiryForm kind="meeting" sourcePage="/book" />
 
         <aside className="space-y-4">
