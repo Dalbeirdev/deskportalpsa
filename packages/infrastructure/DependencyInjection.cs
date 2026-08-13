@@ -138,6 +138,7 @@ public static class DependencyInjection
         services.AddScoped<ITicketResyncService, Sync.TicketResyncService>();
         services.AddScoped<IAuditQueryService, AuditQueryService>();
         services.AddScoped<IUserAdminService, UserAdminService>();
+        services.AddScoped<Application.Marketing.IEnquiryService, Marketing.EnquiryService>();
 
         return services;
     }

@@ -5,8 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, Ticket, Plug, Bell, User, BarChart3, Activity, ListChecks, ShieldCheck,
-  SlidersHorizontal, HardDrive, Rocket, Users, type LucideIcon,
-} from 'lucide-react';
+  SlidersHorizontal, HardDrive, Rocket, Users, type LucideIcon, Inbox,} from 'lucide-react';
 import { api } from '@/lib/api';
 
 // `permissions` is ANY-OF: "Productivity" is rightly visible to a technician who may only see
@@ -44,6 +43,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
       { href: '/dashboard/users', label: 'Users', icon: Users, permissions: ['users.manage'] },
       { href: '/dashboard/jobs', label: 'Background Jobs', icon: ListChecks, permissions: ['jobs.manage'] },
       { href: '/dashboard/audit', label: 'Audit Log', icon: ShieldCheck, permissions: ['audit.view'] },
+      { href: '/dashboard/enquiries', label: 'Enquiries', icon: Inbox, permissions: ['enquiries.view'] },
       { href: '/dashboard/notifications', label: 'Notifications', icon: Bell },
       { href: '/dashboard/profile', label: 'Profile', icon: User },
     ],

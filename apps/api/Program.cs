@@ -83,6 +83,13 @@ builder.Services.AddRateLimiter(o =>
             partitionKey: ctx.User.FindFirst(CurrentUser.OrgClaim)?.Value
                           ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "anon",
             _ => new FixedWindowRateLimiterOptions { PermitLimit = 300, Window = TimeSpan.FromMinutes(1) }));
+
+    // The public forms are the one unauthenticated write in the product, so they get their own
+    // much tighter budget, partitioned by IP: the global allowance is sized for a signed-in app
+    // session and would let a single host post thousands of enquiries an hour.
+    o.AddPolicy("public-forms", ctx => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: ctx.Connection.RemoteIpAddress?.ToString() ?? "anon",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(10) }));
 });
 
 // ---- CORS (allowlist from config) ----

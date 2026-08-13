@@ -13,10 +13,33 @@ public static class DatabaseSeeder
     {
         foreach (var roleType in Enum.GetValues<RoleType>())
         {
-            var exists = await db.Roles
+            var existing = await db.Roles
                 .IgnoreQueryFilters()
-                .AnyAsync(r => r.IsSystemRole && r.BuiltInType == roleType, ct);
-            if (exists) continue;
+                .Include(r => r.Permissions)
+                .SingleOrDefaultAsync(r => r.IsSystemRole && r.BuiltInType == roleType, ct);
+
+            // A role seeded by an earlier version predates any permission added since. Skipping it
+            // outright meant a new claim reached fresh installs only and silently never reached a
+            // deployed one, where the feature would then be invisible with no error to explain it.
+            // Additive only: a claim removed from the catalogue is left alone rather than revoked
+            // underneath whoever is relying on it.
+            if (existing is not null)
+            {
+                var held = existing.Permissions.Select(p => p.PermissionKey).ToHashSet();
+                foreach (var missing in Permissions.ForRole(roleType).Where(p => !held.Contains(p)))
+                {
+                    // Added explicitly rather than through existing.Permissions: BaseEntity assigns
+                    // its own Id, so a child discovered on a tracked parent looks to EF like a row
+                    // that already exists and is tracked Modified — which fails the save outright,
+                    // taking down startup on the very deployments this is meant to repair.
+                    db.Set<RolePermission>().Add(new RolePermission
+                    {
+                        RoleId = existing.Id,
+                        PermissionKey = missing,
+                    });
+                }
+                continue;
+            }
 
             var role = new Role
             {

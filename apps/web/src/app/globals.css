@@ -10,7 +10,7 @@
   --muted: #475569; /* ~7:1 on white */
   --faint: #64748b; /* ~4.7:1 on white */
   --border: #e2e8f0;
-  --brand-line: #2563eb;
+  --brand-line: #14532D;
 }
 
 .dark {
@@ -20,7 +20,7 @@
   --muted: #a2adc0; /* AA on dark */
   --faint: #8592a8; /* ~5.6:1 on dark */
   --border: #1e293b;
-  --brand-line: #5b8cff;
+  --brand-line: #86EFAC;
 }
 
 body {
