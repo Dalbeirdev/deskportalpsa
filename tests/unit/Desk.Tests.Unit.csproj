@@ -10,6 +10,8 @@
     <ProjectReference Include="..\..\packages\infrastructure\Desk.Infrastructure.csproj" />
     <ProjectReference Include="..\..\packages\psa-core\Desk.PsaCore.csproj" />
     <ProjectReference Include="..\..\packages\connectors\Desk.Connectors.csproj" />
+    <!-- Referenced so request contracts can be asserted against the real API assembly. -->
+    <ProjectReference Include="..\..\apps\api\Desk.Api.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
