@@ -47,6 +47,9 @@ public static class Permissions
     public const string AuditView = "audit.view";
     public const string SecurityConfigView = "security.config.view";
 
+    // Inbound enquiries from the public site
+    public const string EnquiriesView = "enquiries.view";
+
     /// <summary>Every claim, used to grant the full set to super-administrators.</summary>
     public static readonly IReadOnlyList<string> All = new[]
     {
@@ -56,7 +59,7 @@ public static class Permissions
         TicketsViewAll, TicketsViewAssigned, TicketsViewOwnCompany, TicketsViewOwn,
         TicketsCreate, TicketsAddPublicNote, TicketsLogTime, TicketsUpdate,
         ReportsView, ProductivityViewTeam, ProductivityViewOwn,
-        IntegrationHealthView, JobsManage, AuditView, SecurityConfigView,
+        IntegrationHealthView, JobsManage, AuditView, SecurityConfigView, EnquiriesView,
     };
 
     /// <summary>Default claim set for each built-in role. Used to seed the role table.</summary>
@@ -68,12 +71,12 @@ public static class Permissions
             OrgManage, ConnectionsManage, ConnectionsView, MappingsManage, MappingsView,
             UsersManage, RolesManage, ClientUsersManage, TicketsViewAll, TicketsCreate,
             TicketsAddPublicNote, TicketsLogTime, TicketsUpdate, ReportsView, ProductivityViewTeam, IntegrationHealthView,
-            JobsManage, AuditView, SecurityConfigView,
+            JobsManage, AuditView, SecurityConfigView, EnquiriesView,
         },
         RoleType.Manager => new[]
         {
             ConnectionsView, MappingsView, TicketsViewAll, TicketsLogTime, TicketsUpdate, ReportsView,
-            ProductivityViewTeam, IntegrationHealthView,
+            ProductivityViewTeam, IntegrationHealthView, EnquiriesView,
         },
         RoleType.Technician => new[]
         {

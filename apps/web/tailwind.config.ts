@@ -5,7 +5,9 @@ export default {
   theme: {
     extend: {
       colors: {
-        brand: { DEFAULT: '#2563eb', fg: '#ffffff' },
+        // Forest green from the Pio mark. Blue is Autotask and ConnectWise territory;
+        // matching it made the portal read as their add-on rather than a product.
+        brand: { DEFAULT: '#14532D', fg: '#FDF6E3', soft: '#86EFAC', accent: '#EA580C' },
       },
     },
   },

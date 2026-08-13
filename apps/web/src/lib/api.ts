@@ -50,6 +50,26 @@ export class ApiError extends Error {
   }
 }
 
+export const EnquirySchema = z.object({
+  id: z.string(),
+  kind: z.union([z.literal('Contact'), z.literal('Meeting'), z.number()]),
+  name: z.string(),
+  email: z.string(),
+  company: z.string().nullable(),
+  phone: z.string().nullable(),
+  message: z.string(),
+  preferredTime: z.string().nullable(),
+  status: z.union([z.literal('New'), z.literal('InProgress'), z.literal('Closed'), z.number()]),
+  sourcePage: z.string().nullable(),
+  createdAt: z.string(),
+});
+export const EnquiryListSchema = z.object({
+  total: z.number(),
+  newCount: z.number(),
+  items: z.array(EnquirySchema),
+});
+export type Enquiry = z.infer<typeof EnquirySchema>;
+
 export const MeSchema = z.object({
   subject: z.string().nullable(),
   email: z.string().nullable(),
@@ -149,6 +169,22 @@ export const api = {
 
   // Admin
   connections: () => request('/api/admin/connections', z.array(ConnectionSummarySchema)) as Promise<ConnectionSummary[]>,
+  /** Public site forms. No auth: the endpoint is anonymous by design and writes only. */
+  submitEnquiry: (
+    kind: 'contact' | 'meeting',
+    body: {
+      name: string; email: string; company?: string; phone?: string;
+      message: string; preferredTime?: string; sourcePage?: string; website?: string;
+    },
+  ) => request(`/api/public/enquiries/${kind}`, z.object({ received: z.boolean() }), {
+    method: 'POST', body: JSON.stringify(body),
+  }),
+  enquiries: (status?: 'New' | 'InProgress' | 'Closed') =>
+    request(`/api/admin/enquiries${status ? `?status=${status}` : ''}`, EnquiryListSchema),
+  setEnquiryStatus: (id: string, status: 'New' | 'InProgress' | 'Closed') =>
+    request(`/api/admin/enquiries/${id}/status`, z.void(), {
+      method: 'POST', body: JSON.stringify({ status }),
+    }),
   createConnection: (body: {
     name: string; provider: number; apiEndpoint: string; tenantIdentifier?: string;
     credentials: Record<string, string>; timeZone?: string;

@@ -428,3 +428,22 @@ public sealed class AuditLogEntryConfig : IEntityTypeConfiguration<AuditLogEntry
         b.HasIndex(x => x.CorrelationId);
     }
 }
+
+public sealed class EnquiryConfig : IEntityTypeConfiguration<Desk.Domain.Marketing.Enquiry>
+{
+    public void Configure(EntityTypeBuilder<Desk.Domain.Marketing.Enquiry> b)
+    {
+        b.ToTable("enquiries");
+        b.HasKey(x => x.Id);
+        // Caps match the API's validation, so an oversized field is refused rather than truncated.
+        b.Property(x => x.Name).HasMaxLength(120).IsRequired();
+        b.Property(x => x.Email).HasMaxLength(200).IsRequired();
+        b.Property(x => x.Company).HasMaxLength(160);
+        b.Property(x => x.Phone).HasMaxLength(60);
+        b.Property(x => x.Message).HasMaxLength(4000).IsRequired();
+        b.Property(x => x.PreferredTime).HasMaxLength(200);
+        b.Property(x => x.SourcePage).HasMaxLength(200);
+        // The list is read newest-first and filtered by status; this is that query.
+        b.HasIndex(x => new { x.Status, x.CreatedAt });
+    }
+}
