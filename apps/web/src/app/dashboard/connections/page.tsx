@@ -176,7 +176,11 @@ export default function ConnectionsPage() {
               {save.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Save connection'}
             </button>
           </div>
-          {save.isError && <p className="text-sm text-red-500">Could not save (preview runs without a backend).</p>}
+          {save.isError && (
+            <p className="text-sm text-red-500">
+              {save.error instanceof Error ? save.error.message : 'Could not save the connection.'}
+            </p>
+          )}
         </form>
       )}
 

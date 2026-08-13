@@ -8,7 +8,7 @@
   "maxFailureWaitSeconds": 900,
   "failureFactor": 5,
   "accessTokenLifespan": 300,
-  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionIdleTimeout": 28800,
   "ssoSessionMaxLifespan": 36000,
   "clients": [
     {
