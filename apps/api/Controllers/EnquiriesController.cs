@@ -47,10 +47,15 @@ public sealed class PublicEnquiriesController(IEnquiryService enquiries) : Contr
             kind, body.Name, body.Email, body.Company, body.Phone,
             body.Message, body.PreferredTime, body.SourcePage, body.Website), ct);
 
-        // The only detail worth returning: whether the fields were usable. Anything more would let
-        // an anonymous caller probe what is stored.
+        // Enough to correct the form, and no more — an anonymous caller should not be able to probe
+        // what is stored. The list is per-kind because a meeting needs details a question does not,
+        // and naming the wrong fields sends someone to check something that was never the problem.
+        var required = kind == EnquiryKind.Meeting
+            ? "your name, email address, company, phone number, preferred time and message"
+            : "your name, email address and message";
+
         return ok ? Accepted(new { received = true })
-                  : BadRequest(new { error = "Please check your name, email address and message." });
+                  : BadRequest(new { error = $"Please check {required}." });
     }
 }
 
