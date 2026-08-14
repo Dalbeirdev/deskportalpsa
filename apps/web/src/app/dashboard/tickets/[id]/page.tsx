@@ -7,8 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Pencil, MoreHorizontal, Paperclip,
   Send, Bold, Smile, Link2, ArrowUpDown, Lock, Monitor, Wifi, Mail, KeyRound, Cpu, Ticket,
-  Copy, RefreshCw, Download, Clock, Trash2, Check, X, ClipboardList, UserCog,
-} from 'lucide-react';
+  Copy, RefreshCw, Download, Clock, Trash2, Check, X, ClipboardList, UserCog, ExternalLink} from 'lucide-react';
 import { useTimer } from '@/components/TimerProvider';
 import { api, type AssigneeOptions } from '@/lib/api';
 import type { TicketDetail } from '@/lib/types';
@@ -373,7 +372,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 </p>
               )}
               <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-[var(--border)] pt-4 text-sm sm:grid-cols-3 lg:grid-cols-6">
-                <Meta label="Reference" value={ticket.externalTicketId ?? '—'} />
+                <Meta label="Reference" value={ticket.externalTicketId ?? '—'} href={ticket.externalTicketUrl} />
                 <Meta label="Source" value={ticket.connectionName ?? '—'} />
                 <Meta label="Queue / Board" value={ticket.queueOrBoard ?? '—'} />
                 <Meta label="Assigned to" value={ticket.assignedTechnicianName ?? ticket.assignedTechnicianExternalId ?? 'Unassigned'} />
@@ -733,11 +732,28 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   );
 }
 
-function Meta({ label, value }: { label: string; value: string }) {
+function Meta({ label, value, href }: { label: string; value: string; href?: string | null }) {
   return (
     <div>
       <dt className="text-[10px] uppercase tracking-wide text-[var(--faint)]">{label}</dt>
-      <dd className="mt-0.5 truncate font-medium" title={value}>{value}</dd>
+      <dd className="mt-0.5 truncate font-medium" title={value}>
+        {href ? (
+          // Opens the same record in the PSA so a note or a time entry can be checked at source.
+          // noreferrer as well as noopener: the PSA has no need to know where the click came from.
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-brand hover:underline"
+          >
+            {value}
+            <ExternalLink size={12} aria-hidden="true" />
+            <span className="sr-only">— open in the PSA (opens in a new tab)</span>
+          </a>
+        ) : (
+          value
+        )}
+      </dd>
     </div>
   );
 }
