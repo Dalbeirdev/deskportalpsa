@@ -130,6 +130,10 @@ export const ConnectionSummarySchema = z.object({
   isEnabled: z.boolean(),
   lastSuccessfulSyncAt: z.string().nullable(),
   lastError: z.string().nullable(),
+  lastHealthCheckAt: z.string().nullable().default(null),
+  ticketCount: z.number().default(0),
+  customerCount: z.number().default(0),
+  contactCount: z.number().default(0),
 });
 export type ConnectionSummary = z.infer<typeof ConnectionSummarySchema>;
 
