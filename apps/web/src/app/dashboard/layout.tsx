@@ -14,12 +14,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <QueryProvider>
     <TimerProvider>
     <div className="flex min-h-screen">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)] p-4 md:flex">
-        <div className="mb-6 flex items-center gap-2.5 px-2">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-[var(--border)] bg-gradient-to-b from-[var(--surface)] via-[var(--surface)] to-brand/[0.04] p-4 md:flex">
+        <div className="mb-6 flex items-center gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2.5">
           <BrandMark size={36} className="shrink-0 rounded-lg" />
-          <div>
-            <div className="font-semibold leading-tight">Desk Portal</div>
-            <div className="text-[10px] text-[var(--muted)]">Multi-tenant PSA Portal</div>
+          <div className="min-w-0">
+            <div className="truncate text-[15px] font-semibold leading-tight tracking-tight">Desk Portal</div>
+            <div className="truncate text-[10px] text-[var(--muted)]">Multi-tenant PSA Portal</div>
           </div>
         </div>
         <SidebarNav />
