@@ -37,11 +37,12 @@ public class PsaTicketLinkTests
     public void Autotask_maps_the_api_zone_to_the_matching_ui_zone()
     {
         var url = PsaTicketLink.For(
-            ProviderType.AutotaskPsa, "https://webservices2.autotask.net/atservicesrest/v1.0/", "7810");
+            ProviderType.AutotaskPsa, "https://webservices31.autotask.net/ATServicesRest/v1.0/", "7807");
 
-        // Zones are not interchangeable — a ticket in zone 2 is not reachable through zone 1.
+        // Verbatim the form Autotask itself produces for a ticket, confirmed against a live zone-31
+        // instance. Zones are not interchangeable — a ticket in 31 is not reachable through 1.
         url.Should().Be(
-            "https://ww2.autotask.net/Autotask/AutotaskExtend/ExecuteCommand.aspx?Code=OpenTicketDetail&TicketID=7810");
+            "https://ww31.autotask.net/Mvc/ServiceDesk/TicketDetail.mvc?workspace=False&ids%5B0%5D=7807&ticketId=7807");
     }
 
     [Theory]
@@ -77,6 +78,6 @@ public class PsaTicketLinkTests
             ProviderType.AutotaskPsa, "https://webservices2.autotask.net/atservicesrest/", "T2026 0805.0001");
 
         url.Should().NotContain(" ");
-        url.Should().EndWith("TicketID=T2026%200805.0001");
+        url.Should().EndWith("ticketId=T2026%200805.0001");
     }
 }
