@@ -34,15 +34,25 @@ public sealed class EnquiryService(DeskDbContext db, TimeProvider clock) : IEnqu
         if (name is null || email is null || message is null || !LooksLikeEmail(email))
             return false;
 
+        var company = Clip(input.Company, 160);
+        var phone = Clip(input.Phone, 60);
+        var preferred = Clip(input.PreferredTime, 200);
+
+        // A meeting request needs someone reachable and a time to aim for; a general question does
+        // not. The browser marks the same fields required, but that is a courtesy to the visitor —
+        // this endpoint is anonymous and anything arriving here may have skipped the form entirely.
+        if (input.Kind == EnquiryKind.Meeting && (company is null || phone is null || preferred is null))
+            return false;
+
         db.Enquiries.Add(new Enquiry
         {
             Kind = input.Kind,
             Name = name,
             Email = email,
-            Company = Clip(input.Company, 160),
-            Phone = Clip(input.Phone, 60),
+            Company = company,
+            Phone = phone,
             Message = message,
-            PreferredTime = Clip(input.PreferredTime, 200),
+            PreferredTime = preferred,
             SourcePage = Clip(input.SourcePage, 200),
             Status = EnquiryStatus.New,
             CreatedAt = clock.GetUtcNow(),

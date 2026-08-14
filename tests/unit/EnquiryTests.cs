@@ -56,6 +56,56 @@ public class EnquiryTests
         (await db.Enquiries.CountAsync()).Should().Be(0);
     }
 
+    private static SubmitEnquiryInput Meeting(
+        string? company = "Acme", string? phone = "+44 7700 900123", string? preferred = "Tuesday 10:00 (Europe/London)") =>
+        new(EnquiryKind.Meeting, "Dana Reed", "dana@acme.test", company, phone, "Can we see it?", preferred, "/book", null);
+
+    [Fact]
+    public async Task A_meeting_request_carries_the_scheduling_details()
+    {
+        var (svc, db) = Build();
+        await using var _ = db;
+
+        (await svc.SubmitAsync(Meeting())).Should().BeTrue();
+
+        var row = await db.Enquiries.SingleAsync();
+        row.Kind.Should().Be(EnquiryKind.Meeting);
+        row.Company.Should().Be("Acme");
+        row.Phone.Should().Be("+44 7700 900123");
+        row.PreferredTime.Should().Be("Tuesday 10:00 (Europe/London)");
+    }
+
+    [Theory]
+    [InlineData(null, "+44 7700 900123", "Tuesday 10:00")]   // no company
+    [InlineData("Acme", null, "Tuesday 10:00")]               // no phone
+    [InlineData("Acme", "+44 7700 900123", null)]             // no time
+    [InlineData("Acme", "   ", "Tuesday 10:00")]              // whitespace is not a phone number
+    public async Task A_meeting_request_missing_a_required_detail_is_refused(string? company, string? phone, string? preferred)
+    {
+        // The browser marks these required, but the endpoint is anonymous — a caller can skip the
+        // form entirely, so the rule has to hold here or it does not hold at all.
+        var (svc, db) = Build();
+        await using var _ = db;
+
+        (await svc.SubmitAsync(Meeting(company, phone, preferred))).Should().BeFalse();
+        (await db.Enquiries.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task A_contact_message_still_needs_no_company_or_phone()
+    {
+        // The same endpoint serves both forms; tightening the meeting rules must not quietly make
+        // a general question harder to send.
+        var (svc, db) = Build();
+        await using var _ = db;
+
+        var bare = new SubmitEnquiryInput(
+            EnquiryKind.Contact, "Dana Reed", "dana@acme.test", null, null, "Do you support HaloPSA?", null, "/contact", null);
+
+        (await svc.SubmitAsync(bare)).Should().BeTrue();
+        (await db.Enquiries.SingleAsync()).Company.Should().BeNull();
+    }
+
     [Fact]
     public async Task A_tripped_honeypot_looks_like_success_but_stores_nothing()
     {
