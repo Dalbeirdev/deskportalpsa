@@ -60,8 +60,8 @@ public static class PsaTicketLink
     }
 
     /// <summary>
-    /// Autotask pairs each API zone with a UI zone of the same number: webservices2.autotask.net
-    /// -> ww2.autotask.net. Zones are not interchangeable, so an unnumbered or unfamiliar host is
+    /// Autotask pairs each API zone with a UI zone of the same number: webservices31.autotask.net
+    /// -> ww31.autotask.net. Zones are not interchangeable, so an unnumbered or unfamiliar host is
     /// left alone rather than guessed at.
     /// </summary>
     private static string? Autotask(Uri api, string id)
@@ -77,7 +77,10 @@ public static class PsaTicketLink
         var zone = rest[..dot];
         if (!zone.All(char.IsAsciiDigit)) return null;
 
-        return $"https://ww{zone}{rest[dot..]}/Autotask/AutotaskExtend/ExecuteCommand.aspx" +
-               $"?Code=OpenTicketDetail&TicketID={id}";
+        // The service desk route, as Autotask itself produces it. ids[0] is percent-encoded because
+        // it is a literal bracketed parameter name, and the id appears twice — the grid selection
+        // and the record to open are separate parameters that happen to carry the same value.
+        return $"https://ww{zone}{rest[dot..]}/Mvc/ServiceDesk/TicketDetail.mvc" +
+               $"?workspace=False&ids%5B0%5D={id}&ticketId={id}";
     }
 }
