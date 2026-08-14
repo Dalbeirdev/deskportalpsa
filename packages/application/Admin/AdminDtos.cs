@@ -12,7 +12,13 @@ public sealed record ConnectionSummary(
     ConnectionStatus Status,
     bool IsEnabled,
     DateTimeOffset? LastSuccessfulSyncAt,
-    string? LastError);
+    string? LastError,
+    // Counts drawn from what has actually synced, so the card cannot show a number the portal
+    // does not hold. Trailing + defaulted so existing construction sites are unaffected.
+    DateTimeOffset? LastHealthCheckAt = null,
+    int TicketCount = 0,
+    int CustomerCount = 0,
+    int ContactCount = 0);
 
 public sealed record CreateConnectionInput(
     string Name,

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plug, Plus, ShieldCheck, ChevronDown } from 'lucide-react';
+import { Plug, Plus, ShieldCheck, ChevronDown, Globe, Copy, Ticket, Users, Contact, RefreshCw, Activity, type LucideIcon } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { ConnectionSummary, ConnectionFields } from '@/lib/types';
 import { SyncSettings } from './SyncSettings';
@@ -123,7 +123,7 @@ export default function ConnectionsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold">PSA Connections</h1>
-          <p className="text-sm text-[var(--muted)]">Connect Autotask and ConnectWise tenants.</p>
+          <p className="text-sm text-[var(--muted)]">Connect, manage and synchronize your PSA platforms.</p>
         </div>
         <button onClick={openAdd} className="inline-flex items-center gap-2 rounded-lg bg-brand px-3.5 py-2 text-sm font-medium text-brand-fg hover:opacity-90">
           <Plus size={16} /> Add connection
@@ -192,48 +192,71 @@ export default function ConnectionsPage() {
       )}
 
       {data && data.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-[var(--muted)]">
-              <tr className="border-b border-[var(--border)]">
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Endpoint</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Enabled</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((c) => (
-                <FragmentRow
-                  key={c.id}
-                  c={c}
-                  result={results[c.id]}
-                  expanded={expandedId === c.id}
-                  fields={fieldsById[c.id]}
-                  onTest={() => test.mutate(c.id)}
-                  testing={test.isPending && test.variables === c.id}
-                  onSync={() => sync.mutate({ id: c.id, full: false })}
-                  onResyncAll={() => sync.mutate({ id: c.id, full: true })}
-                  syncing={sync.isPending && sync.variables?.id === c.id}
-                  settingsOpen={settingsId === c.id}
-                  onToggleSettings={() => setSettingsId(settingsId === c.id ? null : c.id)}
-                  onRefreshFields={() => refreshFields.mutate(c.id)}
-                  refreshingFields={refreshFields.isPending && refreshFields.variables === c.id}
-                  onEdit={() => openEdit(c)}
-                  onToggleFields={() => toggleFields(c.id)}
-                />
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-4">
+          {data.map((c) => (
+            <ConnectionCard
+              key={c.id}
+              c={c}
+              result={results[c.id]}
+              expanded={expandedId === c.id}
+              fields={fieldsById[c.id]}
+              onTest={() => test.mutate(c.id)}
+              testing={test.isPending && test.variables === c.id}
+              onSync={() => sync.mutate({ id: c.id, full: false })}
+              onResyncAll={() => sync.mutate({ id: c.id, full: true })}
+              syncing={sync.isPending && sync.variables?.id === c.id}
+              settingsOpen={settingsId === c.id}
+              onToggleSettings={() => setSettingsId(settingsId === c.id ? null : c.id)}
+              onRefreshFields={() => refreshFields.mutate(c.id)}
+              refreshingFields={refreshFields.isPending && refreshFields.variables === c.id}
+              onEdit={() => openEdit(c)}
+              onToggleFields={() => toggleFields(c.id)}
+            />
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-function FragmentRow({
-  c, result, expanded, fields, onTest, testing, onSync, onResyncAll, syncing, settingsOpen, onToggleSettings, onRefreshFields, refreshingFields, onEdit, onToggleFields,
+/** Provider mark. Initials, not vendor logos — we ship no brand assets we have no licence for. */
+const PROVIDER_MARK: Record<number, string> = { 1: 'CW', 2: 'AT' };
+
+const HEALTH: Record<number, { dot: string; text: string }> = {
+  0: { dot: 'bg-slate-400', text: 'text-[var(--muted)]' },
+  1: { dot: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400' },
+  2: { dot: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400' },
+  3: { dot: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400' },
+  4: { dot: 'bg-rose-500', text: 'text-rose-600 dark:text-rose-400' },
+};
+
+function ago(iso: string | null) {
+  if (!iso) return 'never';
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + ' min ago';
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return hrs + ' h ago';
+  return Math.round(hrs / 24) + ' d ago';
+}
+
+function Stat({ icon: Icon, label, value, tint }: { icon: LucideIcon; label: string; value: string; tint: string }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className={'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ' + tint}>
+        <Icon size={15} aria-hidden="true" />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[11px] text-[var(--muted)]">{label}</span>
+        <span className="block truncate text-sm font-semibold tabular-nums">{value}</span>
+      </span>
+    </div>
+  );
+}
+
+function ConnectionCard({
+  c, result, expanded, fields, onTest, testing, onSync, onResyncAll, syncing, settingsOpen,
+  onToggleSettings, onRefreshFields, refreshingFields, onEdit, onToggleFields,
 }: {
   c: ConnectionSummary;
   result?: { ok: boolean; msg: string };
@@ -251,58 +274,121 @@ function FragmentRow({
   onEdit: () => void;
   onToggleFields: () => void;
 }) {
+  const status = Number(c.status);
+  const health = HEALTH[status] ?? HEALTH[1];
+
   return (
-    <>
-      <tr className="border-b border-[var(--border)] last:border-0">
-        <td className="px-4 py-3 font-medium">{c.name}</td>
-        <td className="px-4 py-3 text-[var(--muted)]">{c.apiEndpoint}</td>
-        <td className="px-4 py-3">{STATUS_LABEL[Number(c.status)] ?? String(c.status)}</td>
-        <td className="px-4 py-3">{c.isEnabled ? 'Yes' : 'No'}</td>
-        <td className="px-4 py-3 text-right">
-          <div className="flex items-center justify-end gap-2">
-            {result && (
-              <span className={result.ok ? 'text-xs text-green-600 dark:text-green-400' : 'text-xs text-red-600 dark:text-red-400'}>
-                {result.msg}
-              </span>
-            )}
-            <ActionButton onClick={onToggleFields}>
-              <ChevronDown size={13} className={expanded ? 'rotate-180 transition-transform' : 'transition-transform'} /> Boards
-            </ActionButton>
-            <ActionButton onClick={onRefreshFields} disabled={refreshingFields}>{refreshingFields ? 'Refreshing…' : 'Refresh fields'}</ActionButton>
-            <ActionButton onClick={onEdit}>Edit</ActionButton>
-            <ActionButton onClick={onTest} disabled={testing}>{testing ? 'Testing…' : 'Test'}</ActionButton>
-            <ActionButton onClick={onSync} disabled={syncing}>{syncing ? 'Syncing…' : 'Sync now'}</ActionButton>
-            <ActionButton onClick={onResyncAll} disabled={syncing}>Re-sync all</ActionButton>
-            <ActionButton onClick={onToggleSettings}>
-              <ChevronDown size={13} className={settingsOpen ? 'rotate-180 transition-transform' : 'transition-transform'} /> Sync settings
-            </ActionButton>
+    <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+      <div className="flex flex-wrap items-start gap-4 p-5">
+        <span
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--bg)] text-base font-bold tracking-wide text-brand"
+          aria-hidden="true"
+        >
+          {PROVIDER_MARK[Number(c.provider)] ?? '?'}
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-[17px] font-semibold">{c.name}</h2>
+            <span
+              className={
+                'rounded-full px-2 py-0.5 text-[11px] font-medium ' +
+                (c.isEnabled
+                  ? 'bg-brand/10 text-brand dark:bg-brand/25 dark:text-brand-soft'
+                  : 'bg-[var(--bg)] text-[var(--muted)]')
+              }
+            >
+              {c.isEnabled ? 'Enabled' : 'Disabled'}
+            </span>
           </div>
-        </td>
-      </tr>
+          <p className="mt-1 flex items-center gap-1.5 text-[13px] text-[var(--muted)]">
+            <Globe size={12} aria-hidden="true" />
+            <span className="truncate">{c.apiEndpoint}</span>
+            <button
+              onClick={() => navigator.clipboard?.writeText(c.apiEndpoint)}
+              aria-label="Copy endpoint"
+              className="shrink-0 rounded p-0.5 hover:bg-[var(--bg)]"
+            >
+              <Copy size={12} />
+            </button>
+          </p>
+        </div>
+
+        <div className="text-right">
+          <p className={'flex items-center justify-end gap-1.5 text-sm font-medium ' + health.text}>
+            <span className={'h-2 w-2 rounded-full ' + health.dot} aria-hidden="true" />
+            {STATUS_LABEL[status] ?? String(c.status)}
+          </p>
+          <p className="mt-0.5 text-[12px] text-[var(--muted)]">Last checked {ago(c.lastHealthCheckAt)}</p>
+        </div>
+      </div>
+
+      {/* Counts are what has actually synced into the portal, not the PSA's own totals. */}
+      <div className="grid gap-4 border-t border-[var(--border)] px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat icon={Ticket} label="Tickets" value={c.ticketCount.toLocaleString()} tint="bg-brand/10 text-brand dark:bg-brand/25 dark:text-brand-soft" />
+        <Stat icon={Users} label="Customers" value={c.customerCount.toLocaleString()} tint="bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300" />
+        <Stat icon={Contact} label="Contacts" value={c.contactCount.toLocaleString()} tint="bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" />
+        <Stat icon={RefreshCw} label="Last sync" value={ago(c.lastSuccessfulSyncAt)} tint="bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300" />
+      </div>
+
+      {(c.lastError || result) && (
+        <div className="border-t border-[var(--border)] px-5 py-3">
+          {result ? (
+            <p className={'text-xs ' + (result.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
+              {result.msg}
+            </p>
+          ) : (
+            <p className="text-xs text-rose-600 dark:text-rose-400">{c.lastError}</p>
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] bg-[var(--bg)] px-5 py-3">
+        <ActionButton onClick={onTest} disabled={testing}>
+          <Activity size={13} /> {testing ? 'Testing…' : 'Test connection'}
+        </ActionButton>
+        <button
+          onClick={onSync}
+          disabled={syncing}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-brand-fg hover:opacity-90 disabled:opacity-50"
+        >
+          <RefreshCw size={13} className={syncing ? 'animate-spin' : undefined} /> {syncing ? 'Syncing…' : 'Sync now'}
+        </button>
+        <span className="flex-1" />
+        <ActionButton onClick={onEdit}>Edit</ActionButton>
+        <ActionButton onClick={onResyncAll} disabled={syncing}>Re-sync all</ActionButton>
+        <ActionButton onClick={onRefreshFields} disabled={refreshingFields}>
+          {refreshingFields ? 'Refreshing…' : 'Refresh fields'}
+        </ActionButton>
+        <ActionButton onClick={onToggleFields}>
+          <ChevronDown size={13} className={expanded ? 'rotate-180 transition-transform' : 'transition-transform'} /> Boards
+        </ActionButton>
+        <ActionButton onClick={onToggleSettings}>
+          <ChevronDown size={13} className={settingsOpen ? 'rotate-180 transition-transform' : 'transition-transform'} /> Sync settings
+        </ActionButton>
+      </div>
+
       {settingsOpen && (
-        <tr className="border-b border-[var(--border)] bg-[var(--bg)]">
-          <td colSpan={5} className="px-4 py-4">
-            <SyncSettings connectionId={c.id} provider={Number(c.provider)} />
-          </td>
-        </tr>
+        <div className="border-t border-[var(--border)] px-5 py-4">
+          <SyncSettings connectionId={c.id} provider={Number(c.provider)} />
+        </div>
       )}
+
       {expanded && (
-        <tr className="border-b border-[var(--border)] bg-[var(--bg)]">
-          <td colSpan={5} className="px-4 py-4">
-            {fields === 'loading' && <p className="text-sm text-[var(--muted)]">Discovering fields from the PSA…</p>}
-            {fields === 'error' && <p className="text-sm text-red-500">Couldn&apos;t load fields (connection may be unreachable).</p>}
-            {fields && fields !== 'loading' && fields !== 'error' && (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <FieldList title="Service boards / queues" items={fields.queuesOrBoards} />
-                <FieldList title="Statuses" items={fields.statuses} />
-                <FieldList title="Priorities" items={fields.priorities} />
-                <FieldList title="Categories" items={fields.categories} />
-              </div>
-            )}
-          </td>
-        </tr>
+        <div className="border-t border-[var(--border)] px-5 py-4">
+          {fields === 'loading' && <p className="text-sm text-[var(--muted)]">Discovering fields from the PSA…</p>}
+          {fields === 'error' && <p className="text-sm text-rose-500">Couldn&apos;t load fields (connection may be unreachable).</p>}
+          {fields && fields !== 'loading' && fields !== 'error' && (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <FieldList title="Service boards / queues" items={fields.queuesOrBoards} />
+              <FieldList title="Statuses" items={fields.statuses} />
+              <FieldList title="Priorities" items={fields.priorities} />
+              <FieldList title="Categories" items={fields.categories} />
+            </div>
+          )}
+        </div>
       )}
-    </>
+    </div>
   );
 }
 

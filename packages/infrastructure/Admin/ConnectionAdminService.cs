@@ -23,7 +23,13 @@ public sealed class ConnectionAdminService(
             .OrderBy(c => c.Name)
             .Select(c => new ConnectionSummary(
                 c.Id, c.Name, c.Provider, c.ApiEndpoint, c.TenantIdentifier,
-                c.Status, c.IsEnabled, c.LastSuccessfulSyncAt, c.LastError))
+                c.Status, c.IsEnabled, c.LastSuccessfulSyncAt, c.LastError,
+                c.LastHealthCheckAt,
+                // Correlated counts: one query for the page rather than three per connection.
+                db.Tickets.Count(t => t.PsaConnectionId == c.Id),
+                db.ClientCompanies.Count(o => o.PsaConnectionId == c.Id),
+                db.ClientUsers.Count(u => db.ClientCompanies
+                    .Any(o => o.Id == u.ClientCompanyId && o.PsaConnectionId == c.Id))))
             // CredentialSecretRef is intentionally never projected.
             .ToListAsync(ct);
 
