@@ -23,6 +23,44 @@ public sealed class AdminConnectionsController(
     [RequirePermission(Permissions.ConnectionsView)]
     public async Task<IActionResult> List(CancellationToken ct) => Ok(await svc.ListAsync(ct));
 
+    /// <summary>Uploads a logo for the connections page. Small by design — this is a brand mark.</summary>
+    [HttpPost("{id:guid}/logo")]
+    [RequirePermission(Permissions.ConnectionsManage)]
+    [RequestSizeLimit(2 * 1024 * 1024)]
+    public async Task<IActionResult> UploadLogo(Guid id, IFormFile file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0) return BadRequest(new { error = "Choose an image to upload." });
+
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms, ct);
+        return Ok(await svc.UploadLogoAsync(id, new ConnectionLogoUpload(file.FileName, file.ContentType, ms.ToArray()), ct));
+    }
+
+    [HttpDelete("{id:guid}/logo")]
+    [RequirePermission(Permissions.ConnectionsManage)]
+    public async Task<IActionResult> RemoveLogo(Guid id, CancellationToken ct)
+    {
+        await svc.RemoveLogoAsync(id, ct);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Serves the stored logo. nosniff and a locked-down CSP because this route returns bytes an
+    /// administrator supplied — the browser must never be talked into treating them as a document.
+    /// </summary>
+    [HttpGet("{id:guid}/logo")]
+    [RequirePermission(Permissions.ConnectionsView)]
+    public async Task<IActionResult> GetLogo(Guid id, CancellationToken ct)
+    {
+        var logo = await svc.GetLogoAsync(id, ct);
+        if (logo is null) return NotFound();
+
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        Response.Headers["Content-Security-Policy"] = "default-src 'none'; sandbox";
+        Response.Headers["Cache-Control"] = "private, max-age=300";
+        return File(logo.Content, logo.ContentType);
+    }
+
     [HttpPost]
     [RequirePermission(Permissions.ConnectionsManage)]
     public async Task<IActionResult> Create([FromBody] CreateConnectionInput input, CancellationToken ct)
