@@ -55,6 +55,7 @@ export const TicketDetailSchema = z.object({
   serviceInstructions: z.string().nullable().optional(),
   assignedTechnicianExternalId: z.string().nullable().default(null),
   assignedTechnicianName: z.string().nullable().default(null),
+  externalTicketUrl: z.string().nullable().default(null),
 });
 export type TicketDetail = z.infer<typeof TicketDetailSchema>;
 

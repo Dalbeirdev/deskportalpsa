@@ -1,0 +1,82 @@
+using Desk.Application.Tickets;
+using Desk.Domain.Enums;
+using FluentAssertions;
+using Xunit;
+
+namespace Desk.Tests.Unit;
+
+/// <summary>
+/// A link back to the PSA exists so someone can verify a note or a time entry at source. That makes
+/// a confidently wrong link worse than none: it sends a technician to check a record that is not
+/// the one in front of them. These tests care as much about what is refused as what is built.
+/// </summary>
+public class PsaTicketLinkTests
+{
+    [Fact]
+    public void ConnectWise_points_at_the_web_router_on_the_matching_site()
+    {
+        var url = PsaTicketLink.For(
+            ProviderType.ConnectWisePsa, "https://api-na.myconnectwise.net/v4_6_release/apis/3.0/", "548");
+
+        // The API host is the "api-" prefixed twin of the UI host, and the router lives under the
+        // same release segment the endpoint names.
+        url.Should().Be(
+            "https://na.myconnectwise.net/v4_6_release/services/system_io/router/openrecord.rails?recordType=ServiceFV&recid=548");
+    }
+
+    [Fact]
+    public void A_self_hosted_ConnectWise_serves_both_from_one_host()
+    {
+        var url = PsaTicketLink.For(
+            ProviderType.ConnectWisePsa, "https://psa.example.com/v4_6_release/apis/3.0/", "17");
+
+        url.Should().StartWith("https://psa.example.com/v4_6_release/services/system_io/router/");
+    }
+
+    [Fact]
+    public void Autotask_maps_the_api_zone_to_the_matching_ui_zone()
+    {
+        var url = PsaTicketLink.For(
+            ProviderType.AutotaskPsa, "https://webservices2.autotask.net/atservicesrest/v1.0/", "7810");
+
+        // Zones are not interchangeable — a ticket in zone 2 is not reachable through zone 1.
+        url.Should().Be(
+            "https://ww2.autotask.net/Autotask/AutotaskExtend/ExecuteCommand.aspx?Code=OpenTicketDetail&TicketID=7810");
+    }
+
+    [Theory]
+    [InlineData(ProviderType.AutotaskPsa, "https://webservices.autotask.net/atservicesrest/")]   // no zone number
+    [InlineData(ProviderType.AutotaskPsa, "https://something-else.example.com/api/")]            // unfamiliar host
+    [InlineData(ProviderType.ConnectWisePsa, "https://api-na.myconnectwise.net/apis/3.0/")]      // no release segment
+    [InlineData(ProviderType.ConnectWisePsa, "not-a-url")]
+    public void An_endpoint_we_cannot_map_yields_no_link_rather_than_a_guess(ProviderType provider, string endpoint)
+    {
+        PsaTicketLink.For(provider, endpoint, "548").Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(null, "548")]
+    [InlineData("https://webservices2.autotask.net/atservicesrest/", null)]
+    [InlineData("https://webservices2.autotask.net/atservicesrest/", "   ")]
+    public void Nothing_is_built_without_both_an_endpoint_and_a_ticket_id(string? endpoint, string? id)
+    {
+        PsaTicketLink.For(ProviderType.AutotaskPsa, endpoint, id).Should().BeNull();
+    }
+
+    [Fact]
+    public void A_provider_with_no_known_web_ui_yields_no_link()
+    {
+        // Reserved ProviderType slots have no connector and no UI convention to rely on.
+        PsaTicketLink.For(ProviderType.HaloPsa, "https://halo.example.com/api/", "548").Should().BeNull();
+    }
+
+    [Fact]
+    public void A_ticket_reference_is_escaped_rather_than_concatenated()
+    {
+        var url = PsaTicketLink.For(
+            ProviderType.AutotaskPsa, "https://webservices2.autotask.net/atservicesrest/", "T2026 0805.0001");
+
+        url.Should().NotContain(" ");
+        url.Should().EndWith("TicketID=T2026%200805.0001");
+    }
+}

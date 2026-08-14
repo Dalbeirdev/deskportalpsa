@@ -68,11 +68,14 @@ public sealed class TicketReadService(DeskDbContext db) : ITicketReadService
             .Where(c => c.Id == ticket.ClientCompanyId)
             .Select(c => c.Name)
             .FirstOrDefaultAsync(ct);
-        var connectionName = await db.PsaConnections
+        var connection = await db.PsaConnections
             .AsNoTracking()
             .Where(p => p.Id == ticket.PsaConnectionId)
-            .Select(p => p.Name)
+            .Select(p => new { p.Name, p.ApiEndpoint })
             .FirstOrDefaultAsync(ct);
+        var connectionName = connection?.Name;
+        // Built from the endpoint we already have — no credentials, so no vault call to render.
+        var externalUrl = PsaTicketLink.For(ticket.Provider, connection?.ApiEndpoint, ticket.ExternalTicketId);
 
         // Ticket service instructions the client configured: the account-specific override if set,
         // otherwise the organization-wide default. Surfaced so technicians see them on the ticket.
@@ -104,7 +107,8 @@ public sealed class TicketReadService(DeskDbContext db) : ITicketReadService
             ConnectionName: connectionName,
             ServiceInstructions: serviceInstructions,
             AssignedTechnicianExternalId: ticket.AssignedTechnicianExternalId,
-            AssignedTechnicianName: ticket.AssignedTechnicianName);
+            AssignedTechnicianName: ticket.AssignedTechnicianName,
+            ExternalTicketUrl: externalUrl);
     }
 
     public async Task<IReadOnlyList<NotificationDto>> RecentActivityAsync(ClientAccess access, int take = 10, CancellationToken ct = default)

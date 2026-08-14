@@ -53,7 +53,10 @@ public sealed record TicketDetailDto(
     // Who the work sits with. The id is the provider's; the name is resolved for display, and is
     // null when the technician can no longer be looked up.
     string? AssignedTechnicianExternalId = null,
-    string? AssignedTechnicianName = null);
+    string? AssignedTechnicianName = null,
+    // Deep link to the same record in the PSA, for verifying a note or a time entry at source.
+    // Null when the connection's endpoint does not match a shape we can map with confidence.
+    string? ExternalTicketUrl = null);
 
 public sealed record AttachmentDto(
     Guid Id,
