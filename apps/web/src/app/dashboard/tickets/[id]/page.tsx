@@ -309,6 +309,16 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
             {menuOpen && (
               <div className="absolute right-0 z-10 mt-1 w-48 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)] py-1 text-sm shadow-lg">
                 <button onClick={() => { if (ticket?.externalTicketId) navigator.clipboard?.writeText(ticket.externalTicketId); }} className="flex w-full items-center gap-2 px-3 py-2 hover:bg-[var(--bg)]"><Copy size={14} /> Copy reference</button>
+                {ticket?.externalTicketUrl && (
+                  <a
+                    href={ticket.externalTicketUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex w-full items-center gap-2 px-3 py-2 hover:bg-[var(--bg)]"
+                  >
+                    <ExternalLink size={14} /> Open in {ticket.connectionName ?? 'PSA'}
+                  </a>
+                )}
                 <button onClick={() => qc.invalidateQueries({ queryKey: ['ticket', id] })} className="flex w-full items-center gap-2 px-3 py-2 hover:bg-[var(--bg)]"><RefreshCw size={14} /> Refresh</button>
                 <Link href="/dashboard/tickets" className="flex w-full items-center gap-2 px-3 py-2 hover:bg-[var(--bg)]"><ArrowLeft size={14} /> Back to tickets</Link>
               </div>
@@ -744,7 +754,7 @@ function Meta({ label, value, href }: { label: string; value: string; href?: str
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-brand hover:underline"
+            className="inline-flex items-center gap-1 text-brand underline decoration-brand/40 underline-offset-2 hover:decoration-brand"
           >
             {value}
             <ExternalLink size={12} aria-hidden="true" />
