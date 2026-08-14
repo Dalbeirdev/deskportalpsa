@@ -18,7 +18,8 @@ public sealed record ConnectionSummary(
     DateTimeOffset? LastHealthCheckAt = null,
     int TicketCount = 0,
     int CustomerCount = 0,
-    int ContactCount = 0);
+    int ContactCount = 0,
+    string? LogoUrl = null);
 
 public sealed record CreateConnectionInput(
     string Name,
@@ -26,7 +27,8 @@ public sealed record CreateConnectionInput(
     string ApiEndpoint,
     string? TenantIdentifier,
     IReadOnlyDictionary<string, string> Credentials,
-    string? TimeZone);
+    string? TimeZone,
+    string? LogoUrl = null);
 
 public sealed record MappingRuleDto(
     Guid Id,
@@ -130,7 +132,8 @@ public sealed record UpdateConnectionInput(
     string? TimeZone,
     bool IsEnabled,
     // When non-empty, replaces the stored credentials (rotation). Leave empty to keep existing.
-    IReadOnlyDictionary<string, string>? Credentials);
+    IReadOnlyDictionary<string, string>? Credentials,
+    string? LogoUrl = null);
 
 public sealed record FieldOptionDto(string Value, string Label);
 

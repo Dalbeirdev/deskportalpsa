@@ -24,6 +24,12 @@ public class PsaConnection : TenantEntity
     /// <summary>Opaque Vault reference — NOT the secret itself. Masked in all UI and logs.</summary>
     public required string CredentialSecretRef { get; set; }
 
+    /// <summary>
+    /// Optional logo shown on the connections page. A site-relative path or an absolute http(s)
+    /// URL — validated on write, because this value is rendered as an image source.
+    /// </summary>
+    public string? LogoUrl { get; set; }
+
     public string TimeZone { get; set; } = "UTC";
     public ConnectionStatus Status { get; set; } = ConnectionStatus.Pending;
     public bool IsEnabled { get; set; } = true;

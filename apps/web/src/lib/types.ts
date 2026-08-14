@@ -134,6 +134,7 @@ export const ConnectionSummarySchema = z.object({
   ticketCount: z.number().default(0),
   customerCount: z.number().default(0),
   contactCount: z.number().default(0),
+  logoUrl: z.string().nullable().default(null),
 });
 export type ConnectionSummary = z.infer<typeof ConnectionSummarySchema>;
 

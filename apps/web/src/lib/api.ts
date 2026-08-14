@@ -187,7 +187,7 @@ export const api = {
     }),
   createConnection: (body: {
     name: string; provider: number; apiEndpoint: string; tenantIdentifier?: string;
-    credentials: Record<string, string>; timeZone?: string;
+    credentials: Record<string, string>; timeZone?: string; logoUrl?: string;
   }) => request('/api/admin/connections', ConnectionSummarySchema, { method: 'POST', body: JSON.stringify(body) }),
   testConnection: (id: string) =>
     request(`/api/admin/connections/${id}/test`,
@@ -199,7 +199,7 @@ export const api = {
       { method: 'POST' }),
   updateConnection: (id: string, body: {
     name: string; apiEndpoint: string; tenantIdentifier?: string; timeZone?: string;
-    isEnabled: boolean; credentials?: Record<string, string>;
+    isEnabled: boolean; credentials?: Record<string, string>; logoUrl?: string;
   }) => request(`/api/admin/connections/${id}`, ConnectionSummarySchema, { method: 'PUT', body: JSON.stringify(body) }),
   connectionFields: (id: string) =>
     request(`/api/admin/connections/${id}/fields`, ConnectionFieldsSchema) as Promise<ConnectionFields>,

@@ -27,6 +27,7 @@ public sealed class PsaConnectionConfig : IEntityTypeConfiguration<PsaConnection
     public void Configure(EntityTypeBuilder<PsaConnection> b)
     {
         b.ToTable("psa_connections");
+        b.Property(x => x.LogoUrl).HasMaxLength(500);
         b.HasKey(x => x.Id);
         b.Property(x => x.Name).HasMaxLength(200).IsRequired();
         b.Property(x => x.ApiEndpoint).HasMaxLength(500).IsRequired();

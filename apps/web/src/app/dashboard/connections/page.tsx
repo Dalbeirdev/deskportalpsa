@@ -22,19 +22,19 @@ export default function ConnectionsPage() {
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [provider, setProvider] = useState(2);
-  const [form, setForm] = useState<Record<string, string>>({ name: '', apiEndpoint: '', tenantIdentifier: '' });
+  const [form, setForm] = useState<Record<string, string>>({ name: '', apiEndpoint: '', tenantIdentifier: '', logoUrl: '' });
   const providerDef = PROVIDERS.find((p) => p.value === provider)!;
 
   function openAdd() {
     setEditingId(null);
     setProvider(2);
-    setForm({ name: '', apiEndpoint: '', tenantIdentifier: '' });
+    setForm({ name: '', apiEndpoint: '', tenantIdentifier: '', logoUrl: '' });
     setOpen(true);
   }
   function openEdit(c: ConnectionSummary) {
     setEditingId(c.id);
     setProvider(Number(c.provider));
-    setForm({ name: c.name, apiEndpoint: c.apiEndpoint, tenantIdentifier: c.tenantIdentifier ?? '' });
+    setForm({ name: c.name, apiEndpoint: c.apiEndpoint, tenantIdentifier: c.tenantIdentifier ?? '', logoUrl: c.logoUrl ?? '' });
     setOpen(true);
   }
 
@@ -47,6 +47,7 @@ export default function ConnectionsPage() {
           apiEndpoint: form.apiEndpoint,
           tenantIdentifier: form.tenantIdentifier || undefined,
           isEnabled: true,
+          logoUrl: form.logoUrl,
           credentials: Object.keys(entered).length ? entered : undefined,
         });
       }
@@ -55,6 +56,7 @@ export default function ConnectionsPage() {
         provider,
         apiEndpoint: form.apiEndpoint,
         tenantIdentifier: form.tenantIdentifier || undefined,
+        logoUrl: form.logoUrl,
         credentials: Object.fromEntries(providerDef.creds.map((c) => [c, form[c] ?? ''])),
       });
     },
@@ -155,7 +157,22 @@ export default function ConnectionsPage() {
                 {PROVIDERS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
             </label>
-            <Input label="API endpoint" value={form.apiEndpoint} onChange={(v) => setForm({ ...form, apiEndpoint: v })}
+            <div className="sm:col-span-2">
+            <Input
+              label="Logo URL (optional)"
+              value={form.logoUrl}
+              onChange={(v) => setForm({ ...form, logoUrl: v })}
+              placeholder="https://example.com/autotask.svg  or  /brand/autotask.svg"
+              hint="Shown on this page instead of the initials. Paste a link to the vendor's logo, or drop a file into the portal's public folder and use a path like /brand/autotask.svg."
+            />
+            {form.logoUrl && (
+              <span className="mt-2 inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg border border-[var(--border)] bg-white">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={form.logoUrl} alt="Logo preview" className="h-full w-full object-contain p-1" />
+              </span>
+            )}
+          </div>
+          <Input label="API endpoint" value={form.apiEndpoint} onChange={(v) => setForm({ ...form, apiEndpoint: v })}
               placeholder={provider === 2 ? 'https://webservices31.autotask.net/ATServicesRest/' : 'https://api-na.myconnectwise.net/v4_6_release/apis/3.0/'}
               hint={provider === 2
                 ? 'Your Autotask zone URL. The version segment is optional — /ATServicesRest/ and /ATServicesRest/v1.0/ both work.'
@@ -280,11 +297,21 @@ function ConnectionCard({
   return (
     <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
       <div className="flex flex-wrap items-start gap-4 p-5">
-        <span
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--bg)] text-base font-bold tracking-wide text-brand"
-          aria-hidden="true"
-        >
-          {PROVIDER_MARK[Number(c.provider)] ?? '?'}
+        <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[var(--border)] bg-white">
+          {c.logoUrl ? (
+            // A logo the admin supplied. object-contain keeps a wordmark from being cropped, and a
+            // broken URL falls back to the initials rather than leaving an empty tile.
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={c.logoUrl}
+              alt=""
+              className="h-full w-full object-contain p-1.5"
+              onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }}
+            />
+          ) : null}
+          <span className={`text-base font-bold tracking-wide text-brand ${c.logoUrl ? 'hidden' : ''}`} aria-hidden="true">
+            {PROVIDER_MARK[Number(c.provider)] ?? '?'}
+          </span>
         </span>
 
         <div className="min-w-0 flex-1">
