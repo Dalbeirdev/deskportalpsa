@@ -29,7 +29,8 @@ public sealed class ConnectionAdminService(
                 db.Tickets.Count(t => t.PsaConnectionId == c.Id),
                 db.ClientCompanies.Count(o => o.PsaConnectionId == c.Id),
                 db.ClientUsers.Count(u => db.ClientCompanies
-                    .Any(o => o.Id == u.ClientCompanyId && o.PsaConnectionId == c.Id))))
+                    .Any(o => o.Id == u.ClientCompanyId && o.PsaConnectionId == c.Id)),
+                c.LogoUrl))
             // CredentialSecretRef is intentionally never projected.
             .ToListAsync(ct);
 
@@ -49,6 +50,7 @@ public sealed class ConnectionAdminService(
             TenantIdentifier = input.TenantIdentifier,
             CredentialSecretRef = secretRef,
             TimeZone = input.TimeZone ?? "UTC",
+            LogoUrl = NormaliseLogoUrl(input.LogoUrl),
             Status = ConnectionStatus.Pending,
             IsEnabled = true,
         };
@@ -63,7 +65,8 @@ public sealed class ConnectionAdminService(
         await TryCacheFieldsAsync(connection.Id, ct);
 
         return new ConnectionSummary(connection.Id, connection.Name, connection.Provider, connection.ApiEndpoint,
-            connection.TenantIdentifier, connection.Status, connection.IsEnabled, null, null);
+            connection.TenantIdentifier, connection.Status, connection.IsEnabled, null, null,
+            LogoUrl: connection.LogoUrl);
     }
 
     public async Task SetEnabledAsync(Guid connectionId, bool enabled, CancellationToken ct = default)
@@ -108,6 +111,26 @@ public sealed class ConnectionAdminService(
         return dto;
     }
 
+    /// <summary>
+    /// Accepts a site-relative path or an absolute http(s) URL, and nothing else.
+    ///
+    /// This value ends up as an image source in an admin's browser, so schemes like javascript: or
+    /// data: must never survive storage — rejecting them here means no rendering site has to
+    /// remember to. An unusable value becomes null, which falls back to the initials mark.
+    /// </summary>
+    public static string? NormaliseLogoUrl(string? value)
+    {
+        var v = value?.Trim();
+        if (string.IsNullOrEmpty(v)) return null;
+        if (v.Length > 500) return null;
+
+        // Site-relative, e.g. /brand/autotask.svg — but not protocol-relative //evil.example.
+        if (v.StartsWith('/')) return v.StartsWith("//") ? null : v;
+
+        if (!Uri.TryCreate(v, UriKind.Absolute, out var uri)) return null;
+        return uri.Scheme is "http" or "https" ? uri.ToString() : null;
+    }
+
     public async Task<ConnectionSummary> UpdateAsync(Guid connectionId, UpdateConnectionInput input, CancellationToken ct = default)
     {
         var connection = await db.PsaConnections.FirstOrDefaultAsync(c => c.Id == connectionId, ct)
@@ -117,6 +140,7 @@ public sealed class ConnectionAdminService(
         connection.ApiEndpoint = input.ApiEndpoint;
         connection.TenantIdentifier = input.TenantIdentifier;
         connection.TimeZone = input.TimeZone ?? connection.TimeZone;
+        connection.LogoUrl = NormaliseLogoUrl(input.LogoUrl);
         connection.IsEnabled = input.IsEnabled;
         if (!input.IsEnabled) connection.Status = ConnectionStatus.Disabled;
 
