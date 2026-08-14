@@ -30,6 +30,9 @@ public class PsaConnection : TenantEntity
     /// </summary>
     public string? LogoUrl { get; set; }
 
+    /// <summary>Object-storage key when the logo was uploaded rather than linked.</summary>
+    public string? LogoStorageKey { get; set; }
+
     public string TimeZone { get; set; } = "UTC";
     public ConnectionStatus Status { get; set; } = ConnectionStatus.Pending;
     public bool IsEnabled { get; set; } = true;

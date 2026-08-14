@@ -150,6 +150,23 @@ export const api = {
     if (!res.ok) throw new ApiError(res.status, `upload → ${res.status}`);
     return AttachmentSchema.parse(await res.json());
   },
+  uploadConnectionLogo: async (connectionId: string, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`${BFF_BASE}/api/admin/connections/${connectionId}/logo`, {
+      method: 'POST',
+      headers: { 'X-Correlation-ID': crypto.randomUUID() }, // no Content-Type — the browser sets the boundary
+      body: fd,
+    });
+    if (!res.ok) {
+      let detail: string | null = null;
+      try { detail = (await res.json())?.detail ?? null; } catch { /* non-JSON */ }
+      throw new ApiError(res.status, detail ?? 'Could not upload the logo.');
+    }
+    return ConnectionSummarySchema.parse(await res.json());
+  },
+  removeConnectionLogo: (connectionId: string) =>
+    request(`/api/admin/connections/${connectionId}/logo`, z.void(), { method: 'DELETE' }),
   attachmentDownloadUrl: (ticketId: string, attachmentId: string) =>
     request(`/api/tickets/${ticketId}/attachments/${attachmentId}/download`, z.object({ url: z.string() })),
   notifications: () => request('/api/notifications', z.array(NotificationSchema)) as Promise<Notification[]>,

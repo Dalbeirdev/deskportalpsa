@@ -135,6 +135,10 @@ public sealed record UpdateConnectionInput(
     IReadOnlyDictionary<string, string>? Credentials,
     string? LogoUrl = null);
 
+public sealed record ConnectionLogoUpload(string FileName, string ContentType, byte[] Content);
+
+public sealed record StoredLogo(byte[] Content, string ContentType);
+
 public sealed record FieldOptionDto(string Value, string Label);
 
 /// <summary>Live field discovery for a connection: service boards/queues, statuses, priorities, categories.</summary>

@@ -1,3 +1,5 @@
+using Desk.Infrastructure.Attachments;
+using Desk.Application.Attachments;
 using Desk.Application.Admin;
 using Desk.Application.Common;
 using Desk.Application.Connectors;
@@ -26,7 +28,8 @@ public class AdminTests
         var h = AdminHarness.Create(Org);
         var audit = new AuditWriter(h.Db, h.User, h.Tenant, h.Clock);
         var resolver = new FakeResolver(connector ?? new MockConnector(new MockConnectorOptions(), h.Clock));
-        return (new ConnectionAdminService(h.Db, h.Secrets, audit, resolver, new ConnectionFieldCache(), h.Clock), h);
+        return (new ConnectionAdminService(h.Db, h.Secrets, audit, resolver, new ConnectionFieldCache(),
+            new InMemoryObjectStorage(new AttachmentStorageOptions(), h.Clock), h.Clock), h);
     }
 
     private static async Task<Guid> CreateConnAsync(ConnectionAdminService svc)

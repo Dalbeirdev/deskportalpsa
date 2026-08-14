@@ -1,4 +1,5 @@
 using Desk.Application.Abstractions;
+using Desk.Application.Attachments;
 using Desk.Application.Admin;
 using Desk.Application.Common;
 using Desk.Application.Connectors;
@@ -16,6 +17,7 @@ public sealed class ConnectionAdminService(
     IAuditWriter audit,
     IConnectorResolver connectors,
     IConnectionFieldCache fieldCache,
+    IObjectStorage storage,
     TimeProvider clock) : IConnectionAdminService
 {
     public async Task<IReadOnlyList<ConnectionSummary>> ListAsync(CancellationToken ct = default)
@@ -118,6 +120,93 @@ public sealed class ConnectionAdminService(
     /// data: must never survive storage — rejecting them here means no rendering site has to
     /// remember to. An unusable value becomes null, which falls back to the initials mark.
     /// </summary>
+    /// <summary>
+    /// Image types accepted for a logo.
+    ///
+    /// SVG is deliberately absent. An SVG can carry script, and while it cannot run inside an
+    /// &lt;img&gt; tag, anyone who opens the logo URL directly gets it rendered as a document on this
+    /// origin — which is stored cross-site scripting. Raster formats cannot do that, and a logo is
+    /// never so detailed that PNG will not do.
+    /// </summary>
+    private static readonly Dictionary<string, string> AllowedLogoTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["image/png"] = ".png",
+        ["image/jpeg"] = ".jpg",
+        ["image/webp"] = ".webp",
+        ["image/gif"] = ".gif",
+    };
+
+    private const int MaxLogoBytes = 1024 * 1024;
+
+    public async Task<ConnectionSummary> UploadLogoAsync(Guid connectionId, ConnectionLogoUpload upload, CancellationToken ct = default)
+    {
+        var connection = await db.PsaConnections.FirstOrDefaultAsync(c => c.Id == connectionId, ct)
+            ?? throw new NotFoundException("PSA connection");
+
+        if (!AllowedLogoTypes.TryGetValue(upload.ContentType ?? "", out var extension))
+            throw new ValidationFailedException("Use a PNG, JPEG, WebP or GIF image.");
+        if (upload.Content.Length == 0)
+            throw new ValidationFailedException("The file is empty.");
+        if (upload.Content.Length > MaxLogoBytes)
+            throw new ValidationFailedException("Logos must be 1 MB or smaller.");
+
+        // Keyed by connection and stamped, so replacing a logo cannot be served from a cache that
+        // still holds the previous one.
+        var key = $"connection-logos/{connectionId}-{clock.GetUtcNow().ToUnixTimeMilliseconds()}{extension}";
+        await storage.PutAsync(key, upload.Content, upload.ContentType!, ct);
+
+        var previous = connection.LogoStorageKey;
+        connection.LogoStorageKey = key;
+        // The portal serves its own uploads; the stamp doubles as the cache-buster.
+        connection.LogoUrl = $"/api/bff/api/admin/connections/{connectionId}/logo?v={clock.GetUtcNow().ToUnixTimeMilliseconds()}";
+        await db.SaveChangesAsync(ct);
+
+        // Best effort: a leftover object is untidy, never incorrect.
+        if (!string.IsNullOrEmpty(previous))
+            try { await storage.DeleteAsync(previous, ct); } catch { /* ignore */ }
+
+        await audit.WriteAsync("connection.logo.updated", "PsaConnection", connectionId.ToString(),
+            new { upload.FileName, upload.ContentType, Bytes = upload.Content.Length }, ct);
+
+        return Summarise(connection);
+    }
+
+    public async Task RemoveLogoAsync(Guid connectionId, CancellationToken ct = default)
+    {
+        var connection = await db.PsaConnections.FirstOrDefaultAsync(c => c.Id == connectionId, ct)
+            ?? throw new NotFoundException("PSA connection");
+
+        var key = connection.LogoStorageKey;
+        connection.LogoStorageKey = null;
+        connection.LogoUrl = null;
+        await db.SaveChangesAsync(ct);
+
+        if (!string.IsNullOrEmpty(key))
+            try { await storage.DeleteAsync(key, ct); } catch { /* ignore */ }
+
+        await audit.WriteAsync("connection.logo.removed", "PsaConnection", connectionId.ToString(), new { }, ct);
+    }
+
+    public async Task<StoredLogo?> GetLogoAsync(Guid connectionId, CancellationToken ct = default)
+    {
+        var connection = await db.PsaConnections.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == connectionId, ct);
+        if (connection?.LogoStorageKey is not { Length: > 0 } key) return null;
+
+        var bytes = await storage.GetAsync(key, ct);
+        if (bytes is null) return null;
+
+        // Serve only from the allowlist, derived from the stored key. A content type read back from
+        // elsewhere could be steered into text/html and turn an image route into an HTML one.
+        var extension = Path.GetExtension(key);
+        var contentType = AllowedLogoTypes.FirstOrDefault(p => p.Value == extension).Key ?? "image/png";
+        return new StoredLogo(bytes, contentType);
+    }
+
+    private static ConnectionSummary Summarise(PsaConnection c) => new(
+        c.Id, c.Name, c.Provider, c.ApiEndpoint, c.TenantIdentifier, c.Status, c.IsEnabled,
+        c.LastSuccessfulSyncAt, c.LastError, c.LastHealthCheckAt, LogoUrl: c.LogoUrl);
+
     public static string? NormaliseLogoUrl(string? value)
     {
         var v = value?.Trim();

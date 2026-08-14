@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plug, Plus, ShieldCheck, ChevronDown, Globe, Copy, Ticket, Users, Contact, RefreshCw, Activity, type LucideIcon } from 'lucide-react';
+import { Plug, Plus, ShieldCheck, ChevronDown, Globe, Copy, Ticket, Users, Contact, RefreshCw, Activity, Upload, Image as ImageIcon, type LucideIcon } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { ConnectionSummary, ConnectionFields } from '@/lib/types';
 import { SyncSettings } from './SyncSettings';
@@ -157,21 +157,16 @@ export default function ConnectionsPage() {
                 {PROVIDERS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
             </label>
+            {isEdit && (
             <div className="sm:col-span-2">
-            <Input
-              label="Logo URL (optional)"
-              value={form.logoUrl}
-              onChange={(v) => setForm({ ...form, logoUrl: v })}
-              placeholder="https://example.com/autotask.svg  or  /brand/autotask.svg"
-              hint="Shown on this page instead of the initials. Paste a link to the vendor's logo, or drop a file into the portal's public folder and use a path like /brand/autotask.svg."
-            />
-            {form.logoUrl && (
-              <span className="mt-2 inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg border border-[var(--border)] bg-white">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={form.logoUrl} alt="Logo preview" className="h-full w-full object-contain p-1" />
-              </span>
-            )}
-          </div>
+              <span className="mb-1.5 block text-sm font-medium">Logo</span>
+              <LogoPicker
+                connectionId={editingId!}
+                current={form.logoUrl}
+                onChanged={(url) => { setForm((f) => ({ ...f, logoUrl: url })); qc.invalidateQueries({ queryKey: ['connections'] }); }}
+              />
+            </div>
+          )}
           <Input label="API endpoint" value={form.apiEndpoint} onChange={(v) => setForm({ ...form, apiEndpoint: v })}
               placeholder={provider === 2 ? 'https://webservices31.autotask.net/ATServicesRest/' : 'https://api-na.myconnectwise.net/v4_6_release/apis/3.0/'}
               hint={provider === 2
@@ -415,6 +410,94 @@ function ConnectionCard({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Logo upload, in the shape people already know from a profile picture: current image, a button
+ * that opens the file dialog, and a way to remove it.
+ *
+ * Only offered when editing, because the upload needs a connection to attach to — asking for a
+ * logo before the connection exists would mean holding a file in limbo through a failed save.
+ */
+function LogoPicker({
+  connectionId, current, onChanged,
+}: { connectionId: string; current: string; onChanged: (url: string) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function pick(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const updated = await api.uploadConnectionLogo(connectionId, file);
+      onChanged(updated.logoUrl ?? '');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not upload the logo.');
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = ''; // let the same file be chosen again
+    }
+  }
+
+  async function clear() {
+    setBusy(true);
+    try {
+      await api.removeConnectionLogo(connectionId);
+      onChanged('');
+    } catch {
+      setError('Could not remove the logo.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[var(--border)] bg-white">
+          {current ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={current} alt="Current logo" className="h-full w-full object-contain p-1.5" />
+          ) : (
+            <ImageIcon size={20} className="text-[var(--faint)]" aria-hidden="true" />
+          )}
+        </span>
+
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          className="sr-only"
+          onChange={(e) => pick(e.target.files?.[0])}
+        />
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => inputRef.current?.click()}
+          className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--bg)] disabled:opacity-50"
+        >
+          <Upload size={14} /> {busy ? 'Uploading…' : current ? 'Change logo' : 'Upload logo'}
+        </button>
+        {current && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={clear}
+            className="text-sm text-[var(--muted)] hover:text-rose-600 disabled:opacity-50"
+          >
+            Remove
+          </button>
+        )}
+      </div>
+      <p className="mt-2 text-xs text-[var(--muted)]">
+        PNG, JPEG, WebP or GIF, up to 1 MB. A square mark suits the tile best. SVG is not accepted —
+        it can carry script, and a logo never needs it.
+      </p>
+      {error && <p className="mt-1.5 text-xs text-rose-600 dark:text-rose-400">{error}</p>}
     </div>
   );
 }
