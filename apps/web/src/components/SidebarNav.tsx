@@ -11,6 +11,43 @@ import { api } from '@/lib/api';
 // `permissions` is ANY-OF: "Productivity" is rightly visible to a technician who may only see
 // their own numbers AND to a manager who holds only the team-wide permission.
 type NavItem = { href: string; label: string; icon: LucideIcon; permissions?: string[] };
+/**
+ * One accent per section. Colour here is navigation, not decoration: a glance at the icon tint
+ * tells you which part of the product you are in, and the active row is unmistakable without
+ * reading it.
+ *
+ * Class strings are written out in full — Tailwind only ships classes it can see in the source, so
+ * anything assembled at runtime silently arrives unstyled.
+ */
+type Tone = 'brand' | 'sky' | 'violet';
+
+const TONE: Record<Tone, {
+  dot: string; activeRow: string; activeText: string; activeTile: string; idleTile: string;
+}> = {
+  brand: {
+    dot: 'bg-brand',
+    activeRow: 'bg-brand/10 dark:bg-brand/20',
+    activeText: 'text-brand dark:text-brand-soft',
+    activeTile: 'bg-brand text-brand-fg shadow-sm',
+    idleTile: 'bg-[var(--bg)] text-[var(--faint)] group-hover:bg-brand/10 group-hover:text-brand dark:group-hover:text-brand-soft',
+  },
+  sky: {
+    dot: 'bg-sky-500',
+    activeRow: 'bg-sky-50 dark:bg-sky-950/50',
+    activeText: 'text-sky-700 dark:text-sky-300',
+    activeTile: 'bg-sky-700 text-white shadow-sm',
+    idleTile: 'bg-[var(--bg)] text-[var(--faint)] group-hover:bg-sky-100 group-hover:text-sky-700 dark:group-hover:bg-sky-950 dark:group-hover:text-sky-300',
+  },
+  violet: {
+    dot: 'bg-violet-500',
+    activeRow: 'bg-violet-50 dark:bg-violet-950/50',
+    activeText: 'text-violet-700 dark:text-violet-300',
+    activeTile: 'bg-violet-700 text-white shadow-sm',
+    idleTile: 'bg-[var(--bg)] text-[var(--faint)] group-hover:bg-violet-100 group-hover:text-violet-700 dark:group-hover:bg-violet-950 dark:group-hover:text-violet-300',
+  },
+};
+
+
 
 /**
  * Navigation filtered to what the signed-in user can actually open. A technician without
@@ -20,9 +57,10 @@ type NavItem = { href: string; label: string; icon: LucideIcon; permissions?: st
  * Permission keys mirror the [RequirePermission] on each page's backing endpoints, so the menu and
  * the API can't disagree. Items with no key (Tickets, Profile…) are for everyone.
  */
-const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
+const NAV_GROUPS: { label: string | null; tone: Tone; items: NavItem[] }[] = [
   {
     label: null,
+    tone: 'brand',
     items: [
       { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
       { href: '/dashboard/tickets', label: 'Tickets', icon: Ticket },
@@ -31,6 +69,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
   },
   {
     label: 'Integrations',
+    tone: 'brand',
     items: [
       { href: '/dashboard/connections', label: 'PSA Connections', icon: Plug, permissions: ['connections.view'] },
       { href: '/dashboard/mappings', label: 'Field Mapping', icon: SlidersHorizontal, permissions: ['mappings.view'] },
@@ -39,6 +78,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
   },
   {
     label: 'Management',
+    tone: 'sky',
     items: [
       { href: '/dashboard/users', label: 'Users', icon: Users, permissions: ['users.manage'] },
       { href: '/dashboard/jobs', label: 'Background Jobs', icon: ListChecks, permissions: ['jobs.manage'] },
@@ -50,6 +90,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
   },
   {
     label: 'Client-facing',
+    tone: 'violet',
     items: [
       { href: '/control-panel', label: 'Control Panel', icon: Rocket },
     ],
@@ -71,19 +112,23 @@ export function MobileNav() {
   const can = useVisibleNav();
   return (
     <nav aria-label="Primary" className="flex gap-1 overflow-x-auto border-b border-[var(--border)] bg-[var(--surface)] px-2 py-2 md:hidden">
-      {NAV_GROUPS.flatMap((g) => g.items).filter(can).map(({ href, label, icon: Icon }) => (
-        <Link
-          key={href}
-          href={href}
-          aria-current={pathname === href ? 'page' : undefined}
-          className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium ${pathname === href
-            ? 'bg-brand/10 text-brand'
-            : 'text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--fg)]'}`}
-        >
-          <Icon size={15} />
-          {label}
-        </Link>
-      ))}
+      {NAV_GROUPS.flatMap((g) => g.items.map((i) => ({ ...i, tone: g.tone }))).filter(can).map(({ href, label, icon: Icon, tone }) => {
+        const active = pathname === href;
+        const t = TONE[tone];
+        return (
+          <Link
+            key={href}
+            href={href}
+            aria-current={active ? 'page' : undefined}
+            className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium ${
+              active ? `${t.activeRow} ${t.activeText}` : 'text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--fg)]'
+            }`}
+          >
+            <Icon size={15} aria-hidden="true" />
+            {label}
+          </Link>
+        );
+      })}
     </nav>
   );
 }
@@ -93,14 +138,21 @@ export function SidebarNav() {
   const can = useVisibleNav();
 
   return (
-    <nav className="flex-1 space-y-5">
+    <nav aria-label="Primary" className="flex-1 space-y-6">
       {NAV_GROUPS.map((g, gi) => {
         const visible = g.items.filter(can);
         if (visible.length === 0) return null; // a heading over nothing is clutter
+        const t = TONE[g.tone];
         return (
-          <div key={gi} className="space-y-1">
+          <div key={gi} className="space-y-0.5">
             {g.label && (
-              <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--faint)]">{g.label}</div>
+              <div className="mb-2 flex items-center gap-2 px-3">
+                <span className={`h-1.5 w-1.5 rounded-full ${t.dot}`} aria-hidden="true" />
+                <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--faint)]">
+                  {g.label}
+                </span>
+                <span className="h-px flex-1 bg-[var(--border)]" aria-hidden="true" />
+              </div>
             )}
             {visible.map(({ href, label, icon: Icon }) => {
               const active = pathname === href;
@@ -109,12 +161,27 @@ export function SidebarNav() {
                   key={href}
                   href={href}
                   aria-current={active ? 'page' : undefined}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${active
-                    ? 'bg-brand/10 font-medium text-brand'
-                    : 'text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--fg)]'}`}
+                  className={`group relative flex items-center gap-3 rounded-xl px-2.5 py-2 text-sm transition-all ${
+                    active
+                      ? `${t.activeRow} font-medium ${t.activeText}`
+                      : 'text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--fg)]'
+                  }`}
                 >
-                  <Icon size={18} />
-                  {label}
+                  {/* The bar makes the current page findable at a glance, not just tinted. */}
+                  {active && (
+                    <span
+                      className={`absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full ${t.dot}`}
+                      aria-hidden="true"
+                    />
+                  )}
+                  <span
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
+                      active ? t.activeTile : t.idleTile
+                    }`}
+                  >
+                    <Icon size={16} aria-hidden="true" />
+                  </span>
+                  <span className="truncate">{label}</span>
                 </Link>
               );
             })}
@@ -142,14 +209,21 @@ export function StorageUsage() {
   };
 
   return (
-    <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--bg)] p-3">
-      <div className="flex items-center justify-between text-xs">
-        <span className="flex items-center gap-1.5 font-medium"><HardDrive size={13} /> Attachment storage</span>
-        <span className="font-semibold">{fmt(data.usedBytes)}</span>
+    <div className="mt-4 rounded-xl border border-[var(--border)] bg-gradient-to-br from-brand/[0.07] to-transparent p-3">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand dark:text-brand-soft">
+          <HardDrive size={15} aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[11px] text-[var(--muted)]">Attachment storage</span>
+          <span className="block text-sm font-semibold tabular-nums">{fmt(data.usedBytes)}</span>
+        </span>
       </div>
-      <div className="mt-1.5 text-[11px] text-[var(--muted)]">
+      {/* No bar and no percentage: the portal sets no quota, and drawing one would invent a limit
+          for someone to worry about. */}
+      <p className="mt-2 text-[11px] text-[var(--muted)]">
         {data.fileCount} file{data.fileCount === 1 ? '' : 's'} across {data.ticketCount} ticket{data.ticketCount === 1 ? '' : 's'}
-      </div>
+      </p>
     </div>
   );
 }
