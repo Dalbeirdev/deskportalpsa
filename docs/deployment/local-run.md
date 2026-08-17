@@ -3,7 +3,7 @@
 End-to-end bring-up of the Desk Portal — backing services, API, worker, web, and Keycloak — plus how
 to run the live validations (load test, backup). Prerequisites: Docker, .NET 9 SDK, Node 22.
 
-Ports: API `5080` · web `3000` · Keycloak `8081` · Postgres `5432` · Vault `8200` · MinIO `9000/9001`
+Ports: API `5080` · web `3000` · Keycloak `8081` · Postgres `5432` · MinIO `9000/9001`
 · RabbitMQ `5672/15672`.
 
 ## 1. Backing services
@@ -12,9 +12,10 @@ Ports: API `5080` · web `3000` · Keycloak `8081` · Postgres `5432` · Vault `
 docker compose -f infrastructure/docker/docker-compose.yml up -d
 ```
 
-This starts Postgres, Redis, RabbitMQ, MinIO, **Vault** (dev mode — KV v2 mounted at `secret/`, root
-token `desk-root-token`), and **Keycloak** with the `desk` realm auto-imported (clients `desk-api`
-bearer-only and `desk-web` public+PKCE, redirect `http://localhost:3000/*`).
+This starts Postgres, Redis, RabbitMQ, MinIO, and **Keycloak** with the `desk` realm auto-imported
+(clients `desk-api` bearer-only and `desk-web` public+PKCE, redirect `http://localhost:3000/*`).
+PSA credentials are encrypted in Postgres itself (`Secrets:EncryptionKey`) — there is no separate
+secret-store service to run.
 
 ## 2. API (auto-migrates + seeds roles)
 
@@ -24,7 +25,8 @@ dotnet run --project apps/api
 
 In Development the API applies EF migrations and seeds the seven built-in roles on startup, then
 serves on `http://localhost:5080` (`/health/ready`, `/swagger`). The dev `appsettings.Development.json`
-already points at local Postgres, Keycloak, and Vault.
+already points at local Postgres and Keycloak, and carries a fixed, clearly-marked dev-only
+encryption key — never reuse it outside local development.
 
 ## 3. Worker + web
 
@@ -62,7 +64,8 @@ The web `.env.local` (server-side only) sets `APP_URL`, `DESK_API_BASE`, `KEYCLO
 
 ## 5. Connect a PSA
 
-Dashboard → **PSA Connections** → Add connection. Credentials are written to Vault (never the DB).
+Dashboard → **PSA Connections** → Add connection. Credentials are encrypted before storage; the
+connection row only ever holds an opaque reference, never the credential itself.
 For Autotask/ConnectWise, use a real sandbox; the connectors are certified against fakes and ready for
 a live integration pass.
 
@@ -72,7 +75,7 @@ a live integration pass.
 # Load test to the §13 latency targets (grab a token from the web session or a direct grant)
 k6 run -e BASE=http://localhost:5080 -e TOKEN=<jwt> tests/load/k6-smoke.js
 
-# Backup (Postgres/MinIO/Vault/Keycloak) — see the runbook for restore + DR drill
+# Backup (Postgres/MinIO/Keycloak) — see the runbook for restore + DR drill
 bash infrastructure/scripts/backup.sh
 ```
 
@@ -81,6 +84,7 @@ DAST/ZAP and a penetration test run against `http://localhost:5080` once the sta
 
 ## Production notes
 - Run migrations as an explicit deploy step (or set `RunMigrationsOnStartup=true`).
-- Vault runs in server (not dev) mode with a real unseal workflow; set `Vault:Address`/`Vault:Token`.
+- Set `SECRET_ENCRYPTION_KEY` (`Secrets:EncryptionKey`) to a real 32-byte base64 key — generate with
+  `openssl rand -base64 32` and back it up like the database; startup refuses to run without one.
 - Turn on the SSRF guard: `Connectors:BlockPrivateEgress=true` (+ allowlist for self-hosted PSA).
 - Set `KEYCLOAK_CLIENT_SECRET` only if you switch `desk-web` to a confidential client.

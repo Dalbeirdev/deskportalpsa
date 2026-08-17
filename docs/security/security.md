@@ -18,10 +18,16 @@
 - Seven built-in roles seeded with least-privilege claim sets.
 
 ## Secret handling
-- PSA credentials are written to **HashiCorp Vault**; the connection row stores only an opaque
-  reference (`CredentialSecretRef`). Values never touch the database, logs, or API responses.
-- Production startup **refuses to run** with the in-memory dev secret store.
+- PSA credentials are encrypted at rest with **AES-256-GCM** (`EncryptedDbSecretStore`), keyed by a
+  master key held only in the host's `.env.prod` (`Secrets:EncryptionKey`), never in the database.
+  The connection row stores only an opaque reference (`CredentialSecretRef`); plaintext values
+  never touch the database, logs, or API responses.
+- Production startup **refuses to run** with the in-memory dev secret store, on both the API and the
+  worker.
 - `CredentialSecretRef` is never projected into any API response.
+- The encryption key is a single point of failure by design — anyone who can decrypt PSA
+  credentials needs both database access and the key, which live in different places. Losing the
+  key makes every stored credential permanently unreadable; back it up like the database itself.
 
 ## API hardening
 - RFC-7807 problem responses; internal error detail is logged, not returned.

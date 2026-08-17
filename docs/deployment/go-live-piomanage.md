@@ -1,9 +1,9 @@
 # Going live at piomanage.com
 
 The whole product runs on **one Docker host** from a single compose file:
-API, background worker (scheduled sync), web app, Postgres, Keycloak (sign-in),
-Vault (PSA credential store) and Caddy, which obtains Let's Encrypt TLS
-certificates automatically.
+API, background worker (scheduled sync), web app, Postgres (also holds PSA
+credentials, encrypted), Keycloak (sign-in) and Caddy, which obtains Let's
+Encrypt TLS certificates automatically.
 
 ## What the server must be
 
@@ -97,10 +97,11 @@ log in → your portal account binds to that login on this first sign-in
 ## After you are in
 
 Everything else happens in the product: add the PSA connections under
-*PSA Connections* (credentials go to Vault, never the database), set each
-connection's board/queue defaults and time-entry technician, map statuses and
-priorities under *Field Mapping*, and add your team under *Users* — they bind
-the same way on their first login.
+*PSA Connections* (credentials are encrypted before storage; the connection
+row never holds the plaintext), set each connection's board/queue defaults
+and time-entry technician, map statuses and priorities under *Field Mapping*,
+and add your team under *Users* — they bind the same way on their first
+login.
 
 The worker syncs every `SYNC_POLL_MINUTES` (default 5) without anyone pressing
 a button.
@@ -118,9 +119,13 @@ rebuilds. `infrastructure/scripts/backup.sh` covers the database.
 
 ## Testing-tier caveats, stated plainly
 
-- **Vault runs in dev mode.** Secrets are real PSA credentials; the unseal
-  story is not production-grade. Harden (server-mode Vault) before this holds
-  customer data at scale.
+- **`SECRET_ENCRYPTION_KEY` is a single point of failure.** It lives only in
+  `.env.prod` on this host — back it up like the database. Losing it makes
+  every stored PSA credential permanently unreadable; regenerating it while
+  connections exist has the same effect (existing rows will fail to decrypt).
+  This replaced an earlier dev-mode Vault container, whose in-memory backend
+  discarded every credential on restart — the failure mode we are avoiding
+  here, not repeating it.
 - **Attachments are on a local volume**, not object storage. Fine for one
   host; move to S3/MinIO behind `IObjectStorage` before scaling out.
 - **Do not reuse the ConnectWise key that was shared in chat** — create fresh

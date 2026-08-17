@@ -15,4 +15,9 @@ paths = [
 regexes = [
   '''desk-root-token''',
   '''Password=desk''',
+  # SecretCipherTests / EncryptedDbSecretStoreTests fixture key — decrypts nothing outside that
+  # test run. An inline `gitleaks:allow` comment on the same line did not suppress this finding
+  # (gitleaks 8.24.3, scanning via `git log -p`), so it is listed here instead, scoped to the
+  # literal value rather than the whole file.
+  '''w\+WEoJiLQLVmZzgEm//uVd0YpeTwnhwm2rUyftBqdO8=''',
 ]

@@ -4,8 +4,8 @@ Datto Autotask PSA integration over the REST API v1.0. Wave-1 reference connecto
 
 ## Connection setup
 A `PsaConnection` with `Provider = AutotaskPsa` and `ApiEndpoint` set to the account's **zone base
-URL** (e.g. `https://webservices2.autotask.net/atservicesrest/`). Credentials are stored in Vault
-and referenced by `CredentialSecretRef`; the secret blob must contain:
+URL** (e.g. `https://webservices2.autotask.net/atservicesrest/`). Credentials are encrypted at rest
+and referenced by `CredentialSecretRef`; the credential fields required are:
 
 | Key | Value |
 |---|---|

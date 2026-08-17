@@ -117,7 +117,7 @@ if (app.Environment.IsProduction() && config.GetValue("LocalMode:Enabled", false
 if (app.Environment.IsProduction() &&
     app.Services.GetRequiredService<ISecretStore>() is InMemorySecretStore or FileSecretStore)
 {
-    throw new InvalidOperationException("Refusing to start in Production without a configured Vault secret store.");
+    throw new InvalidOperationException("Refusing to start in Production without Secrets:EncryptionKey configured.");
 }
 
 // Startup DB init. Local mode creates the in-memory schema and seeds a demo org + admin; otherwise

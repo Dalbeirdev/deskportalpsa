@@ -1,7 +1,8 @@
 namespace Desk.Application.Abstractions;
 
 /// <summary>
-/// Abstraction over the secret backend (HashiCorp Vault in self-hosted deployments).
+/// Abstraction over the secret backend (AES-256-GCM-encrypted storage in Postgres; see
+/// Desk.Infrastructure.Secrets.EncryptedDbSecretStore).
 /// PSA credentials are written here and referenced from the database by an opaque path;
 /// raw secret values never touch the DB, logs, or the frontend (spec §11 credential security).
 /// </summary>
