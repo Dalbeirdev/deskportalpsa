@@ -1,4 +1,5 @@
-import type { LucideIcon } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, type LucideIcon } from 'lucide-react';
 import { Reveal } from '@/components/marketing/Reveal';
 
 /** One place decides how wide the site is and how far apart its sections sit. */
@@ -47,6 +48,97 @@ export function SectionHead({
         <p className={`mt-4 text-[17px] leading-relaxed ${onInk ? 'text-white/65' : 'text-[var(--muted)]'}`}>{lead}</p>
       )}
     </Reveal>
+  );
+}
+
+/**
+ * The opening block of every page that is not the home page.
+ *
+ * Deliberately quieter than the home hero — no aurora, no product mockup. A visitor who has landed
+ * on an inner page has already been sold the headline; what they need here is to know where they
+ * are and get to the content.
+ */
+export function PageHero({
+  eyebrow, title, lead, children,
+}: {
+  eyebrow: string;
+  title: React.ReactNode;
+  lead: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <section className="relative isolate overflow-hidden border-b border-[var(--border)] bg-[var(--surface)]">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
+        <div className="dp-aurora h-[22rem] w-[22rem] bg-brand/15" style={{ top: '-10rem', left: '-6rem' }} />
+      </div>
+      <Shell className="py-16 sm:py-20">
+        <p className="dp-rise mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-brand-mid">
+          {eyebrow}
+        </p>
+        <h1
+          className="dp-rise max-w-3xl text-[2.1rem] font-semibold leading-[1.1] tracking-tight sm:text-[2.75rem]"
+          style={{ animationDelay: '60ms' }}
+        >
+          {title}
+        </h1>
+        <p
+          className="dp-rise mt-5 max-w-2xl text-[17px] leading-relaxed text-[var(--muted)]"
+          style={{ animationDelay: '120ms' }}
+        >
+          {lead}
+        </p>
+        {children && (
+          <div className="dp-rise mt-8" style={{ animationDelay: '180ms' }}>
+            {children}
+          </div>
+        )}
+      </Shell>
+    </section>
+  );
+}
+
+/**
+ * The closing call to action. One component rather than a copy per page, so the last thing a
+ * visitor reads never drifts out of step with the rest of the site.
+ */
+export function CtaBand({
+  title = 'Keep your PSA. Upgrade your client experience.',
+  lead = 'Desk Portal gives your clients a modern support experience while your team continues working in the PSA they already know.',
+  secondary = { href: '/integrations', label: 'Explore integrations' },
+}: {
+  title?: string;
+  lead?: string;
+  secondary?: { href: string; label: string };
+}) {
+  return (
+    <Shell className="pb-24">
+      <Reveal>
+        <div className="relative isolate overflow-hidden rounded-3xl bg-brand px-6 py-14 text-brand-fg sm:px-12">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
+            <div className="dp-aurora h-80 w-80 bg-brand-soft/30" style={{ top: '-6rem', right: '-4rem' }} />
+            <div className="dp-aurora h-72 w-72 bg-brand-accent/20" style={{ bottom: '-8rem', left: '-3rem', animationDelay: '-5s' }} />
+          </div>
+          <h2 className="max-w-2xl text-[1.8rem] font-semibold leading-tight tracking-tight sm:text-[2.4rem]">
+            {title}
+          </h2>
+          <p className="mt-4 max-w-xl text-[16px] leading-relaxed text-brand-fg/75">{lead}</p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link
+              href="/book"
+              className="inline-flex items-center gap-2 rounded-xl bg-brand-fg px-6 py-3.5 text-sm font-medium text-brand transition-transform hover:-translate-y-0.5"
+            >
+              Book a demo <ArrowRight size={15} aria-hidden="true" />
+            </Link>
+            <Link
+              href={secondary.href}
+              className="inline-flex items-center gap-2 rounded-xl border border-brand-fg/30 px-6 py-3.5 text-sm font-medium transition-colors hover:bg-brand-fg/10"
+            >
+              {secondary.label} <ArrowRight size={15} aria-hidden="true" />
+            </Link>
+          </div>
+        </div>
+      </Reveal>
+    </Shell>
   );
 }
 

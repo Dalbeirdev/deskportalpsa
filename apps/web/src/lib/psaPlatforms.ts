@@ -28,3 +28,9 @@ export const PSA_PLATFORMS: PsaPlatform[] = [
 
 /** Shown on every card, so no platform reads as more or less established than another. */
 export const PLATFORM_DESCRIPTOR = 'Service management integration';
+
+/** One place decides the URL shape, so a link and a route can never disagree about it. */
+export const platformHref = (p: PsaPlatform | string) =>
+  `/integrations/${typeof p === 'string' ? p : p.id}`;
+
+export const findPlatform = (id: string) => PSA_PLATFORMS.find((p) => p.id === id);

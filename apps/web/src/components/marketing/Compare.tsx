@@ -15,7 +15,7 @@ const WITH = [
   { icon: MessagesSquare, text: 'A single thread per ticket. Internal notes stay internal.' },
   { icon: BellRing, text: 'Status, priority and assignment are visible without anyone being asked.' },
   { icon: FolderCheck, text: 'Screenshots and documents land on the ticket, both directions.' },
-  { icon: RefreshCw, text: 'Everything synchronises with Autotask or ConnectWise automatically.' },
+  { icon: RefreshCw, text: 'Everything synchronises with your PSA automatically.' },
   { icon: Smile, text: 'Technicians stay in the PSA. The client experience improves anyway.' },
 ];
 

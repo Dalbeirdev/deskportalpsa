@@ -1,16 +1,16 @@
 import Link from 'next/link';
 import { Mail, ArrowUpRight, RefreshCw, ServerCog, ShieldCheck } from 'lucide-react';
 import { BrandMark } from '@/components/BrandMark';
-import { PSA_PLATFORMS } from '@/lib/psaPlatforms';
+import { PSA_PLATFORMS, platformHref } from '@/lib/psaPlatforms';
 
 /** The one address a visitor can actually reach a human on. */
 export const CONTACT_EMAIL = 'proapps@techpio.com';
 
 const PRODUCT = [
   { href: '/', label: 'Overview' },
-  { href: '/#features', label: 'Features' },
-  { href: '/#integrations', label: 'Integrations' },
-  { href: '/#security', label: 'Security' },
+  { href: '/platform', label: 'Platform' },
+  { href: '/integrations', label: 'Integrations' },
+  { href: '/security', label: 'Security' },
   { href: '/faq', label: 'FAQ' },
   { href: '/book', label: 'Book a demo' },
 ];
@@ -24,7 +24,9 @@ const COMPANY = [
 ];
 
 // Driven by the same list the rest of the site uses, so a new platform appears here for free.
-const INTEGRATIONS = PSA_PLATFORMS.map((p) => ({ href: '/#integrations', label: p.name }));
+// Each one goes to its own page: eight links that all landed on the same anchor were eight links
+// pretending to be a menu.
+const INTEGRATIONS = PSA_PLATFORMS.map((p) => ({ href: platformHref(p), label: p.name }));
 
 /** Claims made here are true of this build. No badges, counts, or certifications it has not earned. */
 const PROOF = [
@@ -86,9 +88,9 @@ export function MarketingFooter() {
       <div className="mx-auto max-w-shell px-5 py-14 sm:px-8">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
           <div>
-            <div className="flex items-center gap-2.5">
-              <BrandMark size={38} variant="inverse" className="rounded-lg" />
-              <span className="text-base font-semibold tracking-tight">Desk Portal</span>
+            <div className="flex items-center gap-3">
+              <BrandMark size={52} variant="inverse" className="rounded-xl" />
+              <span className="text-xl font-semibold tracking-tight">Desk Portal</span>
             </div>
 
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-brand-fg/70">

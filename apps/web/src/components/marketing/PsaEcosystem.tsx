@@ -1,4 +1,6 @@
-import { PSA_PLATFORMS, PLATFORM_DESCRIPTOR, type PsaPlatform } from '@/lib/psaPlatforms';
+import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
+import { PSA_PLATFORMS, PLATFORM_DESCRIPTOR, platformHref, type PsaPlatform } from '@/lib/psaPlatforms';
 
 /**
  * One client experience across a PSA ecosystem — a hub with a spoke to each platform.
@@ -74,18 +76,26 @@ export function PsaEcosystem() {
 
 function Tile({ p }: { p: PsaPlatform }) {
   return (
-    <div className="dp-lift flex h-full items-center gap-3.5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+    <Link
+      href={platformHref(p)}
+      className="dp-lift group flex h-full items-center gap-3.5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 transition-colors hover:border-brand/40"
+    >
       <span
         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand text-[12.5px] font-bold tracking-wide text-brand-fg"
         aria-hidden="true"
       >
         {p.initials}
       </span>
-      <span className="min-w-0">
+      <span className="min-w-0 flex-1">
         <span className="block truncate text-[14px] font-semibold leading-tight">{p.name}</span>
         <span className="mt-1 block text-[12px] leading-snug text-[var(--muted)]">{PLATFORM_DESCRIPTOR}</span>
       </span>
-    </div>
+      <ArrowRight
+        size={15}
+        aria-hidden="true"
+        className="shrink-0 text-[var(--faint)] transition-all group-hover:translate-x-0.5 group-hover:text-brand"
+      />
+    </Link>
   );
 }
 
@@ -95,5 +105,34 @@ export function PsaGrid() {
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {PSA_PLATFORMS.map((p) => <Tile key={p.id} p={p} />)}
     </div>
+  );
+}
+
+/**
+ * The compact coverage row for the home page — marks and names only.
+ *
+ * The full diagram and the descriptive cards live on the integrations page. Here the job is to
+ * answer "does it cover mine?" in one glance and offer the way through.
+ */
+export function PsaStrip() {
+  return (
+    <ul className="flex flex-wrap items-center justify-center gap-2.5">
+      {PSA_PLATFORMS.map((p) => (
+        <li key={p.id}>
+          <Link
+            href={platformHref(p)}
+            className="dp-lift flex items-center gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--bg)] py-2.5 pl-2.5 pr-4 transition-colors hover:border-brand/40"
+          >
+            <span
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand text-[11px] font-bold tracking-wide text-brand-fg"
+              aria-hidden="true"
+            >
+              {p.initials}
+            </span>
+            <span className="text-[13.5px] font-medium">{p.name}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }
