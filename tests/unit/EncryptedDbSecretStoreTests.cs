@@ -9,7 +9,7 @@ namespace Desk.Tests.Unit;
 
 public class EncryptedDbSecretStoreTests
 {
-    private const string TestKey = "w+WEoJiLQLVmZzgEm//uVd0YpeTwnhwm2rUyftBqdO8="; // gitleaks:allow — test fixture, never used outside this file
+    private const string TestKey = "w+WEoJiLQLVmZzgEm//uVd0YpeTwnhwm2rUyftBqdO8=";
 
     private static (EncryptedDbSecretStore Store, DeskDbContext Db) Create(string? dbName = null)
     {
