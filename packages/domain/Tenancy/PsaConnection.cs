@@ -8,7 +8,7 @@ namespace Desk.Domain.Tenancy;
 /// including multiple connections to the same provider (e.g. two Autotask tenants).
 ///
 /// SECURITY: No API secret is ever stored on this row. <see cref="CredentialSecretRef"/>
-/// is an opaque pointer into the secret store (HashiCorp Vault). See ISecretStore.
+/// is an opaque pointer into the secret store (AES-256-GCM-encrypted, in Postgres). See ISecretStore.
 /// </summary>
 public class PsaConnection : TenantEntity
 {
@@ -21,7 +21,7 @@ public class PsaConnection : TenantEntity
     /// <summary>Provider-specific tenant identifier (AT zone / CW company id / Halo instance).</summary>
     public string? TenantIdentifier { get; set; }
 
-    /// <summary>Opaque Vault reference — NOT the secret itself. Masked in all UI and logs.</summary>
+    /// <summary>Opaque reference into the encrypted secret store — NOT the secret itself. Masked in all UI and logs.</summary>
     public required string CredentialSecretRef { get; set; }
 
     /// <summary>

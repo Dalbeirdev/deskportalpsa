@@ -8,6 +8,7 @@ using Desk.Domain.Mapping;
 using Desk.Domain.Sync;
 using Desk.Domain.Tenancy;
 using Desk.Domain.Tickets;
+using Desk.Infrastructure.Secrets;
 using Microsoft.EntityFrameworkCore;
 
 namespace Desk.Infrastructure.Persistence;
@@ -54,6 +55,10 @@ public class DeskDbContext(DbContextOptions<DeskDbContext> options, ITenantConte
     public DbSet<ReportSchedule> ReportSchedules => Set<ReportSchedule>();
     public DbSet<ReportRun> ReportRuns => Set<ReportRun>();
     public DbSet<Desk.Domain.Marketing.Enquiry> Enquiries => Set<Desk.Domain.Marketing.Enquiry>();
+
+    // Encrypted PSA-credential storage — infrastructure plumbing, not a domain concept, so it is
+    // not ITenantScoped and sits outside the tenant query filter below.
+    public DbSet<SecretBlob> SecretBlobs => Set<SecretBlob>();
 
     // Read by the compiled query filter below. Guid.Empty can never match a real row, so an
     // unresolved (null) tenant that is not platform scope yields zero rows — fail closed.

@@ -17,7 +17,7 @@ synchronizes, and reports on top of it via a connector-first architecture.
 | Backend | ASP.NET Core **.NET 9** Web API + Worker · EF Core · MediatR (later phases) |
 | Data | PostgreSQL · Redis · RabbitMQ · MinIO (S3-compatible) |
 | Identity | Keycloak (OIDC / OAuth2, MFA, brute-force protection) |
-| Secrets | HashiCorp Vault (PSA credentials — never in DB or code) |
+| Secrets | AES-256-GCM, encrypted at rest in Postgres (PSA credentials — plaintext never in DB or code) |
 | Observability | Serilog structured logs + correlation IDs (OTLP export in the observability phase) |
 | Delivery | Docker Compose · GitHub Actions CI |
 
@@ -31,10 +31,10 @@ apps/
 packages/
   domain/         Entities + enums + permission catalogue (no dependencies)
   application/    Abstractions: tenant context, current user, secret store
-  infrastructure/ EF Core DbContext (tenant filter), Vault secret store, migrations
+  infrastructure/ EF Core DbContext (tenant filter), encrypted secret store, migrations
   psa-core/       IServiceManagementConnector + ProviderCapabilities + unified models
 tests/unit/       xUnit tests (tenant isolation, RBAC, audit immutability)
-infrastructure/   docker-compose, Keycloak realm, Vault, Terraform (VPS)
+infrastructure/   docker-compose, Keycloak realm, Terraform (VPS)
 docs/             architecture, security, setup, integration guides
 ```
 
@@ -75,7 +75,7 @@ dotnet test tests/unit/Desk.Tests.Unit.csproj
 
 - **Tenant isolation** enforced in the DbContext for every query and write — see
   [TenantIsolationTests](tests/unit/TenantIsolationTests.cs).
-- **PSA secrets** live only in Vault; the DB stores an opaque reference, masked in UI/logs.
+- **PSA secrets** are encrypted at rest (AES-256-GCM, key outside the database); connection rows store only an opaque reference, masked in UI/logs.
 - **Permission-claim authorization** (not role-name checks).
 - **Append-only audit log**, correlation IDs, RFC-7807 error responses.
 - CI fails on any known package vulnerability (`TreatWarningsAsErrors` + NuGet audit) and on

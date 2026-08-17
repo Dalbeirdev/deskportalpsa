@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Desk.Api.Controllers;
 
-/// <summary>PSA connection administration. Secrets are written to Vault and never returned.</summary>
+/// <summary>PSA connection administration. Secrets are written to the encrypted store and never returned.</summary>
 [ApiController]
 [Route("api/admin/connections")]
 public sealed class AdminConnectionsController(

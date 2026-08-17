@@ -4,7 +4,7 @@ ConnectWise Manage integration over REST API 3.0. Wave-1 reference connector (wi
 
 ## Connection setup
 A `PsaConnection` with `Provider = ConnectWisePsa` and `ApiEndpoint` set to the instance API base
-(e.g. `https://api-na.myconnectwise.net/v4_6_release/apis/3.0/`). The Vault secret blob must contain:
+(e.g. `https://api-na.myconnectwise.net/v4_6_release/apis/3.0/`). The credential fields required are:
 
 | Key | Value |
 |---|---|

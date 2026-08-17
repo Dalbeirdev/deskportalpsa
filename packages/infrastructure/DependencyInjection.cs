@@ -145,21 +145,16 @@ public static class DependencyInjection
 
     private static void AddSecretStore(IServiceCollection services, IConfiguration config)
     {
-        var vaultAddress = config["Vault:Address"];
-        var vaultToken = config["Vault:Token"];
+        var encryptionKey = config["Secrets:EncryptionKey"];
 
-        if (!string.IsNullOrWhiteSpace(vaultAddress) && !string.IsNullOrWhiteSpace(vaultToken))
+        if (!string.IsNullOrWhiteSpace(encryptionKey))
         {
-            var options = new VaultOptions
-            {
-                Address = vaultAddress,
-                Token = vaultToken,
-                MountPoint = config["Vault:MountPoint"] ?? "secret",
-                PathPrefix = config["Vault:PathPrefix"] ?? "desk/psa-credentials",
-            };
-            services.AddSingleton(options);
-            services.AddSingleton(VaultSecretStore.BuildClient(options));
-            services.AddSingleton<ISecretStore, VaultSecretStore>();
+            var options = new SecretEncryptionOptions { Key = encryptionKey };
+            // Constructed eagerly so a malformed key fails at startup, not on the first credential
+            // write or read.
+            services.AddSingleton(new SecretCipher(options));
+            // Depends on the scoped DbContext, so this registration must be scoped too.
+            services.AddScoped<ISecretStore, EncryptedDbSecretStore>();
         }
         else
         {

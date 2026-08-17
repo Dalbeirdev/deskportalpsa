@@ -2,7 +2,7 @@ using Desk.Domain.Enums;
 
 namespace Desk.Application.Admin;
 
-/// <summary>PSA connection as shown to admins. Deliberately has NO credential field — secrets stay in Vault.</summary>
+/// <summary>PSA connection as shown to admins. Deliberately has NO credential field — secrets stay in the encrypted store.</summary>
 public sealed record ConnectionSummary(
     Guid Id,
     string Name,

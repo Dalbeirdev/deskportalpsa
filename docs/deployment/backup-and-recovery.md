@@ -1,20 +1,27 @@
 # Backup & Disaster Recovery Runbook
 
-Covers the self-hosted stack: PostgreSQL, MinIO (attachments), Vault (PSA credentials), and
-Keycloak (identity). **Vault and Postgres are the crown jewels** — losing either is unrecoverable
-without a backup.
+Covers the self-hosted stack: PostgreSQL (also holds PSA credentials, encrypted), MinIO
+(attachments), and Keycloak (identity). **Postgres and `SECRET_ENCRYPTION_KEY` are the crown
+jewels** — losing the database is unrecoverable without a backup, and losing the key makes every
+credential *in* that backup permanently unreadable even if the database itself is fine.
+
+> This replaced a Vault container that ran in dev mode: its in-memory backend discarded every PSA
+> credential on restart, which is exactly what happened in production before this rewrite (~26h of
+> silently stalled sync). Credentials now live in the same durable store as everything else — one
+> less process that can lose state independently of the database.
 
 ## What to back up
 
 | Component | Contains | Backup method | RPO target |
 |---|---|---|---|
-| PostgreSQL | All portal data (tenants, tickets, mappings, audit) | `pg_dump` (logical) + WAL archiving (PITR) | ≤ 5 min (with WAL) |
-| Vault | PSA credentials (the only copy) | Vault snapshot (`vault operator raft snapshot`) or KV export | ≤ 1 h |
+| PostgreSQL | All portal data (tenants, tickets, mappings, audit, **encrypted PSA credentials**) | `pg_dump` (logical) + WAL archiving (PITR) | ≤ 5 min (with WAL) |
+| `SECRET_ENCRYPTION_KEY` | The only key that decrypts the credentials in the Postgres backup above | Stored in `.env.prod` on the host; copy to an offsite secrets manager or password manager, **never alongside the Postgres backup** | on change (should not change) |
 | MinIO | Attachment bytes | `mc mirror` to offsite bucket | ≤ 1 h |
 | Keycloak | Realm, clients, users config | Realm export (`kc.sh export`) | on change |
 
-Encrypt every backup at rest and in transit; store offsite; restrict access. **Never** store the
-Vault unseal keys in the same location as the Vault snapshot.
+Encrypt every backup at rest and in transit; store offsite; restrict access. Keeping the encryption
+key separate from the Postgres backup is the whole point: a stolen database dump alone should not
+be enough to read a PSA credential.
 
 ## Daily backup (scripted)
 
@@ -22,24 +29,28 @@ Vault unseal keys in the same location as the Vault snapshot.
 infrastructure/scripts/backup.sh          # see script below
 ```
 
-- Postgres → `desk-YYYYMMDD.dump` (custom format, `pg_dump -Fc`)
+- Postgres → `desk-YYYYMMDD.dump` (custom format, `pg_dump -Fc`) — includes the encrypted
+  `secret_blobs` table
 - MinIO → mirrored to the offsite bucket
-- Vault → raft snapshot (production Vault runs in server mode, not dev)
 - Keycloak realm → `desk-realm-YYYYMMDD.json`
+
+`SECRET_ENCRYPTION_KEY` is not part of this script — it changes essentially never, so back it up
+manually to wherever the rest of the host's root secrets live, the moment it is generated.
 
 ## Restore procedure (drill quarterly)
 
 1. **Provision** a clean stack: `docker compose -f infrastructure/docker/docker-compose.yml up -d`.
 2. **Postgres**: `pg_restore --clean --if-exists -d desk_portal desk-YYYYMMDD.dump`.
    Then apply any newer migrations: `dotnet ef database update`.
-3. **Vault**: restore the snapshot, then unseal with the sealed key shares. Verify a PSA credential
-   reads back: the connection's `CredentialSecretRef` must resolve.
+3. **Set `SECRET_ENCRYPTION_KEY`** in `.env.prod` to the value from offsite storage — it must be the
+   exact key active when the Postgres dump was taken, or every `secret_blobs` row fails to decrypt.
+   Verify a PSA credential reads back: the connection's `CredentialSecretRef` must resolve.
 4. **MinIO**: `mc mirror offsite/desk-attachments local/desk-attachments`.
 5. **Keycloak**: import the realm export (`--import-realm`).
 6. **Verify** (acceptance):
    - API `/health/ready` is green.
    - A known ticket loads with its public conversation.
-   - A PSA connection test succeeds (credentials resolved from restored Vault).
+   - A PSA connection test succeeds (credentials decrypt correctly under the restored key).
    - The audit log shows history (append-only chain intact).
    - Tenant isolation spot-check: a client sees only their company's tickets.
 
@@ -48,13 +59,13 @@ infrastructure/scripts/backup.sh          # see script below
 | Scenario | Action |
 |---|---|
 | Postgres corruption | Restore latest dump + replay WAL to just before the incident (PITR). |
-| Vault loss | Restore snapshot; if unseal keys are also lost, **all PSA credentials must be re-entered** by MSP admins (documented as the worst case — hence offsite key custody). |
-| Full region loss | Rebuild stack from IaC in the DR region; restore all four components from offsite backups. |
+| `SECRET_ENCRYPTION_KEY` lost, Postgres intact | **All PSA credentials must be re-entered** by MSP admins — the `secret_blobs` rows survive but nothing can decrypt them. This is why the key is backed up separately from the database it protects. |
+| Full region loss | Rebuild stack from IaC in the DR region; restore Postgres, the encryption key (from its separate offsite location), MinIO and Keycloak. |
 | Ransomware | Restore from the most recent *immutable* offsite backup predating the compromise. |
 
 ## Targets
 - **RTO**: 4 hours (full stack restore + verification).
-- **RPO**: 5 minutes for Postgres (WAL), 1 hour for object/secret stores.
+- **RPO**: 5 minutes for Postgres (WAL), 1 hour for object storage.
 - Restore drills are run quarterly and the result recorded in this doc's changelog.
 
 > Status: procedure documented and scripted. A live restore drill requires a running stack and is

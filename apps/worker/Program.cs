@@ -1,5 +1,7 @@
+using Desk.Application.Abstractions;
 using Desk.Application.Jobs;
 using Desk.Infrastructure;
+using Desk.Infrastructure.Secrets;
 using Desk.Worker;
 using Serilog;
 
@@ -27,4 +29,14 @@ builder.Services.AddHostedService<PollingSyncService>();
 builder.Services.AddHostedService<ScheduledReportService>();
 
 var host = builder.Build();
+
+// The API applies this same guard, but the worker builds its own DI container and starts
+// independently — a config drift here would run scheduled PSA syncs against a secret store that
+// silently loses every credential on restart, with no symptom until the next sync cycle fails.
+if (builder.Environment.IsProduction() &&
+    host.Services.GetRequiredService<ISecretStore>() is InMemorySecretStore or FileSecretStore)
+{
+    throw new InvalidOperationException("Refusing to start in Production without Secrets:EncryptionKey configured.");
+}
+
 host.Run();

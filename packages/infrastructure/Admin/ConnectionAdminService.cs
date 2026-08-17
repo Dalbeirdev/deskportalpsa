@@ -41,7 +41,7 @@ public sealed class ConnectionAdminService(
         if (input.Credentials.Count == 0)
             throw new ValidationFailedException("At least one credential value is required.");
 
-        // Secret goes to Vault; only the opaque reference is persisted on the row.
+        // Secret goes to the encrypted store; only the opaque reference is persisted on the row.
         var secretRef = await secrets.WriteAsync($"{input.Provider}/{input.Name}", input.Credentials, ct);
 
         var connection = new PsaConnection

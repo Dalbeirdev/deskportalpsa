@@ -6,14 +6,14 @@
 - [ ] CI green: build, tests, gitleaks, dependency scan
 - [ ] No open critical/high defects (see [qa-report.md](../testing/qa-report.md))
 - [ ] DB migrations reviewed and reversible; `dotnet ef migrations script` diffed
-- [ ] Secrets present in Vault; `ConnectionStrings`, `Keycloak`, `Vault` configured per env
+- [ ] `ConnectionStrings`, `Keycloak`, `Secrets:EncryptionKey` configured per env — startup refuses to run without a real encryption key in Production
 - [ ] `Connectors:BlockPrivateEgress=true` in production (SSRF guard on)
 - [ ] Backups verified recent; a restore drill has passed ([backup-and-recovery.md](backup-and-recovery.md))
 - [ ] **Live gates** (production GA): DAST/ZAP, penetration test, k6 load run to §13 targets
 
 ## Deploy steps (self-hosted)
-1. Snapshot: `pg_dump -Fc` + Vault snapshot (rollback point).
-2. Bring up backing services (Postgres/Redis/RabbitMQ/MinIO/Keycloak/Vault).
+1. Snapshot: `pg_dump -Fc` (rollback point — this now includes encrypted PSA credentials).
+2. Bring up backing services (Postgres/Redis/RabbitMQ/MinIO/Keycloak).
 3. Apply migrations: `dotnet ef database update` (forward-only; verified reversible in staging).
 4. Deploy API + Worker (rolling); deploy web.
 5. Smoke: `/health/ready` green; login; load a ticket; run a connection test.
@@ -24,7 +24,7 @@
 | API/Worker fails health after deploy | Redeploy the previous image tag (stateless services). |
 | Migration caused a regression | Roll back to the prior migration: `dotnet ef database update <PreviousMigration>`; if not cleanly reversible, restore the pre-deploy `pg_dump` snapshot. |
 | Data corruption | Restore Postgres from the pre-deploy snapshot (PITR to just before deploy). |
-| Vault/secret issue | Restore Vault snapshot; connections re-resolve credentials. |
+| Secret-store issue | Restore Postgres from the pre-deploy snapshot (`secret_blobs` is a normal table in it); if `SECRET_ENCRYPTION_KEY` itself changed, restore the prior value from its offsite copy — never regenerate it while connections exist. |
 | Web-only regression | Redeploy previous web build (independent of API). |
 
 Rollback is **safe by construction**: services are stateless (image tag swap), migrations are reviewed

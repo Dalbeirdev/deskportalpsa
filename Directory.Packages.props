@@ -44,8 +44,6 @@
     <PackageVersion Include="StackExchange.Redis" Version="2.8.24" />
     <PackageVersion Include="RabbitMQ.Client" Version="7.0.0" />
     <PackageVersion Include="Minio" Version="6.0.4" />
-    <!-- Secrets -->
-    <PackageVersion Include="VaultSharp" Version="1.17.5.1" />
     <!-- Resilience -->
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="9.0.0" />
     <!-- Extensions -->

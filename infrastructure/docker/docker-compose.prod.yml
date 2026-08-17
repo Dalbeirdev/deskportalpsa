@@ -7,8 +7,6 @@
 #   ${PUBLIC_HOST}        -> web app (which proxies the API server-side)
 #   auth.${PUBLIC_HOST}   -> Keycloak (sign-in)
 #
-# Vault runs in dev mode here, which is acceptable for a TESTING deployment only: secrets are
-# real (PSA credentials) but the unseal story is not. Harden before customer data at scale.
 name: desk-portal-prod
 
 services:
@@ -39,14 +37,6 @@ services:
       - ../keycloak:/opt/keycloak/data/import:ro
     restart: unless-stopped
 
-  vault:
-    image: hashicorp/vault:1.18
-    cap_add: ["IPC_LOCK"]
-    environment:
-      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_TOKEN:?}
-      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
-    restart: unless-stopped
-
   api:
     build: { context: ../.., dockerfile: apps/api/Dockerfile }
     environment:
@@ -56,8 +46,7 @@ services:
       # Tokens are issued for the PUBLIC issuer URL, so validation must use it too. Keycloak is
       # reached through Caddy on the public name — the containers resolve it via the proxy.
       Keycloak__Authority: "https://auth.${PUBLIC_HOST}/realms/desk"
-      Vault__Address: "http://vault:8200"
-      Vault__Token: ${VAULT_TOKEN}
+      Secrets__EncryptionKey: ${SECRET_ENCRYPTION_KEY:?}
       Attachments__StoragePath: /data/attachments
       Attachments__SigningKey: ${ATTACHMENT_SIGNING_KEY:?}
       Attachments__PublicBaseUrl: "https://${PUBLIC_HOST}"
@@ -76,8 +65,7 @@ services:
     environment:
       DOTNET_ENVIRONMENT: Production
       ConnectionStrings__Postgres: "Host=postgres;Database=desk_portal;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
-      Vault__Address: "http://vault:8200"
-      Vault__Token: ${VAULT_TOKEN}
+      Secrets__EncryptionKey: ${SECRET_ENCRYPTION_KEY:?}
       Attachments__StoragePath: /data/attachments
       Attachments__SigningKey: ${ATTACHMENT_SIGNING_KEY}
       Attachments__PublicBaseUrl: "https://${PUBLIC_HOST}"
