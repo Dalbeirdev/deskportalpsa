@@ -9,7 +9,7 @@ namespace Desk.Tests.Unit;
 public class SecretCipherTests
 {
     // Fixed only for test determinism — never a value used outside this file.
-    private const string TestKey = "w+WEoJiLQLVmZzgEm//uVd0YpeTwnhwm2rUyftBqdO8=";
+    private const string TestKey = "w+WEoJiLQLVmZzgEm//uVd0YpeTwnhwm2rUyftBqdO8="; // gitleaks:allow — test fixture, never used outside this file
 
     [Fact]
     public void Round_trips_plaintext()
