@@ -7,10 +7,9 @@ import { Menu, X } from 'lucide-react';
 import { BrandMark } from '@/components/BrandMark';
 
 export const MARKETING_NAV = [
-  { href: '/', label: 'Home' },
-  { href: '/#features', label: 'Features' },
-  { href: '/#integrations', label: 'Integrations' },
-  { href: '/#security', label: 'Security' },
+  { href: '/platform', label: 'Platform' },
+  { href: '/integrations', label: 'Integrations' },
+  { href: '/security', label: 'Security' },
   { href: '/faq', label: 'FAQ' },
   { href: '/about', label: 'About' },
 ] as const;
@@ -18,8 +17,11 @@ export const MARKETING_NAV = [
 /**
  * Public-site header. Sticky, because the two things a visitor needs — book a call, sign in —
  * should never be a scroll away. The nav collapses to a disclosure below lg rather than a drawer:
- * six links do not warrant an overlay, and at md they no longer fit beside the logo and both
+ * these links do not warrant an overlay, and at md they no longer fit beside the logo and both
  * calls to action once a scrollbar takes its share of the viewport.
+ *
+ * Every entry is a real route. They were anchors into one long home page, which meant the current
+ * page could never be marked and the browser's back button did nothing useful.
  */
 export function MarketingHeader() {
   const pathname = usePathname();
@@ -28,14 +30,15 @@ export function MarketingHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--surface)]/75 backdrop-blur-xl">
       <div className="mx-auto flex max-w-shell items-center gap-3 px-5 py-3 sm:px-8">
-        <Link href="/" className="flex shrink-0 items-center gap-2.5" onClick={() => setOpen(false)}>
-          <BrandMark size={34} className="rounded-lg" />
-          <span className="text-[15px] font-semibold tracking-tight">Desk Portal</span>
+        <Link href="/" className="flex shrink-0 items-center gap-3" onClick={() => setOpen(false)}>
+          <BrandMark size={46} className="rounded-xl" />
+          <span className="text-[19px] font-semibold tracking-tight">Desk Portal</span>
         </Link>
 
         <nav className="ml-6 hidden items-center gap-1 lg:flex">
           {MARKETING_NAV.map((item) => {
-            const active = item.href.startsWith('/#') ? false : pathname === item.href;
+            // A section page stays marked while you are anywhere beneath it, e.g. an integration.
+            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.href}
