@@ -76,7 +76,8 @@ public interface IIntegrationHealthService
 
 public interface IAuditQueryService
 {
-    Task<IReadOnlyList<AuditEntryDto>> ListAsync(int take = 100, string? action = null, CancellationToken ct = default);
+    Task<IReadOnlyList<AuditEntryDto>> ListAsync(
+        int take = 100, string? action = null, string? entityId = null, CancellationToken ct = default);
 }
 
 public interface IUserAdminService

@@ -62,11 +62,13 @@ public sealed class IntegrationHealthService(DeskDbContext db) : IIntegrationHea
 
 public sealed class AuditQueryService(DeskDbContext db, ITenantContext tenant) : IAuditQueryService
 {
-    public async Task<IReadOnlyList<AuditEntryDto>> ListAsync(int take = 100, string? action = null, CancellationToken ct = default)
+    public async Task<IReadOnlyList<AuditEntryDto>> ListAsync(
+        int take = 100, string? action = null, string? entityId = null, CancellationToken ct = default)
     {
         // AuditLogEntry is not tenant-filtered by the DbContext, so scope it explicitly here.
         var q = db.AuditLog.AsNoTracking().Where(a => a.MspOrganizationId == tenant.OrganizationId);
         if (!string.IsNullOrEmpty(action)) q = q.Where(a => a.Action == action);
+        if (!string.IsNullOrEmpty(entityId)) q = q.Where(a => a.EntityId == entityId);
         return await q.OrderByDescending(a => a.CreatedAt).Take(Math.Clamp(take, 1, 500))
             .Select(a => new AuditEntryDto(a.Id, a.Action, a.EntityType, a.EntityId, a.ActorDisplayName, a.CorrelationId, a.CreatedAt, a.DetailJson))
             .ToListAsync(ct);

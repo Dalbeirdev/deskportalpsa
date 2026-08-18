@@ -1,9 +1,11 @@
 'use client';
 
 import { useMemo, useState, type ReactNode } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  UserPlus, Search, X, ShieldCheck, MailQuestion, Power, MoreVertical, Check,
+  UserPlus, Search, X, MailQuestion, Power, MoreVertical,
   Users, UserCheck, Crown, Trash2, Copy, Pencil,
 } from 'lucide-react';
 import {
@@ -289,203 +291,9 @@ function AddUserDrawer({ roles, departments, boards, templates, onClose, onCreat
   );
 }
 
-function ManageUserDrawer({ user, roles, departments, boards, templates, onClose, onChanged }: {
-  user: UserSummary; roles: RoleOption[]; departments: DepartmentWithTeams[]; boards: BoardOption[];
-  templates: PermissionTemplateOption[]; onClose: () => void; onChanged: () => void;
-}) {
-  const [name, setName] = useState(user.displayName);
-  const [email, setEmail] = useState(user.email);
-  const [phone, setPhone] = useState(user.phoneNumber ?? '');
-  const [location, setLocation] = useState(user.location ?? '');
-  const [departmentId, setDepartmentId] = useState(user.primaryDepartment?.id ?? '');
-  const [templateId, setTemplateId] = useState('');
-
-  const saveBasics = useMutation({
-    mutationFn: () => api.updateStaffUser(user.id, {
-      displayName: name.trim(), email: email.trim(), phoneNumber: phone.trim() || null, location: location.trim() || null,
-    }),
-    onSuccess: onChanged,
-  });
-
-  const held = new Set(user.roles.map((r) => r.id));
-  const addable = roles.filter((r) => !held.has(r.id));
-  const addRole = useMutation({ mutationFn: (roleId: string) => api.assignUserRole(user.id, roleId), onSuccess: onChanged });
-  const dropRole = useMutation({ mutationFn: (roleId: string) => api.removeUserRole(user.id, roleId), onSuccess: onChanged });
-  const roleError = dropRole.error ?? addRole.error;
-
-  const setDept = useMutation({
-    mutationFn: async (id: string) => {
-      if (user.primaryDepartment && user.primaryDepartment.id !== id) await api.removeUserDepartment(user.id, user.primaryDepartment.id);
-      if (id) await api.setUserDepartment(user.id, id, true);
-    },
-    onSuccess: onChanged,
-  });
-
-  const teamsForDept = departments.find((d) => d.id === departmentId)?.teams ?? [];
-  const heldTeams = new Set(user.teams.map((t) => t.id));
-  const addableTeams = teamsForDept.filter((t) => !heldTeams.has(t.id));
-  const addTeam = useMutation({ mutationFn: (teamId: string) => api.assignUserTeam(user.id, teamId), onSuccess: onChanged });
-  const dropTeam = useMutation({ mutationFn: (teamId: string) => api.removeUserTeam(user.id, teamId), onSuccess: onChanged });
-
-  const setMode = useMutation({ mutationFn: (mode: number) => api.setUserBoardAccessMode(user.id, mode), onSuccess: onChanged });
-  const heldBoards = new Set(user.boardGrants.map((b) => `${b.psaConnectionId}::${b.boardName}`));
-  const grantBoard = useMutation({
-    mutationFn: (b: BoardOption) => api.setUserBoardGrant(user.id, { psaConnectionId: b.psaConnectionId, boardName: b.boardName, actions: 1 }),
-    onSuccess: onChanged,
-  });
-  const revokeBoard = useMutation({
-    mutationFn: (b: BoardOption) => api.removeUserBoardGrant(user.id, b.psaConnectionId, b.boardName),
-    onSuccess: onChanged,
-  });
-
-  const applyTemplate = useMutation({ mutationFn: () => api.applyPermissionTemplate(user.id, templateId), onSuccess: onChanged });
-
-  return (
-    <DrawerShell title={`Manage ${user.displayName}`} onClose={onClose}>
-      <section className="space-y-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--faint)]">Basic info</h3>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium">Full name</span>
-          <input value={name} onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium">Email</span>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium">Phone</span>
-          <input value={phone} onChange={(e) => setPhone(e.target.value)}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium">Location</span>
-          <input value={location} onChange={(e) => setLocation(e.target.value)}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
-        </label>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => saveBasics.mutate()} disabled={saveBasics.isPending}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium hover:bg-[var(--bg)] disabled:opacity-50">
-            {saveBasics.isPending ? 'Saving…' : 'Save'}
-          </button>
-          {saveBasics.isSuccess && !saveBasics.isPending && (
-            <span className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-400"><Check size={12} /> Saved</span>
-          )}
-        </div>
-        {saveBasics.isError && <p className="text-xs text-red-600 dark:text-red-400">
-          {saveBasics.error instanceof Error ? saveBasics.error.message : 'Could not save.'}</p>}
-      </section>
-
-      <section className="space-y-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--faint)]">Roles</h3>
-        <div className="flex flex-wrap gap-1.5">
-          {user.roles.map((r) => (
-            <span key={r.id} className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--bg)] px-2 py-0.5 text-[11px] font-medium">
-              <ShieldCheck size={11} className="text-brand" /> {humanizeRole(r.name)}
-              {user.roles.length > 1 && (
-                <button onClick={() => dropRole.mutate(r.id)} aria-label={`Remove ${humanizeRole(r.name)} role`}
-                  className="text-[var(--muted)] hover:text-red-600"><X size={11} /></button>
-              )}
-            </span>
-          ))}
-          {addable.length > 0 && (
-            <select value="" onChange={(e) => { if (e.target.value) addRole.mutate(e.target.value); }} aria-label="Add role"
-              className="rounded-full border border-dashed border-[var(--border)] bg-transparent px-2 py-0.5 text-[11px] text-[var(--muted)]">
-              <option value="">+ role</option>
-              {addable.map((r) => <option key={r.id} value={r.id}>{humanizeRole(r.name)}</option>)}
-            </select>
-          )}
-        </div>
-        {roleError && <p className="text-xs text-red-600 dark:text-red-400">
-          {roleError instanceof Error ? roleError.message : 'Could not change roles.'}</p>}
-      </section>
-
-      <section className="space-y-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--faint)]">Department & team</h3>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium">Primary department</span>
-          <select value={departmentId} onChange={(e) => { setDepartmentId(e.target.value); setDept.mutate(e.target.value); }}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
-            <option value="">Not set</option>
-            {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
-        </label>
-        <div>
-          <span className="mb-1 block text-xs font-medium">Teams</span>
-          <div className="flex flex-wrap gap-1.5">
-            {user.teams.map((t) => (
-              <span key={t.id} className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--bg)] px-2 py-0.5 text-[11px] font-medium">
-                {t.name}
-                <button onClick={() => dropTeam.mutate(t.id)} aria-label={`Remove ${t.name}`} className="text-[var(--muted)] hover:text-red-600"><X size={11} /></button>
-              </span>
-            ))}
-            {addableTeams.length > 0 && (
-              <select value="" onChange={(e) => { if (e.target.value) addTeam.mutate(e.target.value); }} aria-label="Add team"
-                className="rounded-full border border-dashed border-[var(--border)] bg-transparent px-2 py-0.5 text-[11px] text-[var(--muted)]">
-                <option value="">+ team</option>
-                {addableTeams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            )}
-            {user.teams.length === 0 && addableTeams.length === 0 && (
-              <span className="text-xs text-[var(--faint)]">Set a department to pick a team.</span>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--faint)]">Board access</h3>
-        <div className="flex gap-1.5">
-          {BOARD_MODES.map((m) => (
-            <button key={m.value} type="button" onClick={() => setMode.mutate(m.value)}
-              className={`rounded-full border px-2.5 py-1 text-xs font-medium ${user.boardAccessMode === m.value
-                ? 'border-brand bg-brand/10 text-brand' : 'border-[var(--border)] text-[var(--muted)] hover:bg-[var(--bg)]'}`}>
-              {m.label}
-            </button>
-          ))}
-        </div>
-        {user.boardAccessMode === BAM.Selected && (
-          <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-[var(--border)] p-2">
-            {boards.length === 0 && <p className="text-xs text-[var(--muted)]">No boards found — sync a PSA connection first.</p>}
-            {boards.map((b) => {
-              const key = `${b.psaConnectionId}::${b.boardName}`;
-              const granted = heldBoards.has(key);
-              return (
-                <label key={key} className="flex items-center gap-2 text-xs">
-                  <input type="checkbox" checked={granted}
-                    onChange={() => (granted ? revokeBoard.mutate(b) : grantBoard.mutate(b))} />
-                  {b.boardName} <span className="text-[var(--faint)]">({b.connectionName})</span>
-                </label>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      <section className="space-y-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--faint)]">Apply permission template</h3>
-        <div className="flex gap-2">
-          <select value={templateId} onChange={(e) => setTemplateId(e.target.value)}
-            className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
-            <option value="">Choose a template…</option>
-            {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-          <button type="button" onClick={() => applyTemplate.mutate()} disabled={!templateId || applyTemplate.isPending}
-            className="rounded-lg bg-brand px-3 py-2 text-xs font-medium text-brand-fg hover:opacity-90 disabled:opacity-50">
-            {applyTemplate.isPending ? 'Applying…' : 'Apply'}
-          </button>
-        </div>
-        <p className="text-xs text-[var(--muted)]">Applies the template&apos;s differences on top of this user&apos;s current roles.</p>
-        {applyTemplate.isError && <p className="text-xs text-red-600 dark:text-red-400">
-          {applyTemplate.error instanceof Error ? applyTemplate.error.message : 'Could not apply the template.'}</p>}
-      </section>
-    </DrawerShell>
-  );
-}
-
 export default function UsersPage() {
   const qc = useQueryClient();
+  const router = useRouter();
 
   const [search, setSearch] = useState('');
   const [roleId, setRoleId] = useState(ALL);
@@ -515,14 +323,12 @@ export default function UsersPage() {
   const refresh = () => qc.invalidateQueries({ queryKey: ['staff-users'] });
 
   const [showAdd, setShowAdd] = useState(false);
-  const [manageUserId, setManageUserId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [bulkError, setBulkError] = useState<string | null>(null);
 
   const users = useMemo(() => data?.users ?? [], [data]);
-  const manageUser = users.find((u) => u.id === manageUserId) ?? null;
   const allTeams = useMemo(() => (departments ?? []).flatMap((d) => d.teams), [departments]);
   const boardNames = useMemo(() => Array.from(new Set((boards ?? []).map((b) => b.boardName))).sort(), [boards]);
 
@@ -693,7 +499,7 @@ export default function UsersPage() {
                         </span>
                       )}
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium">{u.displayName}</span>
+                        <Link href={`/dashboard/users/${u.id}`} className="block truncate text-sm font-medium hover:underline">{u.displayName}</Link>
                         <span className="block truncate text-xs text-[var(--muted)]">{u.email}</span>
                       </span>
                     </div>
@@ -738,7 +544,7 @@ export default function UsersPage() {
                       onToggle={() => setOpenMenuId(openMenuId === u.id ? null : u.id)}
                       onClose={() => setOpenMenuId((cur) => (cur === u.id ? null : cur))}
                       isActive={u.isActive}
-                      onManage={() => { setManageUserId(u.id); setOpenMenuId(null); }}
+                      onManage={() => { setOpenMenuId(null); router.push(`/dashboard/users/${u.id}`); }}
                       onToggleActive={() => { setActive.mutate({ id: u.id, active: !u.isActive }); setOpenMenuId(null); }}
                       onCopy={() => { copyInstructions(u); setOpenMenuId(null); }}
                       onDelete={() => {
@@ -775,15 +581,6 @@ export default function UsersPage() {
         />
       )}
 
-      {manageUser && (
-        <ManageUserDrawer
-          key={manageUser.id}
-          user={manageUser}
-          roles={roles ?? []} departments={departments ?? []} boards={boards ?? []} templates={templates ?? []}
-          onClose={() => setManageUserId(null)}
-          onChanged={refresh}
-        />
-      )}
     </div>
   );
 }

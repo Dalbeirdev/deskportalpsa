@@ -268,4 +268,21 @@ public class AdminTests
         var entries = await svc.ListAsync();
         entries.Should().ContainSingle().Which.Action.Should().Be("test.action");
     }
+
+    [Fact]
+    public async Task Audit_query_filtered_by_entity_id_returns_only_that_entitys_entries()
+    {
+        // The Users page's Activity tab needs a per-user slice of a log that otherwise mixes every
+        // entity type together — proven non-vacuously by seeding two different entities' entries and
+        // checking the filter excludes the one that doesn't match, not just includes the one that does.
+        var h = AdminHarness.Create(Org);
+        var audit = new AuditWriter(h.Db, h.User, h.Tenant, h.Clock);
+        await audit.WriteAsync("user.updated", "AppUser", "user-1");
+        await audit.WriteAsync("user.updated", "AppUser", "user-2");
+
+        var svc = new AuditQueryService(h.Db, h.Tenant);
+        var entries = await svc.ListAsync(entityId: "user-1");
+
+        entries.Should().ContainSingle().Which.EntityId.Should().Be("user-1");
+    }
 }
