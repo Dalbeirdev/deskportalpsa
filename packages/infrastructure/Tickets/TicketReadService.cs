@@ -1,4 +1,6 @@
+using Desk.Application.Abstractions;
 using Desk.Application.Tickets;
+using Desk.Domain.Authorization;
 using Desk.Domain.Tickets;
 using Desk.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -9,8 +11,12 @@ namespace Desk.Infrastructure.Tickets;
 /// Client-portal reads. All queries are constrained to the caller's company, and to their own
 /// tickets when they are not a company administrator. Detail exposes only the public conversation;
 /// internal PSA notes are never persisted to the portal, so they cannot leak here.
+///
+/// The staff-side methods below route through <see cref="ITicketScopeQuery"/> for the caller's
+/// effective TicketsViewAll scope — the tenant filter alone bounds them to the organization, but
+/// says nothing about which tickets WITHIN it the caller may see.
 /// </summary>
-public sealed class TicketReadService(DeskDbContext db) : ITicketReadService
+public sealed class TicketReadService(DeskDbContext db, ITicketScopeQuery scopeQuery, ICurrentUser user) : ITicketReadService
 {
     private IQueryable<Ticket> Visible(ClientAccess access) =>
         db.Tickets.Where(t =>
@@ -37,7 +43,9 @@ public sealed class TicketReadService(DeskDbContext db) : ITicketReadService
     /// Callers gate this on TicketsViewAll; the tenant filter on the DbContext bounds it to the org.
     /// </summary>
     public async Task<IReadOnlyList<TicketListItem>> ListAllAsync(CancellationToken ct = default)
-        => await db.Tickets
+    {
+        var visible = await StaffVisibleAsync(ct);
+        return await visible
             .AsNoTracking()
             .OrderByDescending(t => t.CreatedAt)
             .Select(t => new TicketListItem(
@@ -46,13 +54,27 @@ public sealed class TicketReadService(DeskDbContext db) : ITicketReadService
                 db.ClientCompanies.Where(c => c.Id == t.ClientCompanyId).Select(c => c.Name).FirstOrDefault(),
                 db.PsaConnections.Where(p => p.Id == t.PsaConnectionId).Select(p => p.Name).FirstOrDefault()))
             .ToListAsync(ct);
+    }
+
+    /// <summary>Staff callers always resolve against TicketsViewAll — it is the only permission that
+    /// reaches these two methods (the controller branches to the client-scoped path otherwise) — so
+    /// a caller with no linked AppUser row has nothing to resolve and sees nothing, not everything.</summary>
+    private async Task<IQueryable<Ticket>> StaffVisibleAsync(CancellationToken ct)
+        => user.UserId is { } uid
+            ? await scopeQuery.VisibleAsync(db.Tickets, uid, Permissions.TicketsViewAll, ct)
+            : db.Tickets.Where(_ => false);
 
     public Task<TicketDetailDto?> GetDetailAsync(ClientAccess access, Guid ticketId, CancellationToken ct = default)
         => DetailAsync(t => Visible(access), ticketId, ct);
 
-    /// <summary>Staff detail: any ticket in the tenant. Gate on TicketsViewAll.</summary>
-    public Task<TicketDetailDto?> GetDetailForStaffAsync(Guid ticketId, CancellationToken ct = default)
-        => DetailAsync(_ => db.Tickets, ticketId, ct);
+    /// <summary>Staff detail, narrowed to the caller's effective TicketsViewAll scope — NOT every
+    /// ticket in the tenant, despite the name; the coarse permission check that used to gate the
+    /// whole method said nothing about which rows within it are actually theirs to see.</summary>
+    public async Task<TicketDetailDto?> GetDetailForStaffAsync(Guid ticketId, CancellationToken ct = default)
+    {
+        var visible = await StaffVisibleAsync(ct);
+        return await DetailAsync(_ => visible, ticketId, ct);
+    }
 
     private async Task<TicketDetailDto?> DetailAsync(Func<object?, IQueryable<Ticket>> scope, Guid ticketId, CancellationToken ct)
     {

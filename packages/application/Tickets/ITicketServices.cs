@@ -33,6 +33,7 @@ public interface ITicketCommandService
     Task<CreateTicketResultDto> CreateAsync(ClientAccess access, CreateTicketInput input, CancellationToken ct = default);
     Task<TicketNoteDto> AddCommentAsync(ClientAccess access, Guid ticketId, string body, CancellationToken ct = default);
 
-    /// <summary>A technician reply on any tenant ticket, attributed by name. Gate on TicketsViewAll.</summary>
-    Task<TicketNoteDto> AddStaffCommentAsync(string authorName, Guid ticketId, string body, CancellationToken ct = default);
+    /// <summary>A technician reply on a ticket within the caller's effective TicketsAddPublicNote
+    /// scope, attributed by display name.</summary>
+    Task<TicketNoteDto> AddStaffCommentAsync(Guid appUserId, string authorName, Guid ticketId, string body, CancellationToken ct = default);
 }

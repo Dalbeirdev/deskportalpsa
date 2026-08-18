@@ -1,0 +1,102 @@
+using Desk.Domain.Authorization;
+using Desk.Infrastructure.Persistence;
+using Desk.Infrastructure.Tenancy;
+using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Xunit;
+
+namespace Desk.Tests.Unit;
+
+/// <summary>
+/// TicketScopeQueryTests runs against the in-memory provider, which is more forgiving than a real
+/// SQL backend — it silently falls back to client-side evaluation for expressions a real provider
+/// would reject outright. These tests build the SAME expression shapes against the actual Npgsql
+/// provider and ask EF to compile them to SQL (never executing — no connection is opened), so a
+/// predicate that only "works" because the in-memory provider is lenient fails here loudly instead
+/// of failing in production. The board-access OR-chain (built via manual Expression.OrElse) is the
+/// one genuinely novel piece of expression-tree surgery in this phase, so it gets the most scrutiny.
+/// </summary>
+public class TicketScopeQueryPostgresTranslationTests
+{
+    private static DeskDbContext NpgsqlDb()
+    {
+        var tenant = new TenantContext();
+        tenant.SetPlatformScope();
+        var options = new DbContextOptionsBuilder<DeskDbContext>()
+            .UseNpgsql("Host=localhost;Database=translation-check-only;Username=x;Password=x")
+            .Options;
+        return new DeskDbContext(options, tenant, TimeProvider.System);
+    }
+
+    [Fact]
+    public void Board_fence_OrElse_chain_compiles_to_sql()
+    {
+        using var db = NpgsqlDb();
+        var connA = Guid.NewGuid();
+        var connB = Guid.NewGuid();
+        var boardsA = new[] { "Help Desk", "NOC" };
+        var boardsB = new[] { "Projects" };
+
+        // Reproduces TicketScopeQuery.BoardFilter's exact shape: two per-connection clauses
+        // combined by rebinding parameters and Expression.OrElse, not Expression.Invoke.
+        var left = (System.Linq.Expressions.Expression<Func<Desk.Domain.Tickets.Ticket, bool>>)
+            (t => t.PsaConnectionId == connA && boardsA.Contains(t.QueueOrBoard!));
+        var right = (System.Linq.Expressions.Expression<Func<Desk.Domain.Tickets.Ticket, bool>>)
+            (t => t.PsaConnectionId == connB && boardsB.Contains(t.QueueOrBoard!));
+
+        var param = left.Parameters[0];
+        var rightBody = new ParamSwap(right.Parameters[0], param).Visit(right.Body)!;
+        var combined = System.Linq.Expressions.Expression.Lambda<Func<Desk.Domain.Tickets.Ticket, bool>>(
+            System.Linq.Expressions.Expression.OrElse(left.Body, rightBody), param);
+
+        var act = () => db.Tickets.Where(combined).ToQueryString();
+
+        act.Should().NotThrow("a predicate this shape has to survive real SQL translation, not just the lenient in-memory provider");
+    }
+
+    [Fact]
+    public void Assigned_scope_filter_compiles_to_sql()
+    {
+        using var db = NpgsqlDb();
+        const string me = "tech-123";
+
+        var act = () => db.Tickets.Where(t => t.AssignedTechnicianExternalId == me).ToQueryString();
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Department_scope_unassigned_or_in_technician_list_compiles_to_sql()
+    {
+        using var db = NpgsqlDb();
+        var technicianIds = new List<string> { "tech-1", "tech-2" };
+
+        var act = () => db.Tickets
+            .Where(t => t.AssignedTechnicianExternalId == null || technicianIds.Contains(t.AssignedTechnicianExternalId!))
+            .ToQueryString();
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Board_actions_bitwise_flag_check_compiles_to_sql()
+    {
+        using var db = NpgsqlDb();
+        const BoardAction required = BoardAction.Edit;
+
+        // Mirrors EffectivePermissionService.ResolveBoardAccessAsync's flag-containment check.
+        var act = () => db.UserBoardGrants
+            .Where(g => (g.Actions & required) == required)
+            .ToQueryString();
+
+        act.Should().NotThrow();
+    }
+
+    private sealed class ParamSwap(
+        System.Linq.Expressions.ParameterExpression from, System.Linq.Expressions.ParameterExpression to)
+        : System.Linq.Expressions.ExpressionVisitor
+    {
+        protected override System.Linq.Expressions.Expression VisitParameter(System.Linq.Expressions.ParameterExpression node)
+            => node == from ? to : base.VisitParameter(node);
+    }
+}

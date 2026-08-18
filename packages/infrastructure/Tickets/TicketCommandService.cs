@@ -3,6 +3,7 @@ using Desk.Application.Connectors;
 using Desk.Application.Mapping;
 using Desk.Application.Sync;
 using Desk.Application.Tickets;
+using Desk.Domain.Authorization;
 using Desk.Domain.Enums;
 using Desk.Domain.Mapping;
 using Desk.Domain.Tickets;
@@ -23,6 +24,7 @@ public sealed class TicketCommandService(
     IConnectorResolver connectors,
     IMappingEngine mapping,
     ISyncEventStore syncEvents,
+    ITicketScopeQuery scopeQuery,
     TimeProvider clock) : ITicketCommandService
 {
     /// <summary>Portal-neutral status a newly raised ticket starts in.</summary>
@@ -161,9 +163,9 @@ public sealed class TicketCommandService(
     /// A technician reply from the staff dashboard. Same provider push and echo bookkeeping as a
     /// client comment; only the attribution differs — the staff display name, never a client flag.
     /// </summary>
-    public async Task<TicketNoteDto> AddStaffCommentAsync(string authorName, Guid ticketId, string body, CancellationToken ct = default)
+    public async Task<TicketNoteDto> AddStaffCommentAsync(Guid appUserId, string authorName, Guid ticketId, string body, CancellationToken ct = default)
     {
-        var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.Id == ticketId, ct)
+        var ticket = await scopeQuery.FindAsync(db.Tickets, ticketId, appUserId, Permissions.TicketsAddPublicNote, ct)
             ?? throw new NotFoundException("Ticket");
         if (string.IsNullOrEmpty(ticket.ExternalTicketId))
             throw new ValidationFailedException("This ticket is not yet synced to the PSA, so a reply cannot be posted.");

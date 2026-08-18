@@ -1,8 +1,10 @@
 using Desk.Api.Auth;
+using Desk.Application.Abstractions;
 using Desk.Application.Admin;
 using Desk.Application.Common;
 using Desk.Application.Connectors;
 using Desk.Application.Mapping;
+using Desk.Application.Tickets;
 using Desk.Domain.Authorization;
 using Desk.Infrastructure.Persistence;
 using Desk.PsaCore.Models;
@@ -28,7 +30,9 @@ public sealed class TicketAssignmentController(
     IConnectorResolver connectors,
     IConnectionAdminService admin,
     IMappingEngine mapping,
-    IAuditWriter audit) : ControllerBase
+    IAuditWriter audit,
+    ITicketScopeQuery scopeQuery,
+    ICurrentUser user) : ControllerBase
 {
     /// <summary>
     /// Who can take this ticket, and in what role. Narrowed to the technicians who actually cover
@@ -212,7 +216,11 @@ public sealed class TicketAssignmentController(
     }
 
     private async Task<Desk.Domain.Tickets.Ticket> LoadAsync(Guid id, CancellationToken ct)
-        => await db.Tickets.FirstOrDefaultAsync(t => t.Id == id, ct) ?? throw new NotFoundException("Ticket");
+    {
+        if (user.UserId is not { } uid) throw new NotFoundException("Ticket");
+        return await scopeQuery.FindAsync(db.Tickets, id, uid, Permissions.TicketsUpdate, ct)
+            ?? throw new NotFoundException("Ticket");
+    }
 
     private static string? Blank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
 

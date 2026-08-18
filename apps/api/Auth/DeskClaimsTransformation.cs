@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Desk.Domain.Authorization;
 using Desk.Domain.Enums;
 using Desk.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -75,7 +76,25 @@ public sealed class DeskClaimsTransformation(DeskDbContext db) : Microsoft.AspNe
         else if (user.MspOrganizationId is { } org)
             identity.AddClaim(new Claim(CurrentUser.OrgClaim, org.ToString()));
 
-        foreach (var perm in roles.SelectMany(r => r.Permissions).Select(p => p.PermissionKey).Distinct())
+        var granted = roles.SelectMany(r => r.Permissions).Select(p => p.PermissionKey).ToHashSet();
+
+        // A per-user override REPLACES the role-derived answer for its key, not just at the
+        // fine-grained scope level resolved later by IEffectivePermissionService — the coarse
+        // claim-presence gate (`[RequirePermission]`) has to agree with it too, or a Deny override
+        // would stop nothing: the endpoint-level check would still see the role's claim and let the
+        // request through, leaving only the later, easier-to-forget scope check standing between the
+        // caller and the denied action. A Grant override works the same way in reverse — it can hand
+        // out a permission no role held at all.
+        var overrides = await db.UserPermissionOverrides.AsNoTracking()
+            .Where(o => o.AppUserId == user.Id)
+            .ToListAsync();
+        foreach (var o in overrides)
+        {
+            if (o.Effect == PermissionEffect.Deny) granted.Remove(o.PermissionKey);
+            else granted.Add(o.PermissionKey);
+        }
+
+        foreach (var perm in granted)
             identity.AddClaim(new Claim(CurrentUser.PermissionClaim, perm));
 
         principal.AddIdentity(identity);

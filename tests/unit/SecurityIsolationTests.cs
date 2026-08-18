@@ -102,7 +102,7 @@ public class SecurityIsolationTests
         var (db, _) = store.Tenant(OrgA);
         // Even naming org B's exact company id, the tenant filter hides the row entirely.
         var access = new ClientAccess(OrgA, companyB, Guid.NewGuid(), true);
-        (await new TicketReadService(db).ListAsync(access)).Should().BeEmpty();
+        (await new TicketReadService(db, new NoopTicketScopeQuery(), new TestCurrentUser(OrgA)).ListAsync(access)).Should().BeEmpty();
     }
 
     [Fact]

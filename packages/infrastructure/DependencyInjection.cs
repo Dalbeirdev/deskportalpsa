@@ -1,4 +1,5 @@
 using Desk.Application.Abstractions;
+using Desk.Application.Authorization;
 using Desk.Application.Connectors;
 using Desk.Application.Mapping;
 using Desk.Application.Resilience;
@@ -6,6 +7,7 @@ using Desk.Application.Admin;
 using Desk.Application.Analytics;
 using Desk.Application.Attachments;
 using Desk.Infrastructure.Attachments;
+using Desk.Infrastructure.Authorization;
 using Desk.Application.Sync;
 using Desk.Application.Tickets;
 using Desk.Infrastructure.Admin;
@@ -95,6 +97,8 @@ public static class DependencyInjection
         services.AddScoped<IProfileService, ProfileService>();
         services.AddScoped<ITicketReadService, TicketReadService>();
         services.AddScoped<ITicketCommandService, TicketCommandService>();
+        services.AddScoped<IEffectivePermissionService, EffectivePermissionService>();
+        services.AddScoped<ITicketScopeQuery, TicketScopeQuery>();
 
         // Client control panel (CP-1 → CP-4 + reports)
         services.AddScoped<Desk.Application.ControlPanel.IControlPanelService, Desk.Infrastructure.ControlPanel.ControlPanelService>();

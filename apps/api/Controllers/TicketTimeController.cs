@@ -1,8 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using Desk.Api.Auth;
+using Desk.Application.Abstractions;
 using Desk.Application.Admin;
 using Desk.Application.Common;
 using Desk.Application.Connectors;
+using Desk.Application.Tickets;
 using Desk.Domain.Authorization;
 using Desk.Domain.Tickets;
 using Desk.Infrastructure.Persistence;
@@ -26,7 +28,9 @@ namespace Desk.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/tickets")]
-public sealed class TicketTimeController(DeskDbContext db, IConnectorResolver connectors, IConnectionAdminService admin) : ControllerBase
+public sealed class TicketTimeController(
+    DeskDbContext db, IConnectorResolver connectors, IConnectionAdminService admin,
+    ITicketScopeQuery scopeQuery, ICurrentUser user) : ControllerBase
 {
     [HttpGet("{id:guid}/time-options")]
     [RequirePermission(Permissions.TicketsLogTime)]
@@ -233,7 +237,11 @@ public sealed class TicketTimeController(DeskDbContext db, IConnectorResolver co
     // ---- helpers ----
 
     private async Task<Ticket> LoadAsync(Guid id, CancellationToken ct)
-        => await db.Tickets.FirstOrDefaultAsync(t => t.Id == id, ct) ?? throw new NotFoundException("Ticket");
+    {
+        if (user.UserId is not { } uid) throw new NotFoundException("Ticket");
+        return await scopeQuery.FindAsync(db.Tickets, id, uid, Permissions.TicketsLogTime, ct)
+            ?? throw new NotFoundException("Ticket");
+    }
 
     /// <summary>
     /// Confirms a provider-side time entry actually belongs to this ticket before it is edited or

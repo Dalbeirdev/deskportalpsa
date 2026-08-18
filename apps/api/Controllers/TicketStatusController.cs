@@ -1,7 +1,9 @@
 using Desk.Api.Auth;
+using Desk.Application.Abstractions;
 using Desk.Application.Common;
 using Desk.Application.Connectors;
 using Desk.Application.Mapping;
+using Desk.Application.Tickets;
 using Desk.Domain.Authorization;
 using Desk.Infrastructure.Persistence;
 using Desk.PsaCore.Models;
@@ -25,7 +27,9 @@ namespace Desk.Api.Controllers;
 public sealed class TicketStatusController(
     DeskDbContext db,
     IConnectorResolver connectors,
-    IMappingEngine mapping) : ControllerBase
+    IMappingEngine mapping,
+    ITicketScopeQuery scopeQuery,
+    ICurrentUser user) : ControllerBase
 {
     [HttpPost("{id:guid}/status")]
     [RequirePermission(Permissions.TicketsUpdate)]
@@ -34,7 +38,8 @@ public sealed class TicketStatusController(
         if (string.IsNullOrWhiteSpace(req.Status))
             throw new ValidationFailedException("A status is required.");
 
-        var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.Id == id, ct)
+        if (user.UserId is not { } uid) throw new NotFoundException("Ticket");
+        var ticket = await scopeQuery.FindAsync(db.Tickets, id, uid, Permissions.TicketsUpdate, ct)
             ?? throw new NotFoundException("Ticket");
         if (string.IsNullOrEmpty(ticket.ExternalTicketId))
             throw new ValidationFailedException("This ticket is not yet synced to the PSA.");

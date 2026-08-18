@@ -163,6 +163,7 @@ public sealed class UserAdminService(DeskDbContext db, IAuditWriter audit, ITena
 
     public async Task AssignRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default)
     {
+        EnsureNotActingOnSelf(userId);
         var exists = await db.UserRoles.AnyAsync(r => r.AppUserId == userId && r.RoleId == roleId, ct);
         if (!exists)
         {
@@ -174,6 +175,7 @@ public sealed class UserAdminService(DeskDbContext db, IAuditWriter audit, ITena
 
     public async Task RemoveRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default)
     {
+        EnsureNotActingOnSelf(userId);
         var link = await db.UserRoles.FirstOrDefaultAsync(r => r.AppUserId == userId && r.RoleId == roleId, ct);
         if (link is not null)
         {
@@ -181,5 +183,19 @@ public sealed class UserAdminService(DeskDbContext db, IAuditWriter audit, ITena
             await db.SaveChangesAsync(ct);
             await audit.WriteAsync("user.role.removed", "AppUser", userId.ToString(), new { roleId }, ct);
         }
+    }
+
+    /// <summary>
+    /// No one may change their own roles, even while holding UsersManage/RolesManage. Claim
+    /// presence alone cannot express this — a holder of RolesManage genuinely has the permission —
+    /// so it has to be a same-row-as-actor check in the service itself. Blanket rather than
+    /// "only blocks adding a higher role": a narrower rule invites exactly the edge-case reasoning
+    /// ("this role isn't ADMIN, so self-assigning it is fine") that produces the next escalation
+    /// path. Any legitimate change to your own access is made by someone else.
+    /// </summary>
+    private void EnsureNotActingOnSelf(Guid targetUserId)
+    {
+        if (currentUser.UserId is { } actorId && actorId == targetUserId)
+            throw new ForbiddenException("You cannot change your own role assignments. Ask another administrator.");
     }
 }
