@@ -276,6 +276,50 @@ public sealed class AdminReadController(
     [RequirePermission(Permissions.UsersManage)]
     public async Task<IActionResult> Departments(CancellationToken ct) => Ok(await users.DepartmentsAsync(ct));
 
+    [HttpGet("org-structure")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> OrgStructure(CancellationToken ct) => Ok(await users.DepartmentsManageAsync(ct));
+
+    [HttpPost("departments")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> CreateDepartment([FromBody] CreateDepartmentInput input, CancellationToken ct)
+        => Ok(await users.CreateDepartmentAsync(input, ct));
+
+    [HttpPut("departments/{id:guid}")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> UpdateDepartment(Guid id, [FromBody] UpdateDepartmentInput input, CancellationToken ct)
+        => Ok(await users.UpdateDepartmentAsync(id, input, ct));
+
+    [HttpPut("departments/{id:guid}/active")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> SetDepartmentActive(Guid id, [FromBody] bool active, CancellationToken ct)
+    { await users.SetDepartmentActiveAsync(id, active, ct); return NoContent(); }
+
+    [HttpDelete("departments/{id:guid}")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> DeleteDepartment(Guid id, CancellationToken ct)
+    { await users.DeleteDepartmentAsync(id, ct); return NoContent(); }
+
+    [HttpPost("teams")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> CreateTeam([FromBody] CreateTeamInput input, CancellationToken ct)
+        => Ok(await users.CreateTeamAsync(input, ct));
+
+    [HttpPut("teams/{id:guid}")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> UpdateTeam(Guid id, [FromBody] UpdateTeamInput input, CancellationToken ct)
+        => Ok(await users.UpdateTeamAsync(id, input, ct));
+
+    [HttpPut("teams/{id:guid}/active")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> SetTeamActive(Guid id, [FromBody] bool active, CancellationToken ct)
+    { await users.SetTeamActiveAsync(id, active, ct); return NoContent(); }
+
+    [HttpDelete("teams/{id:guid}")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> DeleteTeam(Guid id, CancellationToken ct)
+    { await users.DeleteTeamAsync(id, ct); return NoContent(); }
+
     [HttpGet("boards")]
     [RequirePermission(Permissions.UsersManage)]
     public async Task<IActionResult> Boards(CancellationToken ct) => Ok(await users.BoardsAsync(ct));

@@ -211,6 +211,148 @@ public sealed class UserAdminService(
                     .Select(t => new TeamOptionDto(t.Id, t.Name, t.DepartmentId)).ToList()))
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<DepartmentManageDto>> DepartmentsManageAsync(CancellationToken ct = default)
+    {
+        var departments = await db.Departments.AsNoTracking().OrderBy(d => d.SortOrder).ToListAsync(ct);
+        var teams = await db.Teams.AsNoTracking().OrderBy(t => t.SortOrder).ToListAsync(ct);
+        var deptIds = departments.Select(d => d.Id).ToList();
+        var teamIds = teams.Select(t => t.Id).ToList();
+
+        // Grouped once up front rather than a per-row count query, same reasoning as ToSummariesAsync.
+        var primaryByDept = await db.UserDepartments.AsNoTracking()
+            .Where(ud => deptIds.Contains(ud.DepartmentId) && ud.IsPrimary)
+            .GroupBy(ud => ud.DepartmentId).Select(g => new { DepartmentId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.DepartmentId, x => x.Count, ct);
+        var secondaryByDept = await db.UserDepartments.AsNoTracking()
+            .Where(ud => deptIds.Contains(ud.DepartmentId) && !ud.IsPrimary)
+            .GroupBy(ud => ud.DepartmentId).Select(g => new { DepartmentId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.DepartmentId, x => x.Count, ct);
+        var usersByTeam = await db.UserTeams.AsNoTracking()
+            .Where(ut => teamIds.Contains(ut.TeamId))
+            .GroupBy(ut => ut.TeamId).Select(g => new { TeamId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.TeamId, x => x.Count, ct);
+
+        return departments.Select(d => new DepartmentManageDto(
+            d.Id, d.Name, d.Description, d.IsActive, d.IsSystemDefault, d.SortOrder,
+            teams.Where(t => t.DepartmentId == d.Id)
+                .Select(t => new TeamManageDto(t.Id, t.DepartmentId, t.Name, t.IsActive, t.SortOrder, usersByTeam.GetValueOrDefault(t.Id)))
+                .ToList(),
+            primaryByDept.GetValueOrDefault(d.Id), secondaryByDept.GetValueOrDefault(d.Id))).ToList();
+    }
+
+    private static string NormalizedName(string name)
+    {
+        var trimmed = name.Trim();
+        if (trimmed.Length is < 2 or > 200)
+            throw new ValidationFailedException("Name must be between 2 and 200 characters.");
+        return trimmed;
+    }
+
+    public async Task<DepartmentManageDto> CreateDepartmentAsync(CreateDepartmentInput input, CancellationToken ct = default)
+    {
+        var name = NormalizedName(input.Name);
+        var taken = await db.Departments.AnyAsync(d => d.Name.ToLower() == name.ToLower(), ct);
+        if (taken) throw new ValidationFailedException("A department with that name already exists.");
+
+        var maxSort = await db.Departments.Select(d => (int?)d.SortOrder).MaxAsync(ct) ?? -1;
+        var dept = new Department { Name = name, Description = input.Description?.Trim(), SortOrder = maxSort + 1 };
+        db.Departments.Add(dept);
+        await db.SaveChangesAsync(ct);
+        await audit.WriteAsync("department.created", "Department", dept.Id.ToString(), new { name }, ct);
+        return new DepartmentManageDto(dept.Id, dept.Name, dept.Description, dept.IsActive, dept.IsSystemDefault, dept.SortOrder, [], 0, 0);
+    }
+
+    public async Task<DepartmentManageDto> UpdateDepartmentAsync(Guid departmentId, UpdateDepartmentInput input, CancellationToken ct = default)
+    {
+        var dept = await db.Departments.FirstOrDefaultAsync(d => d.Id == departmentId, ct)
+            ?? throw new NotFoundException("Department");
+        var name = NormalizedName(input.Name);
+        if (!string.Equals(name, dept.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            var taken = await db.Departments.AnyAsync(d => d.Id != departmentId && d.Name.ToLower() == name.ToLower(), ct);
+            if (taken) throw new ValidationFailedException("A department with that name already exists.");
+        }
+        dept.Name = name;
+        dept.Description = input.Description?.Trim();
+        await db.SaveChangesAsync(ct);
+        await audit.WriteAsync("department.updated", "Department", departmentId.ToString(), new { name }, ct);
+        return (await DepartmentsManageAsync(ct)).First(d => d.Id == departmentId);
+    }
+
+    public async Task SetDepartmentActiveAsync(Guid departmentId, bool active, CancellationToken ct = default)
+    {
+        var dept = await db.Departments.FirstOrDefaultAsync(d => d.Id == departmentId, ct)
+            ?? throw new NotFoundException("Department");
+        dept.IsActive = active;
+        await db.SaveChangesAsync(ct);
+        await audit.WriteAsync("department.active_changed", "Department", departmentId.ToString(), new { active }, ct);
+    }
+
+    public async Task DeleteDepartmentAsync(Guid departmentId, CancellationToken ct = default)
+    {
+        var dept = await db.Departments.FirstOrDefaultAsync(d => d.Id == departmentId, ct)
+            ?? throw new NotFoundException("Department");
+        var name = dept.Name;
+        // Teams and UserDepartment rows cascade at the database level (see OrganizationConfigurations).
+        db.Departments.Remove(dept);
+        await db.SaveChangesAsync(ct);
+        await audit.WriteAsync("department.deleted", "Department", departmentId.ToString(), new { name }, ct);
+    }
+
+    public async Task<TeamManageDto> CreateTeamAsync(CreateTeamInput input, CancellationToken ct = default)
+    {
+        var name = NormalizedName(input.Name);
+        var deptExists = await db.Departments.AnyAsync(d => d.Id == input.DepartmentId, ct);
+        if (!deptExists) throw new ValidationFailedException("That department does not exist.");
+        var taken = await db.Teams.AnyAsync(t => t.DepartmentId == input.DepartmentId && t.Name.ToLower() == name.ToLower(), ct);
+        if (taken) throw new ValidationFailedException("A team with that name already exists in this department.");
+
+        var maxSort = await db.Teams.Where(t => t.DepartmentId == input.DepartmentId)
+            .Select(t => (int?)t.SortOrder).MaxAsync(ct) ?? -1;
+        var team = new Team { DepartmentId = input.DepartmentId, Name = name, SortOrder = maxSort + 1 };
+        db.Teams.Add(team);
+        await db.SaveChangesAsync(ct);
+        await audit.WriteAsync("team.created", "Team", team.Id.ToString(), new { name, departmentId = input.DepartmentId }, ct);
+        return new TeamManageDto(team.Id, team.DepartmentId, team.Name, team.IsActive, team.SortOrder, 0);
+    }
+
+    public async Task<TeamManageDto> UpdateTeamAsync(Guid teamId, UpdateTeamInput input, CancellationToken ct = default)
+    {
+        var team = await db.Teams.FirstOrDefaultAsync(t => t.Id == teamId, ct)
+            ?? throw new NotFoundException("Team");
+        var name = NormalizedName(input.Name);
+        if (!string.Equals(name, team.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            var taken = await db.Teams.AnyAsync(t => t.Id != teamId && t.DepartmentId == team.DepartmentId && t.Name.ToLower() == name.ToLower(), ct);
+            if (taken) throw new ValidationFailedException("A team with that name already exists in this department.");
+        }
+        team.Name = name;
+        await db.SaveChangesAsync(ct);
+        await audit.WriteAsync("team.updated", "Team", teamId.ToString(), new { name }, ct);
+        var userCount = await db.UserTeams.CountAsync(ut => ut.TeamId == teamId, ct);
+        return new TeamManageDto(team.Id, team.DepartmentId, team.Name, team.IsActive, team.SortOrder, userCount);
+    }
+
+    public async Task SetTeamActiveAsync(Guid teamId, bool active, CancellationToken ct = default)
+    {
+        var team = await db.Teams.FirstOrDefaultAsync(t => t.Id == teamId, ct)
+            ?? throw new NotFoundException("Team");
+        team.IsActive = active;
+        await db.SaveChangesAsync(ct);
+        await audit.WriteAsync("team.active_changed", "Team", teamId.ToString(), new { active }, ct);
+    }
+
+    public async Task DeleteTeamAsync(Guid teamId, CancellationToken ct = default)
+    {
+        var team = await db.Teams.FirstOrDefaultAsync(t => t.Id == teamId, ct)
+            ?? throw new NotFoundException("Team");
+        var name = team.Name;
+        // UserTeam rows cascade at the database level (see OrganizationConfigurations).
+        db.Teams.Remove(team);
+        await db.SaveChangesAsync(ct);
+        await audit.WriteAsync("team.deleted", "Team", teamId.ToString(), new { name }, ct);
+    }
+
     public async Task<IReadOnlyList<BoardOptionDto>> BoardsAsync(CancellationToken ct = default)
         // Boards are not a stored entity — see the Phase-1 design note on UserBoardGrant — so this
         // is a live derivation from whatever has actually synced, exactly like the Tickets page's

@@ -90,6 +90,24 @@ public interface IUserAdminService
 
     Task<IReadOnlyList<DepartmentWithTeamsDto>> DepartmentsAsync(CancellationToken ct = default);
 
+    /// <summary>The full admin view of departments and teams — includes inactive rows and usage
+    /// counts, unlike DepartmentsAsync's active-only picker list.</summary>
+    Task<IReadOnlyList<DepartmentManageDto>> DepartmentsManageAsync(CancellationToken ct = default);
+    Task<DepartmentManageDto> CreateDepartmentAsync(CreateDepartmentInput input, CancellationToken ct = default);
+    Task<DepartmentManageDto> UpdateDepartmentAsync(Guid departmentId, UpdateDepartmentInput input, CancellationToken ct = default);
+    Task SetDepartmentActiveAsync(Guid departmentId, bool active, CancellationToken ct = default);
+
+    /// <summary>Hard delete — cascades to its teams and every user's membership in it. Callers should
+    /// prefer SetDepartmentActiveAsync(false) unless the department was created by mistake.</summary>
+    Task DeleteDepartmentAsync(Guid departmentId, CancellationToken ct = default);
+
+    Task<TeamManageDto> CreateTeamAsync(CreateTeamInput input, CancellationToken ct = default);
+    Task<TeamManageDto> UpdateTeamAsync(Guid teamId, UpdateTeamInput input, CancellationToken ct = default);
+    Task SetTeamActiveAsync(Guid teamId, bool active, CancellationToken ct = default);
+
+    /// <summary>Hard delete — cascades to every user's membership in it.</summary>
+    Task DeleteTeamAsync(Guid teamId, CancellationToken ct = default);
+
     /// <summary>Distinct (connection, board name) pairs derived from synced tickets — boards are not
     /// a stored entity, so this list is only ever as current as the last sync.</summary>
     Task<IReadOnlyList<BoardOptionDto>> BoardsAsync(CancellationToken ct = default);
