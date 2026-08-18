@@ -30,6 +30,20 @@ public sealed class ConnectorResolver(DeskDbContext db, IEnumerable<IConnectorFa
         if (!_factories.TryGetValue(connection.Provider, out var factory))
             throw new ValidationFailedException($"No connector registered for provider {connection.Provider}.");
 
-        return await factory.CreateAsync(psaConnectionId, ct);
+        try
+        {
+            return await factory.CreateAsync(psaConnectionId, ct);
+        }
+        catch (KeyNotFoundException)
+        {
+            // The secret store's reference genuinely doesn't resolve — most commonly a credential
+            // rotation the store lost (e.g. a prior secret-backend outage). Every factory reaches
+            // ISecretStore.ReadAsync through here, so this is the one place to turn that into a
+            // message an admin can act on, rather than letting it fall through to the API's generic
+            // "unexpected error, contact support" response — which is what a plain KeyNotFoundException
+            // gets, and which sent an admin looking for a bug instead of the Edit button.
+            throw new ValidationFailedException(
+                $"'{connection.Name}' has no valid stored credentials — edit the connection and re-enter them.");
+        }
     }
 }
