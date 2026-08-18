@@ -92,6 +92,29 @@ public class TicketScopeQueryPostgresTranslationTests
         act.Should().NotThrow();
     }
 
+    [Fact]
+    public void Board_options_join_and_order_compiles_to_sql()
+    {
+        // Reproduces UserAdminService.BoardsAsync's exact shape. This is the query that actually
+        // shipped broken: ordering by a property read off a positional record built in the Join's
+        // result selector doesn't translate — EF can't see through the constructor to know which
+        // argument maps to the join's c.Name. The in-memory provider evaluated it client-side and
+        // never complained; this is the test that would have caught it before it reached prod.
+        using var db = NpgsqlDb();
+
+        var act = () => db.Tickets
+            .Where(t => t.QueueOrBoard != null)
+            .Select(t => new { t.PsaConnectionId, t.QueueOrBoard })
+            .Distinct()
+            .Join(db.PsaConnections, t => t.PsaConnectionId, c => c.Id,
+                (t, c) => new { t.PsaConnectionId, ConnectionName = c.Name, BoardName = t.QueueOrBoard! })
+            .OrderBy(b => b.ConnectionName).ThenBy(b => b.BoardName)
+            .Select(b => new Desk.Application.Admin.BoardOptionDto(b.PsaConnectionId, b.ConnectionName, b.BoardName))
+            .ToQueryString();
+
+        act.Should().NotThrow("boards are a live per-tenant derivation hit on every Users-page load — this must survive real SQL translation");
+    }
+
     private sealed class ParamSwap(
         System.Linq.Expressions.ParameterExpression from, System.Linq.Expressions.ParameterExpression to)
         : System.Linq.Expressions.ExpressionVisitor
