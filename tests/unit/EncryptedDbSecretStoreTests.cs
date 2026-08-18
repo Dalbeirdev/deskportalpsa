@@ -65,6 +65,24 @@ public class EncryptedDbSecretStoreTests
     }
 
     [Fact]
+    public async Task Rotating_a_reference_with_no_backing_row_creates_one_instead_of_throwing()
+    {
+        // This is the live production bug: a PsaConnection whose CredentialSecretRef survived a
+        // Vault-in-dev-mode restart that wiped Vault's actual secret. "Edit the connection and
+        // re-enter your credentials" — the fix the error message itself tells the admin to do —
+        // calls RotateAsync against that now-orphaned ref. It must not throw; it must recover the
+        // ref, matching InMemorySecretStore/FileSecretStore's existing upsert behavior.
+        var (store, _) = Create();
+        const string orphanedRef = "vault:secret/data/connections/autotask-prod";
+
+        var act = () => store.RotateAsync(orphanedRef, new Dictionary<string, string> { ["PrivateKey"] = "fresh-key" });
+
+        await act.Should().NotThrowAsync();
+        var read = await store.ReadAsync(orphanedRef);
+        read["PrivateKey"].Should().Be("fresh-key");
+    }
+
+    [Fact]
     public async Task Delete_makes_the_reference_unreadable()
     {
         var (store, _) = Create();
