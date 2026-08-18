@@ -18,6 +18,13 @@ public sealed class SystemCurrentUser : ICurrentUser
     public string? Email => null;
     public string? DisplayName => "System";
     public Guid? OrganizationId => null;
+
+    // The system is nobody in particular: it maps to no staff row and no PSA technician, so
+    // anything that scopes data to "this person's own work" finds nothing to scope to and must
+    // fail closed rather than quietly widening.
+    public Guid? UserId => null;
+    public string? TechnicianExternalId => null;
+
     public IReadOnlySet<string> Permissions => new HashSet<string>();
     public bool HasPermission(string permissionKey) => false;
 }

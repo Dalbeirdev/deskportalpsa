@@ -1,8 +1,11 @@
 using System.Globalization;
 using System.Text;
+using Desk.Application.Abstractions;
 using Desk.Application.Analytics;
+using Desk.Application.Common;
 using Desk.Domain.Authorization;
 using Desk.Api.Auth;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Desk.Api.Controllers;
@@ -12,15 +15,35 @@ namespace Desk.Api.Controllers;
 /// productivity permission; export mirrors the team query. Every response carries the operational-
 /// indicator disclaimer so it travels with the numbers.
 /// </summary>
+// Class-level [Authorize] as a floor: every action here also carries [RequirePermission],
+// but that is opt-in per action — an action added later without one would otherwise be
+// reachable anonymously. This makes authentication the default and the omission harmless.
+[Authorize]
 [ApiController]
 [Route("api/dashboard")]
-public sealed class DashboardController(ITechnicianMetricsService metrics) : ControllerBase
+public sealed class DashboardController(ITechnicianMetricsService metrics, ICurrentUser user) : ControllerBase
 {
     [HttpGet("technician")]
     [RequirePermission(Permissions.ProductivityViewOwn)]
     public async Task<IActionResult> Technician([FromQuery] DashboardQuery q, CancellationToken ct)
     {
-        var m = await metrics.ForTechnicianAsync(q.ToFilter(), q.ToWeights(), ct);
+        var filter = q.ToFilter();
+
+        // The technician filter arrives from the query string, so on its own this endpoint let
+        // anyone holding the own-productivity permission read a NAMED colleague's numbers by
+        // passing their id — or the whole organization's by passing nothing at all, since an
+        // absent filter means "no restriction" downstream. Callers without the team permission are
+        // therefore pinned to themselves regardless of what they asked for.
+        if (!user.HasPermission(Permissions.ProductivityViewTeam))
+        {
+            var self = user.TechnicianExternalId;
+            if (string.IsNullOrEmpty(self))
+                throw new ForbiddenException(
+                    "Your account is not linked to a technician in the PSA, so it has no own-productivity figures to show.");
+            filter = filter with { TechnicianExternalId = self };
+        }
+
+        var m = await metrics.ForTechnicianAsync(filter, q.ToWeights(), ct);
         return Ok(new { metrics = m, disclaimer = ProductivityScore.Disclaimer });
     }
 

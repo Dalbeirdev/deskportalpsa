@@ -8,6 +8,7 @@ using Desk.Domain.Tickets;
 using Desk.Infrastructure.Persistence;
 using Desk.PsaCore.Contracts;
 using Desk.PsaCore.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,6 +20,10 @@ namespace Desk.Api.Controllers;
 /// of record) so the productivity dashboards stay in sync. A technician action gated by
 /// <see cref="Permissions.TicketsLogTime"/> — distinct from the client-portal ticket endpoints.
 /// </summary>
+// Class-level [Authorize] as a floor: every action here also carries [RequirePermission],
+// but that is opt-in per action — an action added later without one would otherwise be
+// reachable anonymously. This makes authentication the default and the omission harmless.
+[Authorize]
 [ApiController]
 [Route("api/tickets")]
 public sealed class TicketTimeController(DeskDbContext db, IConnectorResolver connectors, IConnectionAdminService admin) : ControllerBase
@@ -185,6 +190,7 @@ public sealed class TicketTimeController(DeskDbContext db, IConnectorResolver co
     public async Task<IActionResult> Update(Guid id, string entryId, [FromBody] UpdateTimeRequest req, CancellationToken ct)
     {
         var (ticket, connector) = await LoadSyncedAsync(id, ct);
+        await EnsureEntryBelongsToTicketAsync(ticket, connector, entryId, ct);
         var result = await connector.UpdateTimeEntryAsync(entryId,
             new UnifiedTimeEntryUpdate(req.Hours, req.Billable is null ? null : ParseBillable(req.Billable), req.Notes), ct);
         if (!result.Success)
@@ -212,6 +218,7 @@ public sealed class TicketTimeController(DeskDbContext db, IConnectorResolver co
             }
         }
 
+        await EnsureEntryBelongsToTicketAsync(ticket, connector, entryId, ct);
         var result = await connector.DeleteTimeEntryAsync(entryId, ct);
         if (!result.Success)
             throw new ValidationFailedException(result.Error ?? "The PSA rejected the deletion.");
@@ -227,6 +234,24 @@ public sealed class TicketTimeController(DeskDbContext db, IConnectorResolver co
 
     private async Task<Ticket> LoadAsync(Guid id, CancellationToken ct)
         => await db.Tickets.FirstOrDefaultAsync(t => t.Id == id, ct) ?? throw new NotFoundException("Ticket");
+
+    /// <summary>
+    /// Confirms a provider-side time entry actually belongs to this ticket before it is edited or
+    /// deleted. Without this the entry id is simply forwarded to the PSA, so passing another
+    /// ticket's entry id would edit or delete THAT ticket's time — including a ticket the caller
+    /// cannot otherwise see, and potentially another customer's.
+    ///
+    /// Checked against the provider rather than the portal's mirror on purpose: the mirror can lag
+    /// a sync, and a stale mirror would reject a legitimate edit. The provider owns the ticket's
+    /// time, so it is also the right thing to ask.
+    /// </summary>
+    private async Task EnsureEntryBelongsToTicketAsync(
+        Ticket ticket, IServiceManagementConnector connector, string entryId, CancellationToken ct)
+    {
+        var entries = await connector.GetTimeEntriesAsync(ticket.ExternalTicketId!, ct);
+        if (!entries.Any(e => e.ExternalId == entryId))
+            throw new NotFoundException("Time entry");
+    }
 
     private async Task<(Ticket ticket, IServiceManagementConnector connector)> LoadSyncedAsync(Guid id, CancellationToken ct)
     {

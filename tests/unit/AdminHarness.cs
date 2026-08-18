@@ -6,16 +6,33 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Desk.Tests.Unit;
 
-/// <summary>Stub authenticated user for admin service tests.</summary>
-public sealed class TestCurrentUser(Guid? org, string subject = "admin-sub", string name = "Admin User") : ICurrentUser
+/// <summary>
+/// Stub authenticated user for admin service tests.
+///
+/// By default this grants every permission, because most tests exercise a service's own logic and
+/// not its gate. Pass <paramref name="permissions"/> to model a real, limited caller — which is the
+/// only way to test that something is DENIED, as opposed to merely present.
+/// </summary>
+public sealed class TestCurrentUser(
+    Guid? org,
+    string subject = "admin-sub",
+    string name = "Admin User",
+    IReadOnlySet<string>? permissions = null,
+    string? technicianExternalId = null,
+    Guid? userId = null) : ICurrentUser
 {
     public bool IsAuthenticated => true;
     public string? Subject => subject;
     public string? Email => "admin@test";
     public string? DisplayName => name;
     public Guid? OrganizationId => org;
-    public IReadOnlySet<string> Permissions => new HashSet<string>();
-    public bool HasPermission(string permissionKey) => true;
+    public Guid? UserId => userId;
+    public string? TechnicianExternalId => technicianExternalId;
+    public IReadOnlySet<string> Permissions => permissions ?? new HashSet<string>();
+
+    /// <summary>Grants everything unless an explicit permission set was supplied.</summary>
+    public bool HasPermission(string permissionKey)
+        => permissions is null || permissions.Contains(permissionKey);
 }
 
 /// <summary>
