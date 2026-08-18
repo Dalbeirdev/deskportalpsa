@@ -26,3 +26,20 @@ public abstract class TenantEntity : BaseEntity, ITenantScoped
 {
     public Guid MspOrganizationId { get; set; }
 }
+
+/// <summary>
+/// Marks an entity that belongs to a tenant OR is global/built-in (nullable org id) — e.g. a
+/// system-provided row visible to every tenant alongside each tenant's own rows of the same kind.
+/// The matching query filter treats a null org id as "visible everywhere."
+///
+/// Deliberately NOT applied to <see cref="Identity.AppUser"/> or <see cref="Identity.Role"/>: both
+/// are looked up during authentication before any tenant scope has been established (the org claim
+/// that establishes tenant scope is itself derived from the AppUser lookup), so a filter keyed on
+/// "current tenant" would return zero rows at exactly the point that lookup needs to succeed.
+/// Entities implementing this interface must only ever be queried from within an already-tenant-
+/// scoped request.
+/// </summary>
+public interface INullableTenantScoped
+{
+    Guid? MspOrganizationId { get; set; }
+}

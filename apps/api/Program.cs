@@ -129,7 +129,9 @@ if (localMode)
     var startupDb = startupScope.ServiceProvider.GetRequiredService<DeskDbContext>();
     await startupDb.Database.EnsureCreatedAsync();
     await DatabaseSeeder.SeedBuiltInRolesAsync(startupDb);
+    await DatabaseSeeder.SeedBuiltInPermissionTemplatesAsync(startupDb);
     await DatabaseSeeder.SeedLocalDemoAsync(startupDb);
+    await DatabaseSeeder.SeedDefaultDepartmentsAsync(startupDb);
     app.Logger.LogWarning("LOCAL MODE: in-memory DB + dev auto-login active. Not for production.");
 }
 else if (app.Environment.IsDevelopment() || config.GetValue("RunMigrationsOnStartup", false))
@@ -139,6 +141,7 @@ else if (app.Environment.IsDevelopment() || config.GetValue("RunMigrationsOnStar
     var startupDb = startupScope.ServiceProvider.GetRequiredService<DeskDbContext>();
     await startupDb.Database.MigrateAsync();
     await DatabaseSeeder.SeedBuiltInRolesAsync(startupDb);
+    await DatabaseSeeder.SeedBuiltInPermissionTemplatesAsync(startupDb);
 
     // First-admin bootstrap. A fresh non-local deployment has zero users, and sign-in binds an IdP
     // subject to an existing row by email — so without this, no one can ever log in.
@@ -151,7 +154,10 @@ else if (app.Environment.IsDevelopment() || config.GetValue("RunMigrationsOnStar
             bootstrapEmail,
             config["Bootstrap:AdminName"] ?? bootstrapEmail);
 
-    app.Logger.LogInformation("Database migrated and built-in roles seeded.");
+    // Depends on SeedBootstrapAdminAsync above having created the organization row.
+    await DatabaseSeeder.SeedDefaultDepartmentsAsync(startupDb);
+
+    app.Logger.LogInformation("Database migrated and built-in roles/templates/departments seeded.");
 }
 
 // ---- Pipeline order matters ----

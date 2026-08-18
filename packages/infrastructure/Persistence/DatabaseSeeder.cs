@@ -1,6 +1,7 @@
 using Desk.Domain.Authorization;
 using Desk.Domain.Enums;
 using Desk.Domain.Identity;
+using Desk.Domain.Organization;
 using Desk.Domain.Tenancy;
 using Microsoft.EntityFrameworkCore;
 
@@ -52,6 +53,80 @@ public static class DatabaseSeeder
                 role.Permissions.Add(new RolePermission { PermissionKey = perm });
 
             db.Roles.Add(role);
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>The 7 default departments seeded for every organization, staff org structure only
+    /// (unrelated to client companies).</summary>
+    private static readonly string[] DefaultDepartmentNames =
+        ["IT Support", "NOC", "Projects", "Sales", "Billing", "Administration", "Security"];
+
+    /// <summary>
+    /// Seeds the default department set for every organization that does not yet have any
+    /// departments. Runs under platform scope so it can see every tenant; per-org writes still go
+    /// through the normal tenant-stamping path since <see cref="Department"/> is tenant-scoped.
+    /// Idempotent — an organization that already has ANY departments (including ones an admin has
+    /// since renamed or deleted down to a subset) is left alone entirely, so this never resurrects
+    /// a department someone deliberately removed.
+    /// </summary>
+    public static async Task SeedDefaultDepartmentsAsync(DeskDbContext db, CancellationToken ct = default)
+    {
+        var orgIds = await db.MspOrganizations.IgnoreQueryFilters().Select(o => o.Id).ToListAsync(ct);
+        var orgsWithDepartments = await db.Departments.IgnoreQueryFilters()
+            .Select(d => d.MspOrganizationId).Distinct().ToListAsync(ct);
+        var missing = orgIds.Except(orgsWithDepartments);
+
+        foreach (var orgId in missing)
+        {
+            for (var i = 0; i < DefaultDepartmentNames.Length; i++)
+            {
+                db.Departments.Add(new Department
+                {
+                    MspOrganizationId = orgId,
+                    Name = DefaultDepartmentNames[i],
+                    IsSystemDefault = true,
+                    SortOrder = i,
+                });
+            }
+        }
+
+        if (missing.Any())
+            await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>The 8 built-in permission templates. Entries are populated in a later phase once
+    /// scoped enforcement exists to give them something meaningful to grant — the rows exist now so
+    /// they have stable ids a later Add-User flow can reference.</summary>
+    private static readonly (string Name, string Description, RoleType BaseRole)[] BuiltInTemplates =
+    [
+        ("Full Administrator", "Unrestricted access across the organization.", RoleType.MspAdministrator),
+        ("Service Desk Manager", "Manages the service desk team and its tickets.", RoleType.Manager),
+        ("Senior Technician", "Broader ticket access than a standard technician.", RoleType.Technician),
+        ("Standard Technician", "Assigned-ticket access for day-to-day work.", RoleType.Technician),
+        ("Dispatcher", "Assigns and routes incoming tickets.", RoleType.Technician),
+        ("Billing User", "Access to billing and invoicing data.", RoleType.Technician),
+        ("Auditor", "Read-only access to audit and security data.", RoleType.Auditor),
+        ("Read Only", "View access with no ability to change anything.", RoleType.Technician),
+    ];
+
+    public static async Task SeedBuiltInPermissionTemplatesAsync(DeskDbContext db, CancellationToken ct = default)
+    {
+        var existingNames = await db.PermissionTemplates.IgnoreQueryFilters()
+            .Where(t => t.IsSystemTemplate).Select(t => t.Name).ToListAsync(ct);
+
+        foreach (var (name, description, baseRole) in BuiltInTemplates)
+        {
+            if (existingNames.Contains(name)) continue;
+            db.PermissionTemplates.Add(new PermissionTemplate
+            {
+                MspOrganizationId = null,
+                Name = name,
+                Description = description,
+                BaseRoleType = baseRole,
+                IsSystemTemplate = true,
+            });
         }
 
         await db.SaveChangesAsync(ct);

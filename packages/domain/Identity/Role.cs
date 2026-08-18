@@ -1,3 +1,4 @@
+using Desk.Domain.Authorization;
 using Desk.Domain.Common;
 using Desk.Domain.Enums;
 
@@ -27,6 +28,12 @@ public class RolePermission : BaseEntity
 
     /// <summary>A value from <see cref="Authorization.Permissions"/>.</summary>
     public required string PermissionKey { get; set; }
+
+    /// <summary>How far this grant reaches. Defaults to <see cref="PermissionScope.All"/> — the
+    /// scope every existing role/permission pair effectively has today, since nothing enforces
+    /// scope yet. Added ahead of enforcement so the migration itself is provably inert: this
+    /// column exists and defaults correctly before anything reads it.</summary>
+    public PermissionScope Scope { get; set; } = PermissionScope.All;
 }
 
 /// <summary>Assignment of a role to an internal user.</summary>

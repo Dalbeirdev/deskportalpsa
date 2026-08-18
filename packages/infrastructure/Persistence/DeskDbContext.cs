@@ -1,10 +1,12 @@
 using System.Linq.Expressions;
 using Desk.Application.Abstractions;
 using Desk.Domain.Audit;
+using Desk.Domain.Authorization;
 using Desk.Domain.Common;
 using Desk.Domain.ControlPanel;
 using Desk.Domain.Identity;
 using Desk.Domain.Mapping;
+using Desk.Domain.Organization;
 using Desk.Domain.Sync;
 using Desk.Domain.Tenancy;
 using Desk.Domain.Tickets;
@@ -60,6 +62,18 @@ public class DeskDbContext(DbContextOptions<DeskDbContext> options, ITenantConte
     // not ITenantScoped and sits outside the tenant query filter below.
     public DbSet<SecretBlob> SecretBlobs => Set<SecretBlob>();
 
+    // Staff organizational structure (Phase 1 of the RBAC expansion — see the plan). Populated and
+    // usable now; not yet consulted by any enforcement.
+    public DbSet<Department> Departments => Set<Department>();
+    public DbSet<Team> Teams => Set<Team>();
+    public DbSet<UserDepartment> UserDepartments => Set<UserDepartment>();
+    public DbSet<UserTeam> UserTeams => Set<UserTeam>();
+    public DbSet<UserBoardAccess> UserBoardAccesses => Set<UserBoardAccess>();
+    public DbSet<UserBoardGrant> UserBoardGrants => Set<UserBoardGrant>();
+    public DbSet<UserPermissionOverride> UserPermissionOverrides => Set<UserPermissionOverride>();
+    public DbSet<PermissionTemplate> PermissionTemplates => Set<PermissionTemplate>();
+    public DbSet<PermissionTemplateEntry> PermissionTemplateEntries => Set<PermissionTemplateEntry>();
+
     // Read by the compiled query filter below. Guid.Empty can never match a real row, so an
     // unresolved (null) tenant that is not platform scope yields zero rows — fail closed.
     private Guid CurrentTenantId => tenant.OrganizationId ?? Guid.Empty;
@@ -93,11 +107,29 @@ public class DeskDbContext(DbContextOptions<DeskDbContext> options, ITenantConte
                 modelBuilder.Entity(entityType.ClrType).HasQueryFilter((LambdaExpression)filter);
             }
         }
+
+        // Same idea for entities that are either a tenant's own row OR a global/built-in one
+        // (nullable org id) — e.g. PermissionTemplate, AuditLogEntry. Deliberately NOT applied to
+        // AppUser/Role: see the INullableTenantScoped doc comment for why that would break sign-in.
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            if (typeof(INullableTenantScoped).IsAssignableFrom(entityType.ClrType))
+            {
+                var method = typeof(DeskDbContext)
+                    .GetMethod(nameof(BuildNullableTenantFilter), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+                    .MakeGenericMethod(entityType.ClrType);
+                var filter = method.Invoke(this, null)!;
+                modelBuilder.Entity(entityType.ClrType).HasQueryFilter((LambdaExpression)filter);
+            }
+        }
     }
 
     private LambdaExpression BuildTenantFilter<TEntity>() where TEntity : class, ITenantScoped
         // References instance members, so EF re-evaluates per DbContext instance/query.
         => (Expression<Func<TEntity, bool>>)(e => BypassTenantFilter || e.MspOrganizationId == CurrentTenantId);
+
+    private LambdaExpression BuildNullableTenantFilter<TEntity>() where TEntity : class, INullableTenantScoped
+        => (Expression<Func<TEntity, bool>>)(e => BypassTenantFilter || e.MspOrganizationId == null || e.MspOrganizationId == CurrentTenantId);
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
