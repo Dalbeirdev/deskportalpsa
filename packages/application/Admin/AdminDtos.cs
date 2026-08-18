@@ -125,6 +125,23 @@ public sealed record DepartmentWithTeamsDto(Guid Id, string Name, IReadOnlyList<
 /// more than one PSA connection without meaning the same thing.</summary>
 public sealed record BoardOptionDto(Guid PsaConnectionId, string ConnectionName, string BoardName);
 
+/// <summary>A team as shown on the Departments & Teams admin page — includes the fields the picker's
+/// TeamOptionDto deliberately omits (IsActive, UserCount) because a picker only ever offers active,
+/// assignable teams and doesn't need to explain why one is missing.</summary>
+public sealed record TeamManageDto(Guid Id, Guid DepartmentId, string Name, bool IsActive, int SortOrder, int UserCount);
+
+/// <summary>A department as shown on the Departments & Teams admin page. Separate from
+/// DepartmentWithTeamsDto (the picker used by Add User / User Details) because the admin page needs
+/// to see and reactivate INACTIVE departments too, not just offer active ones for assignment.</summary>
+public sealed record DepartmentManageDto(
+    Guid Id, string Name, string? Description, bool IsActive, bool IsSystemDefault, int SortOrder,
+    IReadOnlyList<TeamManageDto> Teams, int PrimaryUserCount, int SecondaryUserCount);
+
+public sealed record CreateDepartmentInput(string Name, string? Description);
+public sealed record UpdateDepartmentInput(string Name, string? Description);
+public sealed record CreateTeamInput(Guid DepartmentId, string Name);
+public sealed record UpdateTeamInput(string Name);
+
 public sealed record PermissionTemplateOptionDto(Guid Id, string Name, string? Description, RoleType BaseRoleType);
 
 /// <summary>

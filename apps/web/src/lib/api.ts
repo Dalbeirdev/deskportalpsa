@@ -257,6 +257,23 @@ export const api = {
   staffDepartments: () => request('/api/admin/departments', z.array(DepartmentWithTeamsSchema)),
   staffBoards: () => request('/api/admin/boards', z.array(BoardOptionSchema)),
   permissionTemplates: () => request('/api/admin/permission-templates', z.array(PermissionTemplateOptionSchema)),
+  orgStructure: () => request('/api/admin/org-structure', z.array(DepartmentManageSchema)),
+  createDepartment: (body: { name: string; description?: string | null }) =>
+    request('/api/admin/departments', DepartmentManageSchema, { method: 'POST', body: JSON.stringify(body) }),
+  updateDepartment: (id: string, body: { name: string; description?: string | null }) =>
+    request(`/api/admin/departments/${id}`, DepartmentManageSchema, { method: 'PUT', body: JSON.stringify(body) }),
+  setDepartmentActive: (id: string, active: boolean) =>
+    request(`/api/admin/departments/${id}/active`, z.void(), { method: 'PUT', body: JSON.stringify(active) }),
+  deleteDepartment: (id: string) =>
+    request(`/api/admin/departments/${id}`, z.void(), { method: 'DELETE' }),
+  createTeam: (body: { departmentId: string; name: string }) =>
+    request('/api/admin/teams', TeamManageSchema, { method: 'POST', body: JSON.stringify(body) }),
+  updateTeam: (id: string, body: { name: string }) =>
+    request(`/api/admin/teams/${id}`, TeamManageSchema, { method: 'PUT', body: JSON.stringify(body) }),
+  setTeamActive: (id: string, active: boolean) =>
+    request(`/api/admin/teams/${id}/active`, z.void(), { method: 'PUT', body: JSON.stringify(active) }),
+  deleteTeam: (id: string) =>
+    request(`/api/admin/teams/${id}`, z.void(), { method: 'DELETE' }),
   createStaffUser: (body: { displayName: string; email: string; roleIds: string[] }) =>
     request('/api/admin/users', UserSummarySchema, { method: 'POST', body: JSON.stringify(body) }),
   updateStaffUser: (id: string, body: { displayName: string; email: string; phoneNumber?: string | null; location?: string | null; managerId?: string | null }) =>
@@ -515,6 +532,17 @@ const PermissionTemplateOptionSchema = z.object({
   id: z.string(), name: z.string(), description: z.string().nullable(), baseRoleType: z.number(),
 });
 export type PermissionTemplateOption = z.infer<typeof PermissionTemplateOptionSchema>;
+
+const TeamManageSchema = z.object({
+  id: z.string(), departmentId: z.string(), name: z.string(), isActive: z.boolean(), sortOrder: z.number(), userCount: z.number(),
+});
+export type TeamManage = z.infer<typeof TeamManageSchema>;
+
+const DepartmentManageSchema = z.object({
+  id: z.string(), name: z.string(), description: z.string().nullable(), isActive: z.boolean(), isSystemDefault: z.boolean(),
+  sortOrder: z.number(), teams: z.array(TeamManageSchema), primaryUserCount: z.number(), secondaryUserCount: z.number(),
+});
+export type DepartmentManage = z.infer<typeof DepartmentManageSchema>;
 
 // BoardAccessMode: All = 0, Selected = 1, None = 2.
 export const BoardAccessMode = { All: 0, Selected: 1, None: 2 } as const;
