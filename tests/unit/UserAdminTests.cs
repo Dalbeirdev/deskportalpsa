@@ -1,7 +1,10 @@
 using Desk.Application.Admin;
+using Desk.Application.Attachments;
 using Desk.Application.Common;
 using Desk.Domain.Enums;
 using Desk.Infrastructure.Admin;
+using Desk.Infrastructure.Attachments;
+using Desk.Infrastructure.Authorization;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -28,7 +31,8 @@ public class UserAdminTests
             roles[t] = role.Id;
         }
         await h.Db.SaveChangesAsync();
-        var svc = new UserAdminService(h.Db, new AuditWriter(h.Db, h.User, h.Tenant, h.Clock), h.Tenant, h.User);
+        var svc = new UserAdminService(h.Db, new AuditWriter(h.Db, h.User, h.Tenant, h.Clock), h.Tenant, h.User,
+            new InMemoryObjectStorage(new AttachmentStorageOptions(), h.Clock), new EffectivePermissionService(h.Db), h.Clock);
         return (h, svc, roles);
     }
 
@@ -42,7 +46,7 @@ public class UserAdminTests
 
         created.SignInLinked.Should().BeFalse(); // an invitation until their first IdP login
         created.Roles.Should().ContainSingle().Which.Name.Should().Be("Technician");
-        var listed = await svc.ListAsync();
+        var listed = (await svc.ListAsync(new UserListQuery())).Users;
         listed.Should().ContainSingle(u => u.Email == "jane@msp.test" && u.IsActive);
     }
 
@@ -111,7 +115,8 @@ public class UserAdminTests
         await h.Db.SaveChangesAsync();
 
         var selfAsActor = new TestCurrentUser(Org, userId: me.Id);
-        var svcAsSelf = new UserAdminService(h.Db, new AuditWriter(h.Db, selfAsActor, h.Tenant, h.Clock), h.Tenant, selfAsActor);
+        var svcAsSelf = new UserAdminService(h.Db, new AuditWriter(h.Db, selfAsActor, h.Tenant, h.Clock), h.Tenant, selfAsActor,
+            new InMemoryObjectStorage(new AttachmentStorageOptions(), h.Clock), new EffectivePermissionService(h.Db), h.Clock);
 
         var act = () => svcAsSelf.AssignRoleAsync(me.Id, roles[RoleType.PlatformSuperAdministrator]);
 
@@ -135,7 +140,8 @@ public class UserAdminTests
         await svc.AssignRoleAsync(me.Id, roles[RoleType.Technician]);
 
         var selfAsActor = new TestCurrentUser(Org, userId: me.Id);
-        var svcAsSelf = new UserAdminService(h.Db, new AuditWriter(h.Db, selfAsActor, h.Tenant, h.Clock), h.Tenant, selfAsActor);
+        var svcAsSelf = new UserAdminService(h.Db, new AuditWriter(h.Db, selfAsActor, h.Tenant, h.Clock), h.Tenant, selfAsActor,
+            new InMemoryObjectStorage(new AttachmentStorageOptions(), h.Clock), new EffectivePermissionService(h.Db), h.Clock);
 
         var act = () => svcAsSelf.RemoveRoleAsync(me.Id, roles[RoleType.Technician]);
 
@@ -164,9 +170,9 @@ public class UserAdminTests
         var created = await svc.CreateAsync(new CreateStaffUserInput("Jane", "jane@msp.test", [roles[RoleType.Technician]]));
 
         await svc.SetActiveAsync(created.Id, active: false);
-        (await svc.ListAsync()).Single(u => u.Id == created.Id).IsActive.Should().BeFalse();
+        (await svc.ListAsync(new UserListQuery())).Users.Single(u => u.Id == created.Id).IsActive.Should().BeFalse();
 
         await svc.SetActiveAsync(created.Id, active: true);
-        (await svc.ListAsync()).Single(u => u.Id == created.Id).IsActive.Should().BeTrue();
+        (await svc.ListAsync(new UserListQuery())).Users.Single(u => u.Id == created.Id).IsActive.Should().BeTrue();
     }
 }

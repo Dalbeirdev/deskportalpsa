@@ -1,3 +1,4 @@
+using Desk.Domain.Authorization;
 using Desk.Domain.Enums;
 
 namespace Desk.Application.Admin;
@@ -113,15 +114,84 @@ public sealed record ResyncResultDto(bool Success, Guid TicketId, string? Extern
 /// <summary>A role a staff user can hold, by id (for assignment) and name (for display).</summary>
 public sealed record RoleOptionDto(Guid Id, string Name);
 
+/// <summary>A department as referenced from a user (no nested teams — that would be redundant
+/// with UserSummary's own Teams list). See DepartmentWithTeamsDto for the standalone listing.</summary>
+public sealed record DepartmentOptionDto(Guid Id, string Name);
+public sealed record TeamOptionDto(Guid Id, string Name, Guid DepartmentId);
+public sealed record DepartmentWithTeamsDto(Guid Id, string Name, IReadOnlyList<TeamOptionDto> Teams);
+
+/// <summary>A board is a PSA-synced queue/board name, not a stored entity — see PsaTicketLink /
+/// the Phase-1 design note. Grouped by connection because the same board name can exist under
+/// more than one PSA connection without meaning the same thing.</summary>
+public sealed record BoardOptionDto(Guid PsaConnectionId, string ConnectionName, string BoardName);
+
+public sealed record PermissionTemplateOptionDto(Guid Id, string Name, string? Description, RoleType BaseRoleType);
+
 /// <summary>
 /// SignInLinked distinguishes "can log in today" from "invited, binds on first login": a created
 /// user has no IdP subject until they first sign in and their verified email matches.
+///
+/// LastActiveAt is the one real activity signal this app tracks (see AppUser.LastActiveAt) — it is
+/// NOT a login-event timestamp, because the app has no session/login-event log to draw one from.
 /// </summary>
 public sealed record UserSummary(
     Guid Id, string Email, string DisplayName, bool IsActive, bool SignInLinked,
-    IReadOnlyList<RoleOptionDto> Roles);
+    IReadOnlyList<RoleOptionDto> Roles,
+    string? PhoneNumber,
+    string? Location,
+    string? PhotoUrl,
+    Guid? ManagerId,
+    string? ManagerName,
+    DepartmentOptionDto? PrimaryDepartment,
+    IReadOnlyList<DepartmentOptionDto> SecondaryDepartments,
+    IReadOnlyList<TeamOptionDto> Teams,
+    BoardAccessMode BoardAccessMode,
+    IReadOnlyList<BoardOptionDto> BoardGrants,
+    DateTimeOffset? LastActiveAt,
+    DateTimeOffset CreatedAt);
+
+/// <summary>One page of the user list, plus the counts the summary cards need — computed from the
+/// SAME underlying query as the list, not a second independent count that could disagree with it.</summary>
+public sealed record UserListResultDto(
+    IReadOnlyList<UserSummary> Users, int TotalMatching, int Page, int PageSize, UserSummaryCountsDto Summary);
+
+public sealed record UserSummaryCountsDto(int Total, int Active, int Pending, int Administrators);
+
+/// <summary>Every filter is optional; an absent one applies no constraint. Page is 1-based.</summary>
+public sealed record UserListQuery(
+    string? Search = null,
+    Guid? RoleId = null,
+    Guid? DepartmentId = null,
+    Guid? TeamId = null,
+    string? BoardName = null,
+    bool? IsActive = null,
+    int Page = 1,
+    int PageSize = 25);
 
 public sealed record CreateStaffUserInput(string DisplayName, string Email, IReadOnlyList<Guid> RoleIds);
+
+public sealed record UpdateStaffUserInput(
+    string DisplayName, string Email, string? PhoneNumber, string? Location, Guid? ManagerId);
+
+public sealed record UserPhotoUpload(string FileName, string ContentType, byte[] Content);
+
+/// <summary>What a user can actually do with one permission, for the User Details Permissions tab.
+/// Source is what makes this explainable rather than a bare answer — see IEffectivePermissionService.</summary>
+public sealed record EffectivePermissionDto(
+    string PermissionKey, string Module, string DisplayName,
+    PermissionScope Scope, string Source, bool IsBoardAware, string BoardAccessMode);
+
+/// <summary>Actions a bulk operation can perform across a set of users in one call.</summary>
+public enum BulkUserAction { AssignRole, RemoveRole, AssignDepartment, AssignTeam, Activate, Deactivate, Delete }
+
+public sealed record BulkUserActionInput(
+    BulkUserAction Action, IReadOnlyList<Guid> UserIds, Guid? RoleId = null, Guid? DepartmentId = null, Guid? TeamId = null);
+
+/// <summary>Per-row outcome, not an all-or-nothing result — one row failing (most commonly the
+/// caller's own id on a self-guarded action) must not silently fail every other row in the batch.</summary>
+public sealed record BulkUserActionResultDto(IReadOnlyList<BulkUserRowResultDto> Rows);
+
+public sealed record BulkUserRowResultDto(Guid UserId, bool Success, string? Reason);
 
 public sealed record ConnectionTestResultDto(bool Success, string? Message, double LatencyMs);
 

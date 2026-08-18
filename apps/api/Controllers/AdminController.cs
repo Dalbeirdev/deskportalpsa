@@ -256,21 +256,52 @@ public sealed class AdminReadController(
 
     [HttpGet("users")]
     [RequirePermission(Permissions.UsersManage)]
-    public async Task<IActionResult> Users(CancellationToken ct) => Ok(await users.ListAsync(ct));
+    public async Task<IActionResult> Users([FromQuery] UserListQuery query, CancellationToken ct)
+        => Ok(await users.ListAsync(query, ct));
+
+    [HttpGet("users/{id:guid}")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> UserDetail(Guid id, CancellationToken ct)
+    {
+        var user = await users.GetAsync(id, ct);
+        return user is null ? NotFound() : Ok(user);
+    }
 
     [HttpGet("roles")]
     [RequirePermission(Permissions.UsersManage)]
     public async Task<IActionResult> StaffRoles(CancellationToken ct) => Ok(await users.StaffRolesAsync(ct));
+
+    [HttpGet("departments")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> Departments(CancellationToken ct) => Ok(await users.DepartmentsAsync(ct));
+
+    [HttpGet("boards")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> Boards(CancellationToken ct) => Ok(await users.BoardsAsync(ct));
+
+    [HttpGet("permission-templates")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> PermissionTemplates(CancellationToken ct) => Ok(await users.PermissionTemplatesAsync(ct));
 
     [HttpPost("users")]
     [RequirePermission(Permissions.UsersManage)]
     public async Task<IActionResult> CreateUser([FromBody] CreateStaffUserInput input, CancellationToken ct)
         => Ok(await users.CreateAsync(input, ct));
 
+    [HttpPut("users/{id:guid}")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> UpdateUser(Guid id, [FromBody] UpdateStaffUserInput input, CancellationToken ct)
+        => Ok(await users.UpdateAsync(id, input, ct));
+
     [HttpPut("users/{id:guid}/active")]
     [RequirePermission(Permissions.UsersManage)]
     public async Task<IActionResult> SetUserActive(Guid id, [FromBody] bool active, CancellationToken ct)
     { await users.SetActiveAsync(id, active, ct); return NoContent(); }
+
+    [HttpDelete("users/{id:guid}")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> DeleteUser(Guid id, CancellationToken ct)
+    { await users.DeleteAsync(id, ct); return NoContent(); }
 
     [HttpPost("users/{id:guid}/roles/{roleId:guid}")]
     [RequirePermission(Permissions.UsersManage)]
@@ -281,4 +312,86 @@ public sealed class AdminReadController(
     [RequirePermission(Permissions.UsersManage)]
     public async Task<IActionResult> RemoveRole(Guid id, Guid roleId, CancellationToken ct)
     { await users.RemoveRoleAsync(id, roleId, ct); return NoContent(); }
+
+    [HttpPost("users/{id:guid}/departments/{departmentId:guid}")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> SetDepartment(Guid id, Guid departmentId, [FromQuery] bool isPrimary, CancellationToken ct)
+    { await users.SetDepartmentAsync(id, departmentId, isPrimary, ct); return NoContent(); }
+
+    [HttpDelete("users/{id:guid}/departments/{departmentId:guid}")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> RemoveDepartment(Guid id, Guid departmentId, CancellationToken ct)
+    { await users.RemoveDepartmentAsync(id, departmentId, ct); return NoContent(); }
+
+    [HttpPost("users/{id:guid}/teams/{teamId:guid}")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> AssignTeam(Guid id, Guid teamId, CancellationToken ct)
+    { await users.AssignTeamAsync(id, teamId, ct); return NoContent(); }
+
+    [HttpDelete("users/{id:guid}/teams/{teamId:guid}")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> RemoveTeam(Guid id, Guid teamId, CancellationToken ct)
+    { await users.RemoveTeamAsync(id, teamId, ct); return NoContent(); }
+
+    public sealed record SetBoardAccessModeRequest(Desk.Domain.Authorization.BoardAccessMode Mode);
+
+    [HttpPut("users/{id:guid}/board-access")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> SetBoardAccessMode(Guid id, [FromBody] SetBoardAccessModeRequest req, CancellationToken ct)
+    { await users.SetBoardAccessModeAsync(id, req.Mode, ct); return NoContent(); }
+
+    public sealed record BoardGrantRequest(Guid PsaConnectionId, string BoardName, Desk.Domain.Authorization.BoardAction Actions);
+
+    [HttpPut("users/{id:guid}/board-grants")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> SetBoardGrant(Guid id, [FromBody] BoardGrantRequest req, CancellationToken ct)
+    { await users.SetBoardGrantAsync(id, req.PsaConnectionId, req.BoardName, req.Actions, ct); return NoContent(); }
+
+    [HttpDelete("users/{id:guid}/board-grants")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> RemoveBoardGrant(Guid id, [FromQuery] Guid psaConnectionId, [FromQuery] string boardName, CancellationToken ct)
+    { await users.RemoveBoardGrantAsync(id, psaConnectionId, boardName, ct); return NoContent(); }
+
+    [HttpPost("users/{id:guid}/apply-template/{templateId:guid}")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> ApplyPermissionTemplate(Guid id, Guid templateId, CancellationToken ct)
+    { await users.ApplyPermissionTemplateAsync(id, templateId, ct); return NoContent(); }
+
+    [HttpGet("users/{id:guid}/permissions")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> UserPermissions(Guid id, CancellationToken ct)
+        => Ok(await users.GetEffectivePermissionsAsync(id, ct));
+
+    [HttpPost("users/{id:guid}/photo")]
+    [RequirePermission(Permissions.UsersManage)]
+    [RequestSizeLimit(2 * 1024 * 1024)]
+    public async Task<IActionResult> UploadUserPhoto(Guid id, IFormFile file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0) return BadRequest(new { error = "Choose an image to upload." });
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms, ct);
+        return Ok(await users.UploadPhotoAsync(id, new UserPhotoUpload(file.FileName, file.ContentType, ms.ToArray()), ct));
+    }
+
+    [HttpDelete("users/{id:guid}/photo")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> RemoveUserPhoto(Guid id, CancellationToken ct)
+    { await users.RemovePhotoAsync(id, ct); return NoContent(); }
+
+    [HttpGet("users/{id:guid}/photo")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> GetUserPhoto(Guid id, CancellationToken ct)
+    {
+        var photo = await users.GetPhotoAsync(id, ct);
+        if (photo is null) return NotFound();
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        Response.Headers["Content-Security-Policy"] = "default-src 'none'; sandbox";
+        Response.Headers["Cache-Control"] = "private, max-age=300";
+        return File(photo.Content, photo.ContentType);
+    }
+
+    [HttpPost("users/bulk")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> BulkUsers([FromBody] BulkUserActionInput input, CancellationToken ct)
+        => Ok(await users.BulkAsync(input, ct));
 }

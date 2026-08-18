@@ -81,19 +81,62 @@ public interface IAuditQueryService
 
 public interface IUserAdminService
 {
-    Task<IReadOnlyList<UserSummary>> ListAsync(CancellationToken ct = default);
+    Task<UserListResultDto> ListAsync(UserListQuery query, CancellationToken ct = default);
+    Task<UserSummary?> GetAsync(Guid userId, CancellationToken ct = default);
 
     /// <summary>Staff roles only — the ones this page may hand out. Client and platform roles are excluded.</summary>
     Task<IReadOnlyList<RoleOptionDto>> StaffRolesAsync(CancellationToken ct = default);
 
+    Task<IReadOnlyList<DepartmentWithTeamsDto>> DepartmentsAsync(CancellationToken ct = default);
+
+    /// <summary>Distinct (connection, board name) pairs derived from synced tickets — boards are not
+    /// a stored entity, so this list is only ever as current as the last sync.</summary>
+    Task<IReadOnlyList<BoardOptionDto>> BoardsAsync(CancellationToken ct = default);
+
+    Task<IReadOnlyList<PermissionTemplateOptionDto>> PermissionTemplatesAsync(CancellationToken ct = default);
+
     /// <summary>Creates a technician/manager/admin account. Sign-in binds on their first IdP login by email.</summary>
     Task<UserSummary> CreateAsync(CreateStaffUserInput input, CancellationToken ct = default);
+
+    /// <summary>Edits profile fields. Never touches roles, department/team, or board access.</summary>
+    Task<UserSummary> UpdateAsync(Guid userId, UpdateStaffUserInput input, CancellationToken ct = default);
 
     /// <summary>Activate or deactivate. Deactivating also unbinds nothing — reactivation restores access.</summary>
     Task SetActiveAsync(Guid userId, bool active, CancellationToken ct = default);
 
+    /// <summary>Permanently removes the account and every row that references it (roles, department/
+    /// team/board membership, permission overrides). Blocked on self, exactly like role changes.</summary>
+    Task DeleteAsync(Guid userId, CancellationToken ct = default);
+
     Task AssignRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default);
     Task RemoveRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default);
+
+    /// <summary>Adds (or re-flags) a department membership. The partial unique index on the table
+    /// enforces exactly one primary — setting a new primary un-sets the previous one.</summary>
+    Task SetDepartmentAsync(Guid userId, Guid departmentId, bool isPrimary, CancellationToken ct = default);
+    Task RemoveDepartmentAsync(Guid userId, Guid departmentId, CancellationToken ct = default);
+    Task AssignTeamAsync(Guid userId, Guid teamId, CancellationToken ct = default);
+    Task RemoveTeamAsync(Guid userId, Guid teamId, CancellationToken ct = default);
+
+    Task SetBoardAccessModeAsync(Guid userId, Domain.Authorization.BoardAccessMode mode, CancellationToken ct = default);
+    Task SetBoardGrantAsync(Guid userId, Guid psaConnectionId, string boardName, Domain.Authorization.BoardAction actions, CancellationToken ct = default);
+    Task RemoveBoardGrantAsync(Guid userId, Guid psaConnectionId, string boardName, CancellationToken ct = default);
+
+    /// <summary>Materializes a template's entries as UserPermissionOverride rows tagged with the
+    /// template's id — not a second grant mechanism, per the PermissionTemplate design.</summary>
+    Task ApplyPermissionTemplateAsync(Guid userId, Guid templateId, CancellationToken ct = default);
+
+    /// <summary>Every catalogued permission, resolved through IEffectivePermissionService, for the
+    /// User Details Permissions tab.</summary>
+    Task<IReadOnlyList<EffectivePermissionDto>> GetEffectivePermissionsAsync(Guid userId, CancellationToken ct = default);
+
+    Task<UserSummary> UploadPhotoAsync(Guid userId, UserPhotoUpload upload, CancellationToken ct = default);
+    Task RemovePhotoAsync(Guid userId, CancellationToken ct = default);
+    Task<StoredLogo?> GetPhotoAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>Applies one action across many users. Per-row outcome — a row a self-guard blocks
+    /// does not fail the rest of the batch.</summary>
+    Task<BulkUserActionResultDto> BulkAsync(BulkUserActionInput input, CancellationToken ct = default);
 }
 
 /// <summary>
