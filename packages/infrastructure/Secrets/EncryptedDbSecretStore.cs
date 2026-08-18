@@ -46,10 +46,31 @@ public sealed class EncryptedDbSecretStore(DeskDbContext db, SecretCipher cipher
 
     public async Task RotateAsync(string secretRef, IReadOnlyDictionary<string, string> data, CancellationToken ct = default)
     {
-        var blob = await db.Set<SecretBlob>().FirstOrDefaultAsync(b => b.Id == secretRef, ct)
-            ?? throw new KeyNotFoundException("Secret reference not found.");
-        blob.Ciphertext = cipher.Encrypt(Serialize(data));
-        blob.UpdatedAt = clock.GetUtcNow();
+        // Upsert, not update-only: a PsaConnection can hold a CredentialSecretRef with no backing
+        // row here — the Vault-era connections this store replaced lost their secrets to an
+        // in-memory backend wiped by a container restart (see this class's own doc comment), and
+        // their CredentialSecretRef still names the old Vault key. "Edit the connection and
+        // re-enter your credentials" is the documented, self-service fix for exactly that — and it
+        // must not itself throw. Recreating the row AT THE SAME Id keeps that ref valid without
+        // requiring the caller to persist a freshly minted one. The other two ISecretStore
+        // implementations (InMemory/File) already treat Rotate as upsert; this one shouldn't be
+        // the odd one out.
+        var blob = await db.Set<SecretBlob>().FirstOrDefaultAsync(b => b.Id == secretRef, ct);
+        var now = clock.GetUtcNow();
+        if (blob is null)
+        {
+            blob = new SecretBlob
+            {
+                Id = secretRef, LogicalName = $"recovered:{secretRef}",
+                Ciphertext = cipher.Encrypt(Serialize(data)), CreatedAt = now, UpdatedAt = now,
+            };
+            db.Set<SecretBlob>().Add(blob);
+        }
+        else
+        {
+            blob.Ciphertext = cipher.Encrypt(Serialize(data));
+            blob.UpdatedAt = now;
+        }
         await db.SaveChangesAsync(ct);
     }
 
