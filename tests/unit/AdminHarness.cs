@@ -1,10 +1,26 @@
 using Desk.Application.Abstractions;
+using Desk.Application.Tickets;
+using Desk.Domain.Tickets;
 using Desk.Infrastructure.Persistence;
 using Desk.Infrastructure.Secrets;
 using Desk.Infrastructure.Tenancy;
 using Microsoft.EntityFrameworkCore;
 
 namespace Desk.Tests.Unit;
+
+/// <summary>
+/// Passes every query through unchanged. Used by tests exercising the CLIENT-scoped ticket paths
+/// (which have their own, separate ClientAccess predicate) so they don't have to care about the
+/// staff scope-resolution machinery their scenario never touches.
+/// </summary>
+public sealed class NoopTicketScopeQuery : ITicketScopeQuery
+{
+    public Task<IQueryable<Ticket>> VisibleAsync(IQueryable<Ticket> source, Guid appUserId, string permissionKey, CancellationToken ct = default)
+        => Task.FromResult(source);
+
+    public async Task<Ticket?> FindAsync(IQueryable<Ticket> source, Guid ticketId, Guid appUserId, string permissionKey, CancellationToken ct = default)
+        => await source.FirstOrDefaultAsync(t => t.Id == ticketId, ct);
+}
 
 /// <summary>
 /// Stub authenticated user for admin service tests.

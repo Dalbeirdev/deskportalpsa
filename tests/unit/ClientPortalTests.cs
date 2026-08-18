@@ -62,7 +62,7 @@ public class ClientPortalTests
         db.Tickets.Add(Ticket(CompanyA, RegularUser, "own"));
         db.Tickets.Add(Ticket(CompanyA, AdminUser, "other"));
         await db.SaveChangesAsync();
-        var reads = new TicketReadService(db);
+        var reads = new TicketReadService(db, new NoopTicketScopeQuery(), new TestCurrentUser(Org));
 
         (await reads.ListAsync(Access(CompanyA, AdminUser, true))).Should().HaveCount(2);
         var mine = await reads.ListAsync(Access(CompanyA, RegularUser, false));
@@ -77,7 +77,7 @@ public class ClientPortalTests
         var bTicket = Ticket(CompanyB, Guid.NewGuid(), "b-secret");
         db.Tickets.Add(bTicket);
         await db.SaveChangesAsync();
-        var reads = new TicketReadService(db);
+        var reads = new TicketReadService(db, new NoopTicketScopeQuery(), new TestCurrentUser(Org));
 
         (await reads.ListAsync(Access(CompanyA, AdminUser, true))).Should().BeEmpty();
         (await reads.GetDetailAsync(Access(CompanyA, AdminUser, true), bTicket.Id)).Should().BeNull();
@@ -94,7 +94,7 @@ public class ClientPortalTests
         db.TicketNotes.Add(new TicketNote { MspOrganizationId = Org, TicketId = t.Id, AuthorName = "Tech", Body = "INTERNAL secret", IsPublic = false });
         await db.SaveChangesAsync();
 
-        var detail = await new TicketReadService(db).GetDetailAsync(Access(CompanyA, RegularUser, false), t.Id);
+        var detail = await new TicketReadService(db, new NoopTicketScopeQuery(), new TestCurrentUser(Org)).GetDetailAsync(Access(CompanyA, RegularUser, false), t.Id);
 
         detail!.Conversation.Should().ContainSingle().Which.Body.Should().Be("public reply");
         detail.Conversation.Should().NotContain(n => n.Body.Contains("INTERNAL"));
@@ -108,7 +108,7 @@ public class ClientPortalTests
         await using var db = await SeedAsync(dbName);
         var events = new SyncEventStore(db, clock);
         var svc = new TicketCommandService(db, new FakeResolver(new MockConnector(new MockConnectorOptions(), clock)),
-            new MappingEngine(), events, clock);
+            new MappingEngine(), events, new NoopTicketScopeQuery(), clock);
 
         var result = await svc.CreateAsync(Access(CompanyA, RegularUser, false),
             new CreateTicketInput("Printer down", "It smokes", "HIGH", null, "Service Desk"));
@@ -135,7 +135,7 @@ public class ClientPortalTests
         await db.SaveChangesAsync();
 
         var svc = new TicketCommandService(db, new FakeResolver(new MockConnector(new MockConnectorOptions(), clock)),
-            new MappingEngine(), new SyncEventStore(db, clock), clock);
+            new MappingEngine(), new SyncEventStore(db, clock), new NoopTicketScopeQuery(), clock);
 
         // Create through the service so the ticket exists in the (shared) mock PSA before commenting.
         var created = await svc.CreateAsync(Access(CompanyA, RegularUser, false),

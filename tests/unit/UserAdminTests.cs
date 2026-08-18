@@ -95,6 +95,68 @@ public class UserAdminTests
     }
 
     [Fact]
+    public async Task You_cannot_assign_yourself_a_role_even_holding_RolesManage()
+    {
+        // Claim presence alone cannot express this: the caller genuinely holds RolesManage. The
+        // guard has to be a same-row-as-actor check in the service, which is exactly what this
+        // proves — not just that a permission is missing, but that the actor's OWN row is refused
+        // regardless of what they hold.
+        var (h, _, roles) = await SetupAsync();
+        await using var _ = h.Db;
+        var me = new Desk.Domain.Identity.AppUser
+        {
+            MspOrganizationId = Org, DisplayName = "Admin", Email = "self@msp.test", IsActive = true,
+        };
+        h.Db.AppUsers.Add(me);
+        await h.Db.SaveChangesAsync();
+
+        var selfAsActor = new TestCurrentUser(Org, userId: me.Id);
+        var svcAsSelf = new UserAdminService(h.Db, new AuditWriter(h.Db, selfAsActor, h.Tenant, h.Clock), h.Tenant, selfAsActor);
+
+        var act = () => svcAsSelf.AssignRoleAsync(me.Id, roles[RoleType.PlatformSuperAdministrator]);
+
+        await act.Should().ThrowAsync<ForbiddenException>();
+        (await h.Db.UserRoles.AnyAsync(r => r.AppUserId == me.Id)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task You_cannot_remove_your_own_role_either()
+    {
+        var (h, svc, roles) = await SetupAsync();
+        await using var _ = h.Db;
+        var me = new Desk.Domain.Identity.AppUser
+        {
+            MspOrganizationId = Org, DisplayName = "Admin", Email = "self2@msp.test", IsActive = true,
+        };
+        h.Db.AppUsers.Add(me);
+        await h.Db.SaveChangesAsync();
+        // Assigned by someone else first (the harness's default admin identity), so there is a role
+        // in place for the self-removal attempt to actually target.
+        await svc.AssignRoleAsync(me.Id, roles[RoleType.Technician]);
+
+        var selfAsActor = new TestCurrentUser(Org, userId: me.Id);
+        var svcAsSelf = new UserAdminService(h.Db, new AuditWriter(h.Db, selfAsActor, h.Tenant, h.Clock), h.Tenant, selfAsActor);
+
+        var act = () => svcAsSelf.RemoveRoleAsync(me.Id, roles[RoleType.Technician]);
+
+        await act.Should().ThrowAsync<ForbiddenException>();
+        (await h.Db.UserRoles.AnyAsync(r => r.AppUserId == me.Id && r.RoleId == roles[RoleType.Technician])).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Assigning_someone_elses_role_is_unaffected_by_the_self_check()
+    {
+        var (h, svc, roles) = await SetupAsync();
+        await using var _ = h.Db;
+        var created = await svc.CreateAsync(new CreateStaffUserInput("Jane", "jane2@msp.test", [roles[RoleType.Technician]]));
+
+        await svc.AssignRoleAsync(created.Id, roles[RoleType.MspAdministrator]);
+
+        (await h.Db.UserRoles.AnyAsync(r => r.AppUserId == created.Id && r.RoleId == roles[RoleType.MspAdministrator]))
+            .Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Deactivating_someone_else_works_and_reactivation_restores_them()
     {
         var (h, svc, roles) = await SetupAsync();

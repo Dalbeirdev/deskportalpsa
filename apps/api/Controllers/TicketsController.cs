@@ -70,7 +70,9 @@ public sealed class TicketsController(
         }
         if (!user.HasPermission(Permissions.TicketsViewAll))
             throw new ForbiddenException("This endpoint is for client portal users.");
-        return Ok(await commands.AddStaffCommentAsync(user.DisplayName ?? user.Email ?? "Staff", id, req.Body, ct));
+        if (user.UserId is not { } uid)
+            throw new ForbiddenException("This endpoint is for client portal users.");
+        return Ok(await commands.AddStaffCommentAsync(uid, user.DisplayName ?? user.Email ?? "Staff", id, req.Body, ct));
     }
 
     // Resolves the client identity or refuses the request — staff use the dashboard endpoints instead.

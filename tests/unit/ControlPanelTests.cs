@@ -108,7 +108,7 @@ public class ControlPanelTests
         h.Db.Tickets.Add(ticket);
         await h.Db.SaveChangesAsync();
 
-        var reads = new TicketReadService(h.Db);
+        var reads = new TicketReadService(h.Db, new NoopTicketScopeQuery(), new TestCurrentUser(Org));
         var detail = await reads.GetDetailAsync(AdminAccess, ticket.Id);
         detail!.ServiceInstructions.Should().Be("ACCOUNT");
     }
@@ -128,7 +128,7 @@ public class ControlPanelTests
         h.Db.Tickets.Add(ticket);
         await h.Db.SaveChangesAsync();
 
-        var detail = await new TicketReadService(h.Db).GetDetailAsync(AdminAccess, ticket.Id);
+        var detail = await new TicketReadService(h.Db, new NoopTicketScopeQuery(), new TestCurrentUser(Org)).GetDetailAsync(AdminAccess, ticket.Id);
         detail!.ServiceInstructions.Should().Be("GLOBAL-ONLY");
     }
 

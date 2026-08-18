@@ -16,7 +16,8 @@ public sealed record PermissionDefinition(
     string DisplayName,
     IReadOnlyList<PermissionScope> SupportedScopes,
     PermissionScope DefaultScope,
-    bool IsBoardAware);
+    bool IsBoardAware,
+    BoardAction RequiredBoardAction = BoardAction.View);
 
 public static class PermissionCatalog
 {
@@ -38,7 +39,7 @@ public static class PermissionCatalog
     /// failure could be either cause.
     /// </summary>
     private static PermissionDefinition Legacy(string key, string name, PermissionScope only, bool boardAware = true) =>
-        new(key, "Tickets", name, [only], only, boardAware);
+        new(key, "Tickets", name, [only], only, boardAware, BoardAction.View);
 
     public static readonly IReadOnlyList<PermissionDefinition> Definitions =
     [
@@ -65,11 +66,14 @@ public static class PermissionCatalog
         Legacy(Permissions.TicketsViewOwnCompany, "View own company's tickets", PermissionScope.Selected, boardAware: false),
         Legacy(Permissions.TicketsViewOwn, "View own tickets", PermissionScope.Own, boardAware: false),
 
-        // Tickets — action permissions, genuinely scope-capable
-        new(Permissions.TicketsCreate, "Tickets", "Create tickets", TicketScopes, PermissionScope.All, IsBoardAware: true),
-        new(Permissions.TicketsAddPublicNote, "Tickets", "Add public notes", TicketScopes, PermissionScope.All, IsBoardAware: true),
-        new(Permissions.TicketsLogTime, "Tickets", "Log time", TicketScopes, PermissionScope.All, IsBoardAware: true),
-        new(Permissions.TicketsUpdate, "Tickets", "Edit tickets", TicketScopes, PermissionScope.All, IsBoardAware: true),
+        // Tickets — action permissions, genuinely scope-capable. Note-adding and time-logging both
+        // modify the ticket, and the board action vocabulary (View/Create/Edit/Assign/Close/Delete/
+        // Manage) has no separate verb for either, so both map to Edit — the same board grant that
+        // lets someone edit a ticket already implies they may comment on it or log time against it.
+        new(Permissions.TicketsCreate, "Tickets", "Create tickets", TicketScopes, PermissionScope.All, IsBoardAware: true, BoardAction.Create),
+        new(Permissions.TicketsAddPublicNote, "Tickets", "Add public notes", TicketScopes, PermissionScope.All, IsBoardAware: true, BoardAction.Edit),
+        new(Permissions.TicketsLogTime, "Tickets", "Log time", TicketScopes, PermissionScope.All, IsBoardAware: true, BoardAction.Edit),
+        new(Permissions.TicketsUpdate, "Tickets", "Edit tickets", TicketScopes, PermissionScope.All, IsBoardAware: true, BoardAction.Edit),
 
         // Dashboards & reports
         Admin(Permissions.ReportsView, "Reports", "View reports"),
