@@ -213,13 +213,18 @@ public sealed class UserAdminService(
         // Boards are not a stored entity — see the Phase-1 design note on UserBoardGrant — so this
         // is a live derivation from whatever has actually synced, exactly like the Tickets page's
         // own board filter, just computed server-side instead of from already-loaded rows.
+        //
+        // Ordering by a property read off a positional record (BoardOptionDto) doesn't translate —
+        // EF can't see through the constructor to know ConnectionName maps to the join's c.Name.
+        // Order on the anonymous projection instead, and only build the DTO in the final Select.
         => await db.Tickets.AsNoTracking()
             .Where(t => t.QueueOrBoard != null)
             .Select(t => new { t.PsaConnectionId, t.QueueOrBoard })
             .Distinct()
             .Join(db.PsaConnections.AsNoTracking(), t => t.PsaConnectionId, c => c.Id,
-                (t, c) => new BoardOptionDto(t.PsaConnectionId, c.Name, t.QueueOrBoard!))
+                (t, c) => new { t.PsaConnectionId, ConnectionName = c.Name, BoardName = t.QueueOrBoard! })
             .OrderBy(b => b.ConnectionName).ThenBy(b => b.BoardName)
+            .Select(b => new BoardOptionDto(b.PsaConnectionId, b.ConnectionName, b.BoardName))
             .ToListAsync(ct);
 
     public async Task<IReadOnlyList<PermissionTemplateOptionDto>> PermissionTemplatesAsync(CancellationToken ct = default)

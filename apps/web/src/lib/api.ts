@@ -240,16 +240,75 @@ export const api = {
   deleteMapping: (ruleId: string) =>
     request(`/api/admin/mappings/${ruleId}`, z.unknown(), { method: 'DELETE' }),
   health: () => request('/api/admin/health', z.array(HealthSchema)) as Promise<Health[]>,
-  staffUsers: () => request('/api/admin/users', z.array(StaffUserSchema)),
+  staffUsers: (params: UserListParams = {}) => {
+    const qs = new URLSearchParams();
+    if (params.search) qs.set('search', params.search);
+    if (params.roleId) qs.set('roleId', params.roleId);
+    if (params.departmentId) qs.set('departmentId', params.departmentId);
+    if (params.teamId) qs.set('teamId', params.teamId);
+    if (params.boardName) qs.set('boardName', params.boardName);
+    if (params.isActive !== undefined) qs.set('isActive', String(params.isActive));
+    qs.set('page', String(params.page ?? 1));
+    qs.set('pageSize', String(params.pageSize ?? 25));
+    return request(`/api/admin/users?${qs.toString()}`, UserListResultSchema);
+  },
+  staffUser: (id: string) => request(`/api/admin/users/${id}`, UserSummarySchema),
   staffRoles: () => request('/api/admin/roles', z.array(RoleOptionSchema)),
+  staffDepartments: () => request('/api/admin/departments', z.array(DepartmentWithTeamsSchema)),
+  staffBoards: () => request('/api/admin/boards', z.array(BoardOptionSchema)),
+  permissionTemplates: () => request('/api/admin/permission-templates', z.array(PermissionTemplateOptionSchema)),
   createStaffUser: (body: { displayName: string; email: string; roleIds: string[] }) =>
-    request('/api/admin/users', StaffUserSchema, { method: 'POST', body: JSON.stringify(body) }),
+    request('/api/admin/users', UserSummarySchema, { method: 'POST', body: JSON.stringify(body) }),
+  updateStaffUser: (id: string, body: { displayName: string; email: string; phoneNumber?: string | null; location?: string | null; managerId?: string | null }) =>
+    request(`/api/admin/users/${id}`, UserSummarySchema, { method: 'PUT', body: JSON.stringify(body) }),
   setUserActive: (id: string, active: boolean) =>
-    request(`/api/admin/users/${id}/active`, z.undefined(), { method: 'PUT', body: JSON.stringify(active) }),
+    request(`/api/admin/users/${id}/active`, z.void(), { method: 'PUT', body: JSON.stringify(active) }),
+  deleteStaffUser: (id: string) =>
+    request(`/api/admin/users/${id}`, z.void(), { method: 'DELETE' }),
   assignUserRole: (id: string, roleId: string) =>
-    request(`/api/admin/users/${id}/roles/${roleId}`, z.undefined(), { method: 'POST' }),
+    request(`/api/admin/users/${id}/roles/${roleId}`, z.void(), { method: 'POST' }),
   removeUserRole: (id: string, roleId: string) =>
-    request(`/api/admin/users/${id}/roles/${roleId}`, z.undefined(), { method: 'DELETE' }),
+    request(`/api/admin/users/${id}/roles/${roleId}`, z.void(), { method: 'DELETE' }),
+  setUserDepartment: (id: string, departmentId: string, isPrimary: boolean) =>
+    request(`/api/admin/users/${id}/departments/${departmentId}?isPrimary=${isPrimary}`, z.void(), { method: 'POST' }),
+  removeUserDepartment: (id: string, departmentId: string) =>
+    request(`/api/admin/users/${id}/departments/${departmentId}`, z.void(), { method: 'DELETE' }),
+  assignUserTeam: (id: string, teamId: string) =>
+    request(`/api/admin/users/${id}/teams/${teamId}`, z.void(), { method: 'POST' }),
+  removeUserTeam: (id: string, teamId: string) =>
+    request(`/api/admin/users/${id}/teams/${teamId}`, z.void(), { method: 'DELETE' }),
+  setUserBoardAccessMode: (id: string, mode: number) =>
+    request(`/api/admin/users/${id}/board-access`, z.void(), { method: 'PUT', body: JSON.stringify({ mode }) }),
+  setUserBoardGrant: (id: string, body: { psaConnectionId: string; boardName: string; actions: number }) =>
+    request(`/api/admin/users/${id}/board-grants`, z.void(), { method: 'PUT', body: JSON.stringify(body) }),
+  removeUserBoardGrant: (id: string, psaConnectionId: string, boardName: string) =>
+    request(`/api/admin/users/${id}/board-grants?psaConnectionId=${psaConnectionId}&boardName=${encodeURIComponent(boardName)}`, z.void(), { method: 'DELETE' }),
+  applyPermissionTemplate: (id: string, templateId: string) =>
+    request(`/api/admin/users/${id}/apply-template/${templateId}`, z.void(), { method: 'POST' }),
+  userEffectivePermissions: (id: string) =>
+    request(`/api/admin/users/${id}/permissions`, z.array(EffectivePermissionSchema)),
+  uploadUserPhoto: async (userId: string, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`${BFF_BASE}/api/admin/users/${userId}/photo`, {
+      method: 'POST',
+      headers: { 'X-Correlation-ID': crypto.randomUUID() }, // no Content-Type — the browser sets the boundary
+      body: fd,
+    });
+    if (!res.ok) {
+      let detail: string | null = null;
+      try { detail = (await res.json())?.detail ?? null; } catch { /* non-JSON */ }
+      throw new ApiError(res.status, detail ?? 'Could not upload the photo.');
+    }
+    return UserSummarySchema.parse(await res.json());
+  },
+  removeUserPhoto: (id: string) =>
+    request(`/api/admin/users/${id}/photo`, z.void(), { method: 'DELETE' }),
+  bulkUsers: (input: BulkUserActionInput) =>
+    request('/api/admin/users/bulk', BulkUserActionResultSchema, {
+      method: 'POST',
+      body: JSON.stringify({ ...input, action: BulkUserActionValue[input.action] }),
+    }),
   unsyncedTickets: (connectionId?: string) =>
     request(`/api/admin/tickets/unsynced${connectionId ? `?connectionId=${connectionId}` : ''}`, UnsyncedTicketsSchema),
   resyncTicket: (ticketId: string) =>
@@ -432,16 +491,102 @@ const AssigneeOptionsSchema = z.object({
 export type AssigneeOptions = z.infer<typeof AssigneeOptionsSchema>;
 
 const RoleOptionSchema = z.object({ id: z.string(), name: z.string() });
-const StaffUserSchema = z.object({
+export type RoleOption = z.infer<typeof RoleOptionSchema>;
+
+const DepartmentOptionSchema = z.object({ id: z.string(), name: z.string() });
+export type DepartmentOption = z.infer<typeof DepartmentOptionSchema>;
+
+const TeamOptionSchema = z.object({ id: z.string(), name: z.string(), departmentId: z.string() });
+export type TeamOption = z.infer<typeof TeamOptionSchema>;
+
+const DepartmentWithTeamsSchema = z.object({ id: z.string(), name: z.string(), teams: z.array(TeamOptionSchema) });
+export type DepartmentWithTeams = z.infer<typeof DepartmentWithTeamsSchema>;
+
+// A board is a PSA-synced queue/board name, not a stored entity — grouped by connection because
+// the same board name under two connections doesn't mean the same board.
+const BoardOptionSchema = z.object({ psaConnectionId: z.string(), connectionName: z.string(), boardName: z.string() });
+export type BoardOption = z.infer<typeof BoardOptionSchema>;
+
+// baseRoleType is a raw enum (no JsonStringEnumConverter registered on the API), so it serializes
+// as its underlying number, not a name.
+const PermissionTemplateOptionSchema = z.object({
+  id: z.string(), name: z.string(), description: z.string().nullable(), baseRoleType: z.number(),
+});
+export type PermissionTemplateOption = z.infer<typeof PermissionTemplateOptionSchema>;
+
+// BoardAccessMode: All = 0, Selected = 1, None = 2.
+export const BoardAccessMode = { All: 0, Selected: 1, None: 2 } as const;
+
+// BoardAction: a [Flags] bitmask — combine with | when granting more than one.
+export const BoardAction = { View: 1, Create: 2, Edit: 4, Assign: 8, Close: 16, Delete: 32, Manage: 64 } as const;
+
+// PermissionScope, for reading EffectivePermission.scope back out.
+export const PermissionScope = { All: 0, Department: 10, Team: 20, Assigned: 30, Own: 40, Selected: 50, None: 60 } as const;
+
+const UserSummarySchema = z.object({
   id: z.string(),
   email: z.string(),
   displayName: z.string(),
   isActive: z.boolean(),
   signInLinked: z.boolean(),
   roles: z.array(RoleOptionSchema),
+  phoneNumber: z.string().nullable(),
+  location: z.string().nullable(),
+  photoUrl: z.string().nullable(),
+  managerId: z.string().nullable(),
+  managerName: z.string().nullable(),
+  primaryDepartment: DepartmentOptionSchema.nullable(),
+  secondaryDepartments: z.array(DepartmentOptionSchema),
+  teams: z.array(TeamOptionSchema),
+  boardAccessMode: z.number(),
+  boardGrants: z.array(BoardOptionSchema),
+  lastActiveAt: z.string().nullable(),
+  createdAt: z.string(),
 });
-export type StaffUser = z.infer<typeof StaffUserSchema>;
-export type RoleOption = z.infer<typeof RoleOptionSchema>;
+export type UserSummary = z.infer<typeof UserSummarySchema>;
+
+const UserSummaryCountsSchema = z.object({ total: z.number(), active: z.number(), pending: z.number(), administrators: z.number() });
+export type UserSummaryCounts = z.infer<typeof UserSummaryCountsSchema>;
+
+const UserListResultSchema = z.object({
+  users: z.array(UserSummarySchema), totalMatching: z.number(), page: z.number(), pageSize: z.number(),
+  summary: UserSummaryCountsSchema,
+});
+export type UserListResult = z.infer<typeof UserListResultSchema>;
+
+export type UserListParams = {
+  search?: string; roleId?: string; departmentId?: string; teamId?: string; boardName?: string;
+  isActive?: boolean; page?: number; pageSize?: number;
+};
+
+// scope is a raw PermissionScope enum (number); source/boardAccessMode were already .ToString()'d
+// server-side, so those two are plain strings.
+const EffectivePermissionSchema = z.object({
+  permissionKey: z.string(), module: z.string(), displayName: z.string(),
+  scope: z.number(), source: z.string(), isBoardAware: z.boolean(), boardAccessMode: z.string(),
+});
+export type EffectivePermission = z.infer<typeof EffectivePermissionSchema>;
+
+const BulkUserRowResultSchema = z.object({ userId: z.string(), success: z.boolean(), reason: z.string().nullable() });
+const BulkUserActionResultSchema = z.object({ rows: z.array(BulkUserRowResultSchema) });
+export type BulkUserActionResult = z.infer<typeof BulkUserActionResultSchema>;
+export type BulkUserRowResult = z.infer<typeof BulkUserRowResultSchema>;
+
+export type BulkUserActionName =
+  'AssignRole' | 'RemoveRole' | 'AssignDepartment' | 'AssignTeam' | 'Activate' | 'Deactivate' | 'Delete';
+
+// Order must match the C# BulkUserAction enum exactly — sent as a number, no string converter on the API.
+const BulkUserActionValue: Record<BulkUserActionName, number> = {
+  AssignRole: 0, RemoveRole: 1, AssignDepartment: 2, AssignTeam: 3, Activate: 4, Deactivate: 5, Delete: 6,
+};
+
+export type BulkUserActionInput = {
+  action: BulkUserActionName;
+  userIds: string[];
+  roleId?: string;
+  departmentId?: string;
+  teamId?: string;
+};
 
 const UnsyncedTicketSchema = z.object({
   ticketId: z.string(),

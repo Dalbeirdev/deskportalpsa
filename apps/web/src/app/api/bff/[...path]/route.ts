@@ -70,7 +70,12 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
     if (!t || upstream.status === 401) sessionDead = true;
   }
 
-  const out = new NextResponse(Buffer.from(await upstream.arrayBuffer()), {
+  // The Fetch spec forbids any body argument — even a zero-length one — on a null-body status.
+  // The API returns 204 from every action route (activate/deactivate, delete, role/department/
+  // team/board assignment, …), and passing an empty Buffer through here throws "Invalid response
+  // status code 204" instead of proxying it, turning every one of those actions into a 500.
+  const nullBodyStatus = upstream.status === 204 || upstream.status === 304;
+  const out = new NextResponse(nullBodyStatus ? null : Buffer.from(await upstream.arrayBuffer()), {
     status: upstream.status,
     headers: passthroughHeaders(upstream),
   });
