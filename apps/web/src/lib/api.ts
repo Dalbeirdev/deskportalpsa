@@ -309,6 +309,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ ...input, action: BulkUserActionValue[input.action] }),
     }),
+  userAuditLog: (userId: string) =>
+    request(`/api/admin/audit?entityId=${userId}&take=50`, z.array(AuditEntrySchema)) as Promise<AuditEntry[]>,
   unsyncedTickets: (connectionId?: string) =>
     request(`/api/admin/tickets/unsynced${connectionId ? `?connectionId=${connectionId}` : ''}`, UnsyncedTicketsSchema),
   resyncTicket: (ticketId: string) =>

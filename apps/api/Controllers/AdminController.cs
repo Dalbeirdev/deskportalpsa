@@ -234,8 +234,9 @@ public sealed class AdminReadController(
 
     [HttpGet("audit")]
     [RequirePermission(Permissions.AuditView)]
-    public async Task<IActionResult> Audit([FromQuery] string? action, [FromQuery] int take = 100, CancellationToken ct = default)
-        => Ok(await auditQuery.ListAsync(take, action, ct));
+    public async Task<IActionResult> Audit(
+        [FromQuery] string? action, [FromQuery] string? entityId, [FromQuery] int take = 100, CancellationToken ct = default)
+        => Ok(await auditQuery.ListAsync(take, action, entityId, ct));
 
     /// <summary>
     /// Real attachment-storage usage. The sidebar used to show a hardcoded "6.8 GB of 10 GB" —
