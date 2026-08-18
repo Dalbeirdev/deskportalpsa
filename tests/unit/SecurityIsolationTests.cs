@@ -1,5 +1,7 @@
 using Desk.Application.Abstractions;
+using Desk.Application.Admin;
 using Desk.Application.Analytics;
+using Desk.Application.Attachments;
 using Desk.Application.Tickets;
 using Desk.Domain.Audit;
 using Desk.Domain.Enums;
@@ -8,6 +10,8 @@ using Desk.Domain.Tenancy;
 using Desk.Domain.Tickets;
 using Desk.Infrastructure.Admin;
 using Desk.Infrastructure.Analytics;
+using Desk.Infrastructure.Attachments;
+using Desk.Infrastructure.Authorization;
 using Desk.Infrastructure.Persistence;
 using Desk.Infrastructure.Tickets;
 using Desk.Infrastructure.Tenancy;
@@ -80,7 +84,10 @@ public class SecurityIsolationTests
 
         var (db, tenant) = store.Tenant(OrgA);
         var audit = new AuditWriter(db, new TestCurrentUser(OrgA), tenant, new TestClock());
-        var users = await new UserAdminService(db, audit, tenant, new TestCurrentUser(OrgA)).ListAsync();
+        var clock = new TestClock();
+        var users = (await new UserAdminService(db, audit, tenant, new TestCurrentUser(OrgA),
+            new InMemoryObjectStorage(new AttachmentStorageOptions(), clock), new EffectivePermissionService(db), clock)
+            .ListAsync(new UserListQuery())).Users;
 
         users.Should().ContainSingle().Which.DisplayName.Should().Be("A User");
     }

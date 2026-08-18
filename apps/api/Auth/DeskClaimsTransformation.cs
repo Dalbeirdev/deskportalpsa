@@ -11,8 +11,15 @@ namespace Desk.Api.Auth;
 /// permission claims for the matching internal user. Keeping the DB as the source of truth
 /// means access can change without re-issuing tokens. Runs idempotently per request.
 /// </summary>
-public sealed class DeskClaimsTransformation(DeskDbContext db) : Microsoft.AspNetCore.Authentication.IClaimsTransformation
+public sealed class DeskClaimsTransformation(DeskDbContext db, TimeProvider clock) : Microsoft.AspNetCore.Authentication.IClaimsTransformation
 {
+    /// <summary>How stale AppUser.LastActiveAt must be before it's worth a write. This method runs
+    /// on every authenticated request (stateless bearer tokens, no session), so writing on every
+    /// call would be a write-per-API-call hot path; this keeps it to roughly one write per active
+    /// user per window while still giving a meaningfully fresh signal.</summary>
+    private static readonly TimeSpan ActivityThrottle = TimeSpan.FromMinutes(5);
+
+
     public async Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
     {
         if (principal.Identity is not { IsAuthenticated: true })
@@ -53,6 +60,16 @@ public sealed class DeskClaimsTransformation(DeskDbContext db) : Microsoft.AspNe
         }
         if (user is null)
             return principal;
+
+        var now = clock.GetUtcNow();
+        if (user.LastActiveAt is null || now - user.LastActiveAt > ActivityThrottle)
+        {
+            // A targeted update rather than re-loading the tracked entity: this runs on every
+            // authenticated request, so the write itself has to stay as cheap as the throttle it's
+            // guarded by is meant to make it.
+            await db.AppUsers.Where(u => u.Id == user.Id).ExecuteUpdateAsync(
+                s => s.SetProperty(u => u.LastActiveAt, now));
+        }
 
         var roleIds = user.Roles.Select(r => r.RoleId).ToList();
         var roles = await db.Roles

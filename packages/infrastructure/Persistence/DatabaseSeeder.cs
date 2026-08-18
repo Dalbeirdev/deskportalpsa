@@ -109,37 +109,82 @@ public static class DatabaseSeeder
             await db.SaveChangesAsync(ct);
     }
 
-    /// <summary>The 8 built-in permission templates. Entries are populated in a later phase once
-    /// scoped enforcement exists to give them something meaningful to grant — the rows exist now so
-    /// they have stable ids a later Add-User flow can reference.</summary>
-    private static readonly (string Name, string Description, RoleType BaseRole)[] BuiltInTemplates =
+/// <summary>
+    /// The 8 built-in permission templates. Applying one assigns BaseRole (which already grants
+    /// that role's own permissions) THEN materializes these entries as overrides on top — so a
+    /// template's entries are only the DIFFERENCE from its base role, not a full restatement of it.
+    /// "Standard Technician" and "Auditor" have none at all for exactly that reason: they ARE their
+    /// base role, unmodified, and exist as named choices for clarity in the picker rather than
+    /// because they change anything.
+    ///
+    /// Billing has no dedicated permission module yet (that is future work, not part of this
+    /// batch) — "Billing User" narrows ticket access instead of granting anything billing-specific,
+    /// which is the honest thing to do with the module that actually exists today.
+    /// </summary>
+    private static readonly (string Name, string Description, RoleType BaseRole, (string Key, PermissionEffect Effect, PermissionScope? Scope)[] Entries)[] BuiltInTemplates =
     [
-        ("Full Administrator", "Unrestricted access across the organization.", RoleType.MspAdministrator),
-        ("Service Desk Manager", "Manages the service desk team and its tickets.", RoleType.Manager),
-        ("Senior Technician", "Broader ticket access than a standard technician.", RoleType.Technician),
-        ("Standard Technician", "Assigned-ticket access for day-to-day work.", RoleType.Technician),
-        ("Dispatcher", "Assigns and routes incoming tickets.", RoleType.Technician),
-        ("Billing User", "Access to billing and invoicing data.", RoleType.Technician),
-        ("Auditor", "Read-only access to audit and security data.", RoleType.Auditor),
-        ("Read Only", "View access with no ability to change anything.", RoleType.Technician),
+        ("Full Administrator", "Unrestricted access across the organization.", RoleType.MspAdministrator, []),
+        ("Service Desk Manager", "Manages the service desk team and its tickets.", RoleType.Manager,
+        [
+            (Permissions.ProductivityViewOwn, PermissionEffect.Grant, PermissionScope.Own),
+        ]),
+        ("Senior Technician", "Broader ticket access than a standard technician.", RoleType.Technician,
+        [
+            (Permissions.TicketsViewAll, PermissionEffect.Grant, PermissionScope.Department),
+        ]),
+        ("Standard Technician", "Assigned-ticket access for day-to-day work.", RoleType.Technician, []),
+        ("Dispatcher", "Assigns and routes incoming tickets.", RoleType.Technician,
+        [
+            (Permissions.TicketsViewAll, PermissionEffect.Grant, PermissionScope.Department),
+            (Permissions.TicketsUpdate, PermissionEffect.Grant, PermissionScope.Department),
+        ]),
+        ("Billing User", "Ticket access narrowed for someone who only needs reporting.", RoleType.Technician,
+        [
+            (Permissions.TicketsUpdate, PermissionEffect.Deny, null),
+            (Permissions.TicketsAddPublicNote, PermissionEffect.Deny, null),
+            (Permissions.TicketsLogTime, PermissionEffect.Deny, null),
+            (Permissions.ReportsView, PermissionEffect.Grant, PermissionScope.All),
+        ]),
+        ("Auditor", "Read-only access to audit and security data.", RoleType.Auditor, []),
+        ("Read Only", "View access with no ability to change anything.", RoleType.Technician,
+        [
+            (Permissions.TicketsUpdate, PermissionEffect.Deny, null),
+            (Permissions.TicketsAddPublicNote, PermissionEffect.Deny, null),
+            (Permissions.TicketsLogTime, PermissionEffect.Deny, null),
+        ]),
     ];
 
     public static async Task SeedBuiltInPermissionTemplatesAsync(DeskDbContext db, CancellationToken ct = default)
     {
-        var existingNames = await db.PermissionTemplates.IgnoreQueryFilters()
-            .Where(t => t.IsSystemTemplate).Select(t => t.Name).ToListAsync(ct);
+        var existing = await db.PermissionTemplates.IgnoreQueryFilters()
+            .Where(t => t.IsSystemTemplate)
+            .Include(t => t.Entries)
+            .ToListAsync(ct);
 
-        foreach (var (name, description, baseRole) in BuiltInTemplates)
+        foreach (var (name, description, baseRole, entries) in BuiltInTemplates)
         {
-            if (existingNames.Contains(name)) continue;
-            db.PermissionTemplates.Add(new PermissionTemplate
+            var template = existing.FirstOrDefault(t => t.Name == name);
+            if (template is null)
             {
-                MspOrganizationId = null,
-                Name = name,
-                Description = description,
-                BaseRoleType = baseRole,
-                IsSystemTemplate = true,
-            });
+                template = new PermissionTemplate
+                {
+                    MspOrganizationId = null, Name = name, Description = description,
+                    BaseRoleType = baseRole, IsSystemTemplate = true,
+                };
+                db.PermissionTemplates.Add(template);
+            }
+
+            // Backfill entries onto a template that was already seeded empty (every deployed
+            // database, until this change) — additive only, so a since-edited entry isn't reset.
+            var heldKeys = template.Entries.Select(e => e.PermissionKey).ToHashSet();
+            foreach (var (key, effect, scope) in entries)
+            {
+                if (heldKeys.Contains(key)) continue;
+                db.Set<PermissionTemplateEntry>().Add(new PermissionTemplateEntry
+                {
+                    PermissionTemplateId = template.Id, PermissionKey = key, Effect = effect, Scope = scope,
+                });
+            }
         }
 
         await db.SaveChangesAsync(ct);

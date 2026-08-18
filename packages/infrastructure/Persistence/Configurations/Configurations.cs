@@ -77,9 +77,17 @@ public sealed class AppUserConfig : IEntityTypeConfiguration<AppUser>
         b.HasKey(x => x.Id);
         b.Property(x => x.Email).HasMaxLength(320).IsRequired();
         b.Property(x => x.DisplayName).HasMaxLength(200).IsRequired();
+        b.Property(x => x.PhoneNumber).HasMaxLength(50);
+        b.Property(x => x.Location).HasMaxLength(200);
+        b.Property(x => x.PhotoStorageKey).HasMaxLength(200);
+        b.Property(x => x.PhotoUrl).HasMaxLength(500);
         b.HasIndex(x => x.IdpSubject).IsUnique();
         b.HasIndex(x => new { x.MspOrganizationId, x.Email });
         b.HasMany(x => x.Roles).WithOne(r => r.AppUser!).HasForeignKey(r => r.AppUserId);
+        // Restrict, not cascade: deleting a manager must not silently delete or orphan-cascade
+        // their reports — the manager assignment on a report has to be cleared explicitly first.
+        b.HasOne(x => x.Manager).WithMany()
+            .HasForeignKey(x => x.ManagerId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 
