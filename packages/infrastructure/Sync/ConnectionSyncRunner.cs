@@ -38,19 +38,24 @@ public sealed class ConnectionSyncRunner(
         if (!connection.TwoWaySync)
             return new SyncRunResult(0, 0, 0, 0, 0);
 
-        var connector = await resolver.ResolveAsync(psaConnectionId, ct);
-        // Asked once per run, not per ticket: it decides whether time aggregates are worth pulling.
-        var capabilities = await connector.GetCapabilitiesAsync(ct);
-        var rules = await db.FieldMappings.AsNoTracking()
-            .Where(m => m.Provider == connection.Provider && m.IsActive)
-            .ToListAsync(ct);
-
         int fetched = 0, created = 0, updated = 0, skipped = 0, pages = 0, notes = 0, notesRemoved = 0, files = 0, filesRemoved = 0;
         // External ids seen this run, for providers whose attachments can only be read per ticket.
         var touched = new List<string>();
         string? cursor = null;
         try
         {
+            // Resolving the connector (which reads and decrypts stored credentials) is inside this
+            // try, not before it: a failure here is exactly as much a sync failure as one mid-page,
+            // and connections that can never even resolve their connector — e.g. credentials the
+            // secret store lost — must still be marked Degraded with a reason, not left showing
+            // stale "Healthy" status forever because the code that records failure never ran.
+            var connector = await resolver.ResolveAsync(psaConnectionId, ct);
+            // Asked once per run, not per ticket: it decides whether time aggregates are worth pulling.
+            var capabilities = await connector.GetCapabilitiesAsync(ct);
+            var rules = await db.FieldMappings.AsNoTracking()
+                .Where(m => m.Provider == connection.Provider && m.IsActive)
+                .ToListAsync(ct);
+
             do
             {
                 var page = await connector.GetTicketsAsync(

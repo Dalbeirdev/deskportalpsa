@@ -102,6 +102,16 @@ public sealed class ConnectionAdminService(
             connection.LastError = ex.Message;
             dto = new ConnectionTestResultDto(false, $"{ex.Kind}: {ex.Message}", 0);
         }
+        catch (DeskException ex)
+        {
+            // Thrown by connectors.ResolveAsync above — the connection is disabled, no connector is
+            // registered for its provider, or its stored credentials no longer resolve (e.g. after a
+            // secret-store outage). All are "test failed, here is why" outcomes for an admin to act
+            // on, exactly like a ConnectorException — not a 500, and not silence.
+            connection.Status = ConnectionStatus.Failed;
+            connection.LastError = ex.Message;
+            dto = new ConnectionTestResultDto(false, ex.Message, 0);
+        }
 
         connection.LastHealthCheckAt = clock.GetUtcNow();
         await db.SaveChangesAsync(ct);
