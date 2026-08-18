@@ -5,6 +5,7 @@ using Desk.Application.Mapping;
 using Desk.Domain.Authorization;
 using Desk.Infrastructure.Persistence;
 using Desk.PsaCore.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,6 +16,10 @@ namespace Desk.Api.Controllers;
 /// real value via the mapping rules, pushes it to the provider (PSA = system of record), then updates
 /// the portal projection. Gated by <see cref="Permissions.TicketsUpdate"/>.
 /// </summary>
+// Class-level [Authorize] as a floor: every action here also carries [RequirePermission],
+// but that is opt-in per action — an action added later without one would otherwise be
+// reachable anonymously. This makes authentication the default and the omission harmless.
+[Authorize]
 [ApiController]
 [Route("api/tickets")]
 public sealed class TicketStatusController(

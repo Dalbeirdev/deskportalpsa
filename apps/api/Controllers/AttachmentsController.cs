@@ -51,6 +51,13 @@ public sealed class AttachmentsController(
         var access = await AccessAsync(ct);
         await EnsureTicketAccessAsync(access, ticketId, ct);
 
+        // The access check above proves the caller may read THIS ticket; it says nothing about the
+        // attachment. Without binding the two, a caller could pass a ticket they can see together
+        // with an attachment id from a ticket they cannot — including another company's — and the
+        // download would be issued for it.
+        var belongs = await db.TicketAttachments.AnyAsync(a => a.Id == attachmentId && a.TicketId == ticketId, ct);
+        if (!belongs) throw new NotFoundException("Attachment");
+
         var url = await attachments.GetDownloadUrlAsync(attachmentId, ct);
         return url is null ? NotFound() : Ok(new { url });
     }
