@@ -245,6 +245,52 @@ public class OrganizationAndAuthorizationModelTests
     }
 
     [Fact]
+    public async Task Reseeding_backfills_scope_onto_rows_created_before_the_column_existed()
+    {
+        // Every deployed database seeded its role permissions before Scope existed, so they all sit
+        // at the column default (All). The seeder must correct the handful whose role genuinely
+        // reaches less far, or a deployed database would silently grant more than a fresh one.
+        var db = Guid.NewGuid().ToString();
+        await using var ctx = TestDbContextFactory.ForPlatform(db);
+        await DatabaseSeeder.SeedBuiltInRolesAsync(ctx);
+
+        var technician = await ctx.Roles.IgnoreQueryFilters().Include(r => r.Permissions)
+            .SingleAsync(r => r.BuiltInType == RoleType.Technician);
+        var viewAssigned = technician.Permissions.Single(p => p.PermissionKey == Permissions.TicketsViewAssigned);
+        viewAssigned.Scope = PermissionScope.All;   // simulate the pre-column state
+        await ctx.SaveChangesAsync();
+
+        await DatabaseSeeder.SeedBuiltInRolesAsync(ctx);
+
+        var corrected = await ctx.Set<RolePermission>()
+            .SingleAsync(p => p.RoleId == technician.Id && p.PermissionKey == Permissions.TicketsViewAssigned);
+        corrected.Scope.Should().Be(PermissionScope.Assigned);
+    }
+
+    [Fact]
+    public async Task Reseeding_never_widens_a_scope_an_admin_deliberately_narrowed()
+    {
+        // The backfill only ever touches rows still sitting at the default. A row an admin has
+        // deliberately narrowed must survive a redeploy untouched — otherwise every deploy would
+        // silently undo their access decisions.
+        var db = Guid.NewGuid().ToString();
+        await using var ctx = TestDbContextFactory.ForPlatform(db);
+        await DatabaseSeeder.SeedBuiltInRolesAsync(ctx);
+
+        var manager = await ctx.Roles.IgnoreQueryFilters().Include(r => r.Permissions)
+            .SingleAsync(r => r.BuiltInType == RoleType.Manager);
+        var update = manager.Permissions.Single(p => p.PermissionKey == Permissions.TicketsUpdate);
+        update.Scope = PermissionScope.Department;   // an admin's deliberate narrowing
+        await ctx.SaveChangesAsync();
+
+        await DatabaseSeeder.SeedBuiltInRolesAsync(ctx);
+
+        var after = await ctx.Set<RolePermission>()
+            .SingleAsync(p => p.RoleId == manager.Id && p.PermissionKey == Permissions.TicketsUpdate);
+        after.Scope.Should().Be(PermissionScope.Department);
+    }
+
+    [Fact]
     public async Task Seeding_permission_templates_twice_does_not_duplicate_them()
     {
         var db = Guid.NewGuid().ToString();

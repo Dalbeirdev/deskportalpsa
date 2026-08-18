@@ -26,9 +26,21 @@ public static class DatabaseSeeder
             // underneath whoever is relying on it.
             if (existing is not null)
             {
-                var held = existing.Permissions.Select(p => p.PermissionKey).ToHashSet();
-                foreach (var missing in Permissions.ForRole(roleType).Where(p => !held.Contains(p)))
+                var held = existing.Permissions.ToDictionary(p => p.PermissionKey);
+                foreach (var (key, scope) in Permissions.ForRole(roleType))
                 {
+                    if (held.TryGetValue(key, out var row))
+                    {
+                        // Backfill scope on rows seeded before the Scope column existed. They all
+                        // landed on the column default (All); this corrects the handful whose role
+                        // genuinely reaches less far, so a deployed database matches a fresh one.
+                        // Only ever narrows a default — never widens an admin's deliberate choice,
+                        // because the only rows this touches are ones still sitting at the default.
+                        if (row.Scope == PermissionScope.All && scope != PermissionScope.All)
+                            row.Scope = scope;
+                        continue;
+                    }
+
                     // Added explicitly rather than through existing.Permissions: BaseEntity assigns
                     // its own Id, so a child discovered on a tracked parent looks to EF like a row
                     // that already exists and is tracked Modified — which fails the save outright,
@@ -36,7 +48,8 @@ public static class DatabaseSeeder
                     db.Set<RolePermission>().Add(new RolePermission
                     {
                         RoleId = existing.Id,
-                        PermissionKey = missing,
+                        PermissionKey = key,
+                        Scope = scope,
                     });
                 }
                 continue;
@@ -49,8 +62,8 @@ public static class DatabaseSeeder
                 IsSystemRole = true,
                 MspOrganizationId = null,
             };
-            foreach (var perm in Permissions.ForRole(roleType))
-                role.Permissions.Add(new RolePermission { PermissionKey = perm });
+            foreach (var (key, scope) in Permissions.ForRole(roleType))
+                role.Permissions.Add(new RolePermission { PermissionKey = key, Scope = scope });
 
             db.Roles.Add(role);
         }

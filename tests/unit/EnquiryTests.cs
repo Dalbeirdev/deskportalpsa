@@ -162,10 +162,12 @@ public class EnquiryTests
     public async Task Administrators_and_managers_can_see_enquiries_but_technicians_cannot()
     {
         // The claim has to actually be granted, or the page is unreachable for everyone.
-        Permissions.ForRole(RoleType.MspAdministrator).Should().Contain(Permissions.EnquiriesView);
-        Permissions.ForRole(RoleType.Manager).Should().Contain(Permissions.EnquiriesView);
-        Permissions.ForRole(RoleType.Technician).Should().NotContain(Permissions.EnquiriesView);
-        Permissions.ForRole(RoleType.ClientUser).Should().NotContain(Permissions.EnquiriesView);
+        static IEnumerable<string> Keys(RoleType r) => Permissions.ForRole(r).Select(p => p.Key);
+
+        Keys(RoleType.MspAdministrator).Should().Contain(Permissions.EnquiriesView);
+        Keys(RoleType.Manager).Should().Contain(Permissions.EnquiriesView);
+        Keys(RoleType.Technician).Should().NotContain(Permissions.EnquiriesView);
+        Keys(RoleType.ClientUser).Should().NotContain(Permissions.EnquiriesView);
         Permissions.All.Should().Contain(Permissions.EnquiriesView);
         await Task.CompletedTask;
     }
