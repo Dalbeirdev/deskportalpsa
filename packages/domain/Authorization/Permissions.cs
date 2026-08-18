@@ -62,39 +62,85 @@ public static class Permissions
         IntegrationHealthView, JobsManage, AuditView, SecurityConfigView, EnquiriesView,
     };
 
-    /// <summary>Default claim set for each built-in role. Used to seed the role table.</summary>
-    public static IReadOnlyList<string> ForRole(RoleType role) => role switch
+    /// <summary>
+    /// Default claim set for each built-in role, with the reach of each grant.
+    ///
+    /// Every scope here reproduces what the role could ALREADY do before scoped enforcement
+    /// existed — not what it arguably should do. In particular a Technician's edit / add-note /
+    /// log-time grants are <see cref="PermissionScope.All"/>, because until now nothing row-filtered
+    /// them: narrowing them here would silently strip access from technicians mid-shift, with no
+    /// admin UI yet to grant an exception back. Tightening is a deliberate, visible admin action in
+    /// a later phase. <c>PermissionGoldenMatrixTests</c> pins this to the pre-enforcement behavior.
+    /// </summary>
+    public static IReadOnlyList<(string Key, PermissionScope Scope)> ForRole(RoleType role) => role switch
     {
-        RoleType.PlatformSuperAdministrator => All,
-        RoleType.MspAdministrator => new[]
-        {
-            OrgManage, ConnectionsManage, ConnectionsView, MappingsManage, MappingsView,
-            UsersManage, RolesManage, ClientUsersManage, TicketsViewAll, TicketsCreate,
-            TicketsAddPublicNote, TicketsLogTime, TicketsUpdate, ReportsView, ProductivityViewTeam, IntegrationHealthView,
-            JobsManage, AuditView, SecurityConfigView, EnquiriesView,
-        },
-        RoleType.Manager => new[]
-        {
-            ConnectionsView, MappingsView, TicketsViewAll, TicketsLogTime, TicketsUpdate, ReportsView,
-            ProductivityViewTeam, IntegrationHealthView, EnquiriesView,
-        },
-        RoleType.Technician => new[]
-        {
-            TicketsViewAssigned, TicketsAddPublicNote, TicketsLogTime, TicketsUpdate, ProductivityViewOwn,
-        },
-        RoleType.ClientAdministrator => new[]
-        {
-            TicketsViewOwnCompany, TicketsCreate, TicketsAddPublicNote,
-            ClientUsersManage, ReportsView,
-        },
-        RoleType.ClientUser => new[]
-        {
-            TicketsViewOwn, TicketsCreate, TicketsAddPublicNote,
-        },
-        RoleType.Auditor => new[]
-        {
-            AuditView, SecurityConfigView, IntegrationHealthView,
-        },
-        _ => Array.Empty<string>(),
+        // Every permission, each at the reach its own key already implies.
+        RoleType.PlatformSuperAdministrator =>
+            All.Select(k => (k, ScopeForKey(k))).ToArray(),
+
+        RoleType.MspAdministrator =>
+        [
+            (OrgManage, PermissionScope.All), (ConnectionsManage, PermissionScope.All),
+            (ConnectionsView, PermissionScope.All), (MappingsManage, PermissionScope.All),
+            (MappingsView, PermissionScope.All), (UsersManage, PermissionScope.All),
+            (RolesManage, PermissionScope.All), (ClientUsersManage, PermissionScope.All),
+            (TicketsViewAll, PermissionScope.All), (TicketsCreate, PermissionScope.All),
+            (TicketsAddPublicNote, PermissionScope.All), (TicketsLogTime, PermissionScope.All),
+            (TicketsUpdate, PermissionScope.All), (ReportsView, PermissionScope.All),
+            (ProductivityViewTeam, PermissionScope.All), (IntegrationHealthView, PermissionScope.All),
+            (JobsManage, PermissionScope.All), (AuditView, PermissionScope.All),
+            (SecurityConfigView, PermissionScope.All), (EnquiriesView, PermissionScope.All),
+        ],
+
+        RoleType.Manager =>
+        [
+            (ConnectionsView, PermissionScope.All), (MappingsView, PermissionScope.All),
+            (TicketsViewAll, PermissionScope.All), (TicketsLogTime, PermissionScope.All),
+            (TicketsUpdate, PermissionScope.All), (ReportsView, PermissionScope.All),
+            (ProductivityViewTeam, PermissionScope.All), (IntegrationHealthView, PermissionScope.All),
+            (EnquiriesView, PermissionScope.All),
+        ],
+
+        RoleType.Technician =>
+        [
+            (TicketsViewAssigned, PermissionScope.Assigned),
+            // All, not Assigned — see the summary above. This is today's behavior, preserved.
+            (TicketsAddPublicNote, PermissionScope.All),
+            (TicketsLogTime, PermissionScope.All),
+            (TicketsUpdate, PermissionScope.All),
+            (ProductivityViewOwn, PermissionScope.Own),
+        ],
+
+        RoleType.ClientAdministrator =>
+        [
+            (TicketsViewOwnCompany, PermissionScope.Selected), (TicketsCreate, PermissionScope.All),
+            (TicketsAddPublicNote, PermissionScope.All), (ClientUsersManage, PermissionScope.All),
+            (ReportsView, PermissionScope.All),
+        ],
+
+        RoleType.ClientUser =>
+        [
+            (TicketsViewOwn, PermissionScope.Own), (TicketsCreate, PermissionScope.All),
+            (TicketsAddPublicNote, PermissionScope.All),
+        ],
+
+        RoleType.Auditor =>
+        [
+            (AuditView, PermissionScope.All), (SecurityConfigView, PermissionScope.All),
+            (IntegrationHealthView, PermissionScope.All),
+        ],
+
+        _ => [],
+    };
+
+    /// <summary>The scope a key's own name already asserts — used for the super-admin set, which
+    /// holds every key and must carry each one at its declared reach.</summary>
+    private static PermissionScope ScopeForKey(string key) => key switch
+    {
+        TicketsViewAssigned => PermissionScope.Assigned,
+        TicketsViewOwn => PermissionScope.Own,
+        TicketsViewOwnCompany => PermissionScope.Selected,
+        ProductivityViewOwn => PermissionScope.Own,
+        _ => PermissionScope.All,
     };
 }

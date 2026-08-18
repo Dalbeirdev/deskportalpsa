@@ -57,7 +57,7 @@ public class AuditAndRbacTests
     [Fact]
     public void Super_admin_role_has_every_permission()
     {
-        Permissions.ForRole(RoleType.PlatformSuperAdministrator)
+        Permissions.ForRole(RoleType.PlatformSuperAdministrator).Select(p => p.Key)
             .Should().BeEquivalentTo(Permissions.All);
     }
 
@@ -70,6 +70,6 @@ public class AuditAndRbacTests
     [InlineData(RoleType.Auditor, Permissions.TicketsCreate, false)]
     public void Role_permission_sets_match_least_privilege(RoleType role, string permission, bool expected)
     {
-        Permissions.ForRole(role).Contains(permission).Should().Be(expected);
+        Permissions.ForRole(role).Any(p => p.Key == permission).Should().Be(expected);
     }
 }
