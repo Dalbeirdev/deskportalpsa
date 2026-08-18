@@ -23,13 +23,31 @@ public class AdminTests
         public Task<IServiceManagementConnector> ResolveAsync(Guid id, CancellationToken ct = default) => Task.FromResult(c);
     }
 
+    /// <summary>Simulates what the real ConnectorResolver throws when a connection's credentials
+    /// cannot be resolved at all — e.g. a secret-store outage lost them.</summary>
+    private sealed class ThrowingResolver(Exception ex) : IConnectorResolver
+    {
+        public Task<IServiceManagementConnector> ResolveAsync(Guid id, CancellationToken ct = default) => throw ex;
+    }
+
     private static (ConnectionAdminService svc, AdminHarness h) Connections(IServiceManagementConnector? connector = null)
     {
         var h = AdminHarness.Create(Org);
-        var audit = new AuditWriter(h.Db, h.User, h.Tenant, h.Clock);
         var resolver = new FakeResolver(connector ?? new MockConnector(new MockConnectorOptions(), h.Clock));
-        return (new ConnectionAdminService(h.Db, h.Secrets, audit, resolver, new ConnectionFieldCache(),
-            new InMemoryObjectStorage(new AttachmentStorageOptions(), h.Clock), h.Clock), h);
+        return (ConnectionsSvc(h, resolver), h);
+    }
+
+    private static (ConnectionAdminService svc, AdminHarness h) ConnectionsWithResolver(IConnectorResolver resolver)
+    {
+        var h = AdminHarness.Create(Org);
+        return (ConnectionsSvc(h, resolver), h);
+    }
+
+    private static ConnectionAdminService ConnectionsSvc(AdminHarness h, IConnectorResolver resolver)
+    {
+        var audit = new AuditWriter(h.Db, h.User, h.Tenant, h.Clock);
+        return new ConnectionAdminService(h.Db, h.Secrets, audit, resolver, new ConnectionFieldCache(),
+            new InMemoryObjectStorage(new AttachmentStorageOptions(), h.Clock), h.Clock);
     }
 
     private static async Task<Guid> CreateConnAsync(ConnectionAdminService svc)
@@ -105,6 +123,25 @@ public class AdminTests
         var row = await h.Db.PsaConnections.FirstAsync(c => c.Id == id);
         row.Status.Should().Be(ConnectionStatus.Failed);
         row.LastError.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Test_connection_marks_failed_when_the_connector_cannot_even_be_resolved()
+    {
+        // Simulates a connection whose credentials the secret store lost (a resolver that throws
+        // before a connector is ever built) — this must still record Failed + a reason on the row,
+        // not silently leave Status/LastError untouched, and must not surface as an unhandled 500.
+        var thrown = new ValidationFailedException("'CW' has no valid stored credentials — edit the connection and re-enter them.");
+        var (svc, h) = ConnectionsWithResolver(new ThrowingResolver(thrown));
+        var id = await CreateConnAsync(svc);
+
+        var result = await svc.TestAsync(id);
+
+        result.Success.Should().BeFalse();
+        result.Message.Should().Contain("re-enter them");
+        var row = await h.Db.PsaConnections.FirstAsync(c => c.Id == id);
+        row.Status.Should().Be(ConnectionStatus.Failed);
+        row.LastError.Should().Contain("re-enter them");
     }
 
     [Fact]
