@@ -102,6 +102,7 @@ public sealed class RolePermissionConfig : IEntityTypeConfiguration<RolePermissi
         b.ToTable("role_permissions");
         b.HasKey(x => x.Id);
         b.Property(x => x.PermissionKey).HasMaxLength(100).IsRequired();
+        b.Property(x => x.Scope).HasDefaultValue(Desk.Domain.Authorization.PermissionScope.All);
         b.HasIndex(x => new { x.RoleId, x.PermissionKey }).IsUnique();
     }
 }

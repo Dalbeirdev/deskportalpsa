@@ -6,7 +6,7 @@ namespace Desk.Domain.Audit;
 /// Append-only audit record. Never updated or deleted in normal operation (spec §11:
 /// immutable audit trail). Persistence layer forbids modifying existing rows.
 /// </summary>
-public class AuditLogEntry : BaseEntity
+public class AuditLogEntry : BaseEntity, INullableTenantScoped
 {
     /// <summary>Null only for platform-level actions not tied to one tenant.</summary>
     public Guid? MspOrganizationId { get; set; }
