@@ -58,28 +58,44 @@ public class EncryptedDbSecretStoreTests
         var (store, _) = Create();
         var reference = await store.WriteAsync("ConnectWisePsa/Prod CW", new Dictionary<string, string> { ["PrivateKey"] = "old" });
 
-        await store.RotateAsync(reference, new Dictionary<string, string> { ["PrivateKey"] = "new" });
+        var returned = await store.RotateAsync(reference, new Dictionary<string, string> { ["PrivateKey"] = "new" });
         var read = await store.ReadAsync(reference);
 
+        returned.Should().Be(reference, "an existing row keeps its reference so the connection row needs no change");
         read["PrivateKey"].Should().Be("new");
     }
 
     [Fact]
-    public async Task Rotating_a_reference_with_no_backing_row_creates_one_instead_of_throwing()
+    public async Task Rotating_an_orphaned_reference_recovers_it_under_a_new_reference()
     {
-        // This is the live production bug: a PsaConnection whose CredentialSecretRef survived a
-        // Vault-in-dev-mode restart that wiped Vault's actual secret. "Edit the connection and
-        // re-enter your credentials" — the fix the error message itself tells the admin to do —
-        // calls RotateAsync against that now-orphaned ref. It must not throw; it must recover the
-        // ref, matching InMemorySecretStore/FileSecretStore's existing upsert behavior.
+        // The live production failure: a PsaConnection whose CredentialSecretRef survived the
+        // Vault-in-dev-mode restart that discarded Vault's actual secret. "Edit the connection and
+        // re-enter your credentials" — the fix the error message itself prescribes — rotates
+        // against that orphaned reference, so it must succeed rather than throw.
         var (store, _) = Create();
-        const string orphanedRef = "vault:secret/data/connections/autotask-prod";
+        const string orphanedRef = "desk/psa-credentials/AutotaskPsa/Autotask/2a47afb201f94a759f7645f6b74a845b";
 
-        var act = () => store.RotateAsync(orphanedRef, new Dictionary<string, string> { ["PrivateKey"] = "fresh-key" });
+        var newRef = await store.RotateAsync(orphanedRef, new Dictionary<string, string> { ["Secret"] = "fresh-key" });
 
-        await act.Should().NotThrowAsync();
-        var read = await store.ReadAsync(orphanedRef);
-        read["PrivateKey"].Should().Be("fresh-key");
+        newRef.Should().NotBe(orphanedRef, "the dead reference cannot be reused as a key");
+        (await store.ReadAsync(newRef))["Secret"].Should().Be("fresh-key");
+    }
+
+    [Fact]
+    public async Task A_recovered_reference_fits_the_column_the_real_database_declares()
+    {
+        // The bug the first attempt at this fix shipped: recovering the row AT the orphaned
+        // reference looked right against the in-memory provider, which enforces no column widths,
+        // and then failed in production with "value too long for type character varying(64)" —
+        // Vault paths run past secret_blobs.Id. Asserting the width here is what makes this test
+        // able to fail for the reason production did; the in-memory provider never will on its own.
+        var (store, _) = Create();
+        var orphanedRef = $"desk/psa-credentials/ConnectWisePsa/{new string('x', 120)}";
+
+        var newRef = await store.RotateAsync(orphanedRef, new Dictionary<string, string> { ["Secret"] = "v" });
+
+        newRef.Length.Should().BeLessThanOrEqualTo(64);
+        (await store.ReadAsync(newRef))["Secret"].Should().Be("v");
     }
 
     [Fact]
