@@ -32,14 +32,13 @@ public sealed class AttachmentsController(
     public async Task<IActionResult> Upload(Guid ticketId, IFormFile file, [FromQuery] Guid? noteId, CancellationToken ct)
     {
         if (file is null || file.Length == 0) return BadRequest("No file provided.");
-        var access = await AccessAsync(ct);
-        await EnsureTicketAccessAsync(access, ticketId, ct);
+        var orgId = await AuthorizeTicketAsync(ticketId, ct);
 
         using var ms = new MemoryStream();
         await file.CopyToAsync(ms, ct);
 
         var dto = await attachments.UploadAsync(new UploadAttachmentInput(
-            ticketId, access.MspOrganizationId, file.FileName, file.ContentType, ms.ToArray(), noteId), ct);
+            ticketId, orgId, file.FileName, file.ContentType, ms.ToArray(), noteId), ct);
 
         return Ok(dto);
     }
@@ -48,8 +47,7 @@ public sealed class AttachmentsController(
     [HttpGet("tickets/{ticketId:guid}/attachments/{attachmentId:guid}/download")]
     public async Task<IActionResult> DownloadUrl(Guid ticketId, Guid attachmentId, CancellationToken ct)
     {
-        var access = await AccessAsync(ct);
-        await EnsureTicketAccessAsync(access, ticketId, ct);
+        await AuthorizeTicketAsync(ticketId, ct);
 
         // The access check above proves the caller may read THIS ticket; it says nothing about the
         // attachment. Without binding the two, a caller could pass a ticket they can see together
@@ -95,16 +93,36 @@ public sealed class AttachmentsController(
         return File(bytes, contentType, fileName);
     }
 
-    private async Task<ClientAccess> AccessAsync(CancellationToken ct)
-        => await accessResolver.ResolveAsync(user.Subject ?? "", ct)
-           ?? throw new ForbiddenException("This endpoint is for client portal users.");
-
-    private async Task EnsureTicketAccessAsync(ClientAccess access, Guid ticketId, CancellationToken ct)
+    /// <summary>
+    /// A client acts on their own company's tickets; staff with view-all act on any ticket in the
+    /// tenant — the same dual path the comments endpoint uses, because attaching a file to a reply
+    /// is part of replying. (This controller used to be client-only, which made every attachment
+    /// upload and download from the staff dashboard fail 403 while the reply itself succeeded.)
+    /// Client-scoped resolution is tried FIRST so the dual dev identity still acts as the client on
+    /// its own company's tickets. Returns the organization that owns the ticket.
+    /// </summary>
+    private async Task<Guid> AuthorizeTicketAsync(Guid ticketId, CancellationToken ct)
     {
-        var ok = await db.Tickets.AnyAsync(t =>
-            t.Id == ticketId
-            && t.ClientCompanyId == access.ClientCompanyId
-            && (access.IsCompanyAdministrator || t.RequesterUserId == access.ClientUserId), ct);
-        if (!ok) throw new NotFoundException("Ticket");
+        var access = await accessResolver.ResolveAsync(user.Subject ?? "", ct);
+        if (access is not null)
+        {
+            var ok = await db.Tickets.AnyAsync(t =>
+                t.Id == ticketId
+                && t.ClientCompanyId == access.ClientCompanyId
+                && (access.IsCompanyAdministrator || t.RequesterUserId == access.ClientUserId), ct);
+            if (ok) return access.MspOrganizationId;
+            // Not their company's ticket — fall through to the staff path if they can hold one.
+        }
+
+        if (!user.HasPermission(Permissions.TicketsViewAll))
+            throw access is null
+                ? new ForbiddenException("This endpoint is for client portal users.")
+                : new NotFoundException("Ticket");
+
+        // Staff path: db.Tickets is tenant-scoped, so this cannot cross into another organization.
+        var orgId = await db.Tickets.Where(t => t.Id == ticketId)
+            .Select(t => (Guid?)t.MspOrganizationId).FirstOrDefaultAsync(ct)
+            ?? throw new NotFoundException("Ticket");
+        return orgId;
     }
 }
