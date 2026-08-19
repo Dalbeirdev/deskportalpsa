@@ -21,20 +21,54 @@ public sealed class ConnectionAdminService(
     TimeProvider clock) : IConnectionAdminService
 {
     public async Task<IReadOnlyList<ConnectionSummary>> ListAsync(CancellationToken ct = default)
-        => await db.PsaConnections.AsNoTracking()
+    {
+        var rows = await db.PsaConnections.AsNoTracking()
             .OrderBy(c => c.Name)
-            .Select(c => new ConnectionSummary(
+            .Select(c => new
+            {
                 c.Id, c.Name, c.Provider, c.ApiEndpoint, c.TenantIdentifier,
-                c.Status, c.IsEnabled, c.LastSuccessfulSyncAt, c.LastError,
-                c.LastHealthCheckAt,
+                c.Status, c.IsEnabled, c.LastSuccessfulSyncAt, c.LastError, c.LastHealthCheckAt,
                 // Correlated counts: one query for the page rather than three per connection.
-                db.Tickets.Count(t => t.PsaConnectionId == c.Id),
-                db.ClientCompanies.Count(o => o.PsaConnectionId == c.Id),
-                db.ClientUsers.Count(u => db.ClientCompanies
+                TicketCount = db.Tickets.Count(t => t.PsaConnectionId == c.Id),
+                CustomerCount = db.ClientCompanies.Count(o => o.PsaConnectionId == c.Id),
+                ContactCount = db.ClientUsers.Count(u => db.ClientCompanies
                     .Any(o => o.Id == u.ClientCompanyId && o.PsaConnectionId == c.Id)),
-                c.LogoUrl))
-            // CredentialSecretRef is intentionally never projected.
+                c.LogoUrl,
+                // The ref itself still never leaves this method — it is resolved to key NAMES below.
+                c.CredentialSecretRef,
+            })
             .ToListAsync(ct);
+
+        var result = new List<ConnectionSummary>(rows.Count);
+        foreach (var c in rows)
+        {
+            result.Add(new ConnectionSummary(
+                c.Id, c.Name, c.Provider, c.ApiEndpoint, c.TenantIdentifier,
+                c.Status, c.IsEnabled, c.LastSuccessfulSyncAt, c.LastError, c.LastHealthCheckAt,
+                c.TicketCount, c.CustomerCount, c.ContactCount, c.LogoUrl,
+                StoredCredentialKeys: await StoredCredentialKeysAsync(c.CredentialSecretRef, ct)));
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// The NAMES of the credential fields that hold a non-empty stored value — never the values.
+    /// An orphaned reference (the Vault-era loss) honestly reports nothing stored, which is the
+    /// whole point: the edit form must be able to say "there is no existing key to keep" instead
+    /// of implying one with an 'unchanged' placeholder.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> StoredCredentialKeysAsync(string secretRef, CancellationToken ct)
+    {
+        try
+        {
+            var secret = await secrets.ReadAsync(secretRef, ct);
+            return secret.Where(kv => !string.IsNullOrEmpty(kv.Value)).Select(kv => kv.Key).Order().ToList();
+        }
+        catch (KeyNotFoundException)
+        {
+            return [];
+        }
+    }
 
     public async Task<ConnectionSummary> CreateAsync(CreateConnectionInput input, CancellationToken ct = default)
     {
@@ -251,8 +285,25 @@ public sealed class ConnectionAdminService(
         var rotated = input.Credentials is { Count: > 0 };
         if (rotated)
         {
+            // The form sends only the fields the admin typed; a blank field means "keep what's
+            // stored" — the edit screen says so in as many words. Rotating with just the typed
+            // fields would make that promise false by replacing the whole secret: re-entering only
+            // the Secret would silently drop ApiIntegrationCode and UserName. Merge over whatever
+            // exists so blank truly means keep.
+            var credentials = input.Credentials!;
+            try
+            {
+                var merged = new Dictionary<string, string>(await secrets.ReadAsync(connection.CredentialSecretRef, ct));
+                foreach (var (key, value) in credentials) merged[key] = value;
+                credentials = merged;
+            }
+            catch (KeyNotFoundException)
+            {
+                // Nothing stored (the Vault-era loss) — the typed fields are the whole secret.
+            }
+
             connection.CredentialSecretRef =
-                await secrets.RotateAsync(connection.CredentialSecretRef, input.Credentials!, ct);
+                await secrets.RotateAsync(connection.CredentialSecretRef, credentials, ct);
 
             // The recorded failure describes the credentials that were just replaced. Leaving it in
             // place keeps a solved problem on screen until something else happens to run. Status

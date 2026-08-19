@@ -23,18 +23,23 @@ export default function ConnectionsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [provider, setProvider] = useState(2);
   const [form, setForm] = useState<Record<string, string>>({ name: '', apiEndpoint: '', tenantIdentifier: '', logoUrl: '' });
+  // Which credential FIELDS hold a stored value for the connection being edited (names only — the
+  // values are write-only). null = unknown, [] = the server said nothing is stored.
+  const [storedKeys, setStoredKeys] = useState<string[] | null>(null);
   const providerDef = PROVIDERS.find((p) => p.value === provider)!;
 
   function openAdd() {
     setEditingId(null);
     setProvider(2);
     setForm({ name: '', apiEndpoint: '', tenantIdentifier: '', logoUrl: '' });
+    setStoredKeys(null);
     setOpen(true);
   }
   function openEdit(c: ConnectionSummary) {
     setEditingId(c.id);
     setProvider(Number(c.provider));
     setForm({ name: c.name, apiEndpoint: c.apiEndpoint, tenantIdentifier: c.tenantIdentifier ?? '', logoUrl: c.logoUrl ?? '' });
+    setStoredKeys(c.storedCredentialKeys);
     setOpen(true);
   }
 
@@ -120,6 +125,16 @@ export default function ConnectionsPage() {
 
   const isEdit = editingId !== null;
 
+  // Blank means "keep the stored key" — so when a save would rotate credentials (anything typed),
+  // every field must be either typed or already stored. Otherwise a partial entry saves fine and
+  // then fails at sync time with "credential missing from the secret store".
+  const isStored = (c: string) => isEdit && (storedKeys?.includes(c) ?? true);
+  const enteredAny = providerDef.creds.some((c) => (form[c] ?? '').trim() !== '');
+  const missingCreds = isEdit && enteredAny
+    ? providerDef.creds.filter((c) => !(form[c] ?? '').trim() && !isStored(c))
+    : [];
+  const nothingStored = isEdit && storedKeys !== null && storedKeys.length === 0;
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -140,10 +155,16 @@ export default function ConnectionsPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">{isEdit ? 'Edit connection' : 'New connection'}</h2>
           </div>
-          <div className="flex items-center gap-2 rounded-lg bg-[var(--bg)] px-3 py-2 text-xs text-[var(--muted)]">
-            <ShieldCheck size={14} /> Credentials are stored in your secret vault — never in the database or shown again.
-            {isEdit && ' Leave the credential fields blank to keep the existing keys.'}
-          </div>
+          {nothingStored ? (
+            <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+              <ShieldCheck size={14} /> No credentials are currently stored for this connection — fill in every credential field.
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-lg bg-[var(--bg)] px-3 py-2 text-xs text-[var(--muted)]">
+              <ShieldCheck size={14} /> Credentials are stored in your secret vault — never in the database or shown again.
+              {isEdit && ' Leave the credential fields blank to keep the existing keys.'}
+            </div>
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
             <label className="block">
@@ -176,15 +197,27 @@ export default function ConnectionsPage() {
               hint="A label for your own reference — not required, and not sent to the PSA." />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            {providerDef.creds.map((c) => (
-              <Input key={c} label={c} type={/secret|key/i.test(c) ? 'password' : 'text'}
-                placeholder={isEdit ? 'unchanged' : ''}
-                value={form[c] ?? ''} onChange={(v) => setForm({ ...form, [c]: v })} />
-            ))}
+            {providerDef.creds.map((c) => {
+              // stored===null means an older response didn't say — keep the historical wording.
+              const stored = !isEdit ? null : storedKeys === null ? null : storedKeys.includes(c);
+              return (
+                <Input key={c} label={c} type={/secret|key/i.test(c) ? 'password' : 'text'}
+                  placeholder={!isEdit ? '' : stored === false ? 'nothing stored — enter a value' : 'unchanged'}
+                  badge={stored === null ? undefined : stored
+                    ? { label: 'Stored', tone: 'ok' }
+                    : { label: 'Nothing stored', tone: 'warn' }}
+                  value={form[c] ?? ''} onChange={(v) => setForm({ ...form, [c]: v })} />
+              );
+            })}
           </div>
+          {missingCreds.length > 0 && (
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              Entering credentials replaces the stored set — also fill in {missingCreds.join(', ')} (nothing is stored for {missingCreds.length === 1 ? 'it' : 'them'}).
+            </p>
+          )}
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-[var(--border)] px-3.5 py-2 text-sm">Cancel</button>
-            <button type="submit" disabled={save.isPending} className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-fg disabled:opacity-50">
+            <button type="submit" disabled={save.isPending || missingCreds.length > 0} className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-fg disabled:opacity-50">
               {save.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Save connection'}
             </button>
           </div>
@@ -534,10 +567,23 @@ function FieldList({ title, items }: { title: string; items: { value: string; la
   );
 }
 
-function Input({ label, value, onChange, type = 'text', placeholder, hint }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string; hint?: string }) {
+function Input({ label, value, onChange, type = 'text', placeholder, hint, badge }: {
+  label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string; hint?: string;
+  /** Small status chip after the label — used to say whether a credential field has a stored value. */
+  badge?: { label: string; tone: 'ok' | 'warn' };
+}) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm font-medium">{label}</span>
+      <span className="mb-1.5 flex items-center gap-2 text-sm font-medium">
+        {label}
+        {badge && (
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${badge.tone === 'ok'
+            ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300'
+            : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}`}>
+            {badge.label}
+          </span>
+        )}
+      </span>
       <input
         type={type}
         value={value}
