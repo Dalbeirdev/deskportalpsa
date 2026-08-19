@@ -135,6 +135,10 @@ export const ConnectionSummarySchema = z.object({
   customerCount: z.number().default(0),
   contactCount: z.number().default(0),
   logoUrl: z.string().nullable().default(null),
+  // Names of the credential fields that currently hold a stored value — never the values (they
+  // stay write-only). null = the endpoint didn't say (older responses), which is different from
+  // [] = it said "nothing is stored".
+  storedCredentialKeys: z.array(z.string()).nullable().default(null),
 });
 export type ConnectionSummary = z.infer<typeof ConnectionSummarySchema>;
 

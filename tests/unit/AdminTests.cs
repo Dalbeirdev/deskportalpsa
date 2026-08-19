@@ -328,4 +328,51 @@ public class AdminTests
         healed.LastError.Should().BeNull("the recorded failure was about the credentials just replaced");
         healed.Status.Should().Be(ConnectionStatus.Pending, "only a real successful call may claim Healthy");
     }
+
+    [Fact]
+    public async Task Connection_list_reports_which_credential_fields_are_stored_by_name_only()
+    {
+        var (svc, h) = Connections();
+        await using var _ = h.Db;
+        await CreateConnAsync(svc); // stores CompanyId + PrivateKey
+
+        var summary = (await svc.ListAsync()).Single();
+
+        // Names only — the edit form needs "is something stored behind this field", never the value.
+        summary.StoredCredentialKeys.Should().BeEquivalentTo(["CompanyId", "PrivateKey"]);
+    }
+
+    [Fact]
+    public async Task A_connection_whose_secret_is_lost_reports_nothing_stored()
+    {
+        // The Vault-era loss as the list sees it: the ref exists on the row, the secret behind it
+        // does not. [] is what lets the edit form stop bluffing 'unchanged' at the admin.
+        var (svc, h) = Connections();
+        await using var _ = h.Db;
+        var id = await CreateConnAsync(svc);
+        var row = await h.Db.PsaConnections.SingleAsync(c => c.Id == id);
+        await h.Secrets.DeleteAsync(row.CredentialSecretRef);
+
+        (await svc.ListAsync()).Single().StoredCredentialKeys.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Re_entering_one_credential_keeps_the_other_stored_fields()
+    {
+        // The edit form promises "leave blank to keep the existing keys". Rotation used to replace
+        // the whole secret with only the typed fields, making that promise false: re-entering just
+        // the PrivateKey silently dropped CompanyId, and the next sync failed on a field the admin
+        // never touched.
+        var (svc, h) = Connections();
+        await using var _ = h.Db;
+        var id = await CreateConnAsync(svc); // CompanyId=c, PrivateKey=p
+
+        await svc.UpdateAsync(id, new UpdateConnectionInput("CW", "https://x", null, null, true,
+            new Dictionary<string, string> { ["PrivateKey"] = "rotated" }, null));
+
+        var row = await h.Db.PsaConnections.SingleAsync(c => c.Id == id);
+        var secret = await h.Secrets.ReadAsync(row.CredentialSecretRef);
+        secret["PrivateKey"].Should().Be("rotated");
+        secret["CompanyId"].Should().Be("c", "a blank field means keep, and keep must be true per-field");
+    }
 }

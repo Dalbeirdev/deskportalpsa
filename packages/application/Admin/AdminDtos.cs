@@ -20,7 +20,13 @@ public sealed record ConnectionSummary(
     int TicketCount = 0,
     int CustomerCount = 0,
     int ContactCount = 0,
-    string? LogoUrl = null);
+    string? LogoUrl = null,
+    // NAMES of the credential fields that currently hold a stored value — never the values, which
+    // stay write-only by design. Exists so the edit form can distinguish "leave blank to keep the
+    // existing key" from "there is nothing stored to keep": after the Vault-era secret loss, both
+    // rendered as the same 'unchanged' placeholder and an admin could not tell whether their
+    // re-entry had actually landed.
+    IReadOnlyList<string>? StoredCredentialKeys = null);
 
 public sealed record CreateConnectionInput(
     string Name,
