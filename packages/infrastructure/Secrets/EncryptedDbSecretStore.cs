@@ -44,35 +44,42 @@ public sealed class EncryptedDbSecretStore(DeskDbContext db, SecretCipher cipher
         return Deserialize(cipher.Decrypt(blob.Ciphertext));
     }
 
-    public async Task RotateAsync(string secretRef, IReadOnlyDictionary<string, string> data, CancellationToken ct = default)
+    public async Task<string> RotateAsync(string secretRef, IReadOnlyDictionary<string, string> data, CancellationToken ct = default)
     {
-        // Upsert, not update-only: a PsaConnection can hold a CredentialSecretRef with no backing
-        // row here — the Vault-era connections this store replaced lost their secrets to an
-        // in-memory backend wiped by a container restart (see this class's own doc comment), and
-        // their CredentialSecretRef still names the old Vault key. "Edit the connection and
-        // re-enter your credentials" is the documented, self-service fix for exactly that — and it
-        // must not itself throw. Recreating the row AT THE SAME Id keeps that ref valid without
-        // requiring the caller to persist a freshly minted one. The other two ISecretStore
-        // implementations (InMemory/File) already treat Rotate as upsert; this one shouldn't be
-        // the odd one out.
         var blob = await db.Set<SecretBlob>().FirstOrDefaultAsync(b => b.Id == secretRef, ct);
-        var now = clock.GetUtcNow();
-        if (blob is null)
-        {
-            blob = new SecretBlob
-            {
-                Id = secretRef, LogicalName = $"recovered:{secretRef}",
-                Ciphertext = cipher.Encrypt(Serialize(data)), CreatedAt = now, UpdatedAt = now,
-            };
-            db.Set<SecretBlob>().Add(blob);
-        }
-        else
+        if (blob is not null)
         {
             blob.Ciphertext = cipher.Encrypt(Serialize(data));
-            blob.UpdatedAt = now;
+            blob.UpdatedAt = clock.GetUtcNow();
+            await db.SaveChangesAsync(ct);
+            return secretRef;
         }
+
+        // No row at this reference. A connection carried over from the Vault-era store points at a
+        // Vault path that was never written here — Vault's dev-mode backend discarded the secret on
+        // restart (see this class's doc comment) and the Postgres migration had nothing to carry
+        // over. Re-entering credentials is the documented fix for that and must succeed.
+        //
+        // The old reference cannot simply be reused as the key: Vault paths run past this table's
+        // 64-character Id, so inserting one fails outright (value too long for character
+        // varying(64)). Mint a fresh reference instead and hand it back, so the caller repoints the
+        // connection at something readable. The dead path is kept as the logical name, which is
+        // sized for it, so a support session can still see where the row came from.
+        var now = clock.GetUtcNow();
+        var recovered = new SecretBlob
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            LogicalName = Truncate($"recovered from {secretRef}", 300),
+            Ciphertext = cipher.Encrypt(Serialize(data)),
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.Set<SecretBlob>().Add(recovered);
         await db.SaveChangesAsync(ct);
+        return recovered.Id;
     }
+
+    private static string Truncate(string value, int max) => value.Length <= max ? value : value[..max];
 
     public async Task DeleteAsync(string secretRef, CancellationToken ct = default)
     {

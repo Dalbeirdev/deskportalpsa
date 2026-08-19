@@ -285,4 +285,47 @@ public class AdminTests
 
         entries.Should().ContainSingle().Which.EntityId.Should().Be("user-1");
     }
+
+    [Fact]
+    public async Task Re_entering_credentials_heals_a_connection_whose_secret_reference_is_orphaned()
+    {
+        // End-to-end reproduction of the live failure on piomanage.com: both PSA connections point
+        // at Vault-era references whose secrets were discarded when Vault's dev-mode backend
+        // restarted, so the connection is stuck Failed and the remedy its own error message
+        // prescribes — edit and re-enter the credentials — has to work.
+        //
+        // Uses the real EncryptedDbSecretStore rather than the harness's in-memory one: the
+        // reference-minting only happens in the database-backed store, so the in-memory store would
+        // pass this test without exercising anything it covers.
+        var h = AdminHarness.Create(Org);
+        await using var _ = h.Db;
+        var cipher = new Desk.Infrastructure.Secrets.SecretCipher(
+            new Desk.Infrastructure.Secrets.SecretEncryptionOptions { Key = "w+WEoJiLQLVmZzgEm//uVd0YpeTwnhwm2rUyftBqdO8=" });
+        var store = new Desk.Infrastructure.Secrets.EncryptedDbSecretStore(h.Db, cipher, h.Clock);
+        var svc = new ConnectionAdminService(h.Db, store, new AuditWriter(h.Db, h.User, h.Tenant, h.Clock),
+            new FakeResolver(new MockConnector(new MockConnectorOptions(), h.Clock)), new ConnectionFieldCache(),
+            new InMemoryObjectStorage(new AttachmentStorageOptions(), h.Clock), h.Clock);
+
+        var created = await svc.CreateAsync(new CreateConnectionInput(
+            "Autotask", ProviderType.AutotaskPsa, "https://webservices31.autotask.net/ATServicesRest/v1.0/", null,
+            new Dictionary<string, string> { ["Secret"] = "original" }, null));
+
+        // Reproduce the production row exactly: a 74-character Vault path with nothing behind it,
+        // and the failure the sync job recorded against it.
+        var row = await h.Db.PsaConnections.SingleAsync(c => c.Id == created.Id);
+        await store.DeleteAsync(row.CredentialSecretRef);
+        row.CredentialSecretRef = "desk/psa-credentials/AutotaskPsa/Autotask/2a47afb201f94a759f7645f6b74a845b";
+        row.Status = ConnectionStatus.Failed;
+        row.LastError = "'Autotask' has no valid stored credentials — edit the connection and re-enter them.";
+        await h.Db.SaveChangesAsync();
+
+        await svc.UpdateAsync(created.Id, new UpdateConnectionInput(
+            "Autotask", "https://webservices31.autotask.net/ATServicesRest/v1.0/", null, null, true,
+            new Dictionary<string, string> { ["Secret"] = "re-entered" }, null));
+
+        var healed = await h.Db.PsaConnections.SingleAsync(c => c.Id == created.Id);
+        (await store.ReadAsync(healed.CredentialSecretRef))["Secret"].Should().Be("re-entered");
+        healed.LastError.Should().BeNull("the recorded failure was about the credentials just replaced");
+        healed.Status.Should().Be(ConnectionStatus.Pending, "only a real successful call may claim Healthy");
+    }
 }

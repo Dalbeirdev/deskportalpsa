@@ -243,10 +243,24 @@ public sealed class ConnectionAdminService(
         connection.IsEnabled = input.IsEnabled;
         if (!input.IsEnabled) connection.Status = ConnectionStatus.Disabled;
 
-        // Rotate credentials only if new ones were supplied — the secret ref stays the same.
+        // Rotate credentials only if new ones were supplied. The store returns the reference the
+        // secret now lives at — usually the same one, but a freshly minted one when the old
+        // reference could not be reused (a Vault-era connection whose secret this backend never
+        // held). Assigning it back repoints the row in the same save, instead of leaving it naming
+        // something that cannot be read.
         var rotated = input.Credentials is { Count: > 0 };
         if (rotated)
-            await secrets.RotateAsync(connection.CredentialSecretRef, input.Credentials!, ct);
+        {
+            connection.CredentialSecretRef =
+                await secrets.RotateAsync(connection.CredentialSecretRef, input.Credentials!, ct);
+
+            // The recorded failure describes the credentials that were just replaced. Leaving it in
+            // place keeps a solved problem on screen until something else happens to run. Status
+            // goes back to Pending rather than Healthy — only a real successful call may claim that.
+            connection.LastError = null;
+            if (connection.IsEnabled && connection.Status is ConnectionStatus.Degraded or ConnectionStatus.Failed)
+                connection.Status = ConnectionStatus.Pending;
+        }
 
         await db.SaveChangesAsync(ct);
         await audit.WriteAsync("connection.updated", "PsaConnection", connectionId.ToString(),

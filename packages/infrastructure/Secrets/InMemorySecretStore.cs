@@ -23,10 +23,11 @@ public sealed class InMemorySecretStore : ISecretStore
             ? Task.FromResult(v)
             : throw new KeyNotFoundException("Secret reference not found.");
 
-    public Task RotateAsync(string secretRef, IReadOnlyDictionary<string, string> data, CancellationToken ct = default)
+    public Task<string> RotateAsync(string secretRef, IReadOnlyDictionary<string, string> data, CancellationToken ct = default)
     {
+        // A dictionary key has no length limit, so the reference is always reusable here.
         _store[secretRef] = data;
-        return Task.CompletedTask;
+        return Task.FromResult(secretRef);
     }
 
     public Task DeleteAsync(string secretRef, CancellationToken ct = default)
