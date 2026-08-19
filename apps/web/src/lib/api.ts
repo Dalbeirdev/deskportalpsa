@@ -123,10 +123,12 @@ export const api = {
       { method: 'PUT', body: JSON.stringify(body) }),
   updateTicketStatus: (id: string, status: string) =>
     request(`/api/tickets/${id}/status`, z.object({ portalStatus: z.string() }), { method: 'POST', body: JSON.stringify({ status }) }),
+  // Same aggregate response as update/retry/delete — the endpoint recomputes the ticket's totals
+  // from the PSA and returns those, not the created entry. The old schema here demanded an
+  // externalId the response never carried, so every SUCCESSFUL log threw at the parse and showed
+  // as a failure while the entry quietly landed in the PSA.
   logTime: (id: string, body: { hours: number; billable: string; notes?: string; workType?: string; workRole?: string }) =>
-    request(`/api/tickets/${id}/time`,
-      z.object({ externalId: z.string().nullable(), timeWorkedHours: z.number(), billableHours: z.number(), nonBillableHours: z.number() }),
-      { method: 'POST', body: JSON.stringify(body) }),
+    request(`/api/tickets/${id}/time`, TimeAggregateSchema, { method: 'POST', body: JSON.stringify(body) }),
   ticketTimeOptions: (id: string) =>
     request(`/api/tickets/${id}/time-options`,
       z.object({ workTypes: z.array(FieldOptionSchema), workRoles: z.array(FieldOptionSchema) })),
