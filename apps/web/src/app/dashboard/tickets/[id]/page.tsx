@@ -242,14 +242,35 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
     timer.start();
   }
 
+  // Time logged alongside a reply, in one send. Kept OUTSIDE the mutation's failure path: once the
+  // note has posted, failing the whole mutation over a time entry would tell the user to resend —
+  // and resending would duplicate the note. A failed side-step is reported specifically instead.
+  const [replyHours, setReplyHours] = useState('');
+  const [replyBillable, setReplyBillable] = useState('Billable');
+  const [replySideError, setReplySideError] = useState<string | null>(null);
+
   const addComment = useMutation({
     mutationFn: async (body: string) => {
       const note = await api.addComment(id, body);
+      const sideErrors: string[] = [];
       // Upload after the reply exists, so each file carries its note id all the way to the PSA.
-      for (const file of pendingFiles) await api.uploadAttachment(id, file, note.id);
-      return note;
+      for (const file of pendingFiles) {
+        try { await api.uploadAttachment(id, file, note.id); }
+        catch (e) { sideErrors.push(`"${file.name}" failed to upload${e instanceof Error && e.message ? ` — ${e.message}` : ''}`); }
+      }
+      const hrs = parseFloat(replyHours);
+      if (hrs > 0) {
+        try { await api.logTime(id, { hours: hrs, billable: replyBillable, notes: body }); }
+        catch (e) { sideErrors.push(`the time entry failed${e instanceof Error && e.message ? ` — ${e.message}` : ''} (use the Log time panel to retry)`); }
+      }
+      return { note, sideErrors };
     },
-    onSuccess: () => { setComment(''); setPendingFiles([]); qc.invalidateQueries({ queryKey: ['ticket', id] }); },
+    onSuccess: ({ sideErrors }) => {
+      setComment(''); setPendingFiles([]); setReplyHours('');
+      setReplySideError(sideErrors.length > 0 ? `Reply sent, but ${sideErrors.join('; ')}.` : null);
+      qc.invalidateQueries({ queryKey: ['ticket', id] });
+      if (parseFloat(replyHours) > 0) refreshTime();
+    },
   });
 
   const { data: entries } = useQuery({ queryKey: ['time-entries', id], queryFn: () => api.listTimeEntries(id), enabled: !!ticket, retry: false });
@@ -666,7 +687,23 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                       ))}
                     </ul>
                   )}
-                  <div className="flex items-center justify-between px-4 pb-3">
+                  <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] px-4 py-2">
+                    <Clock size={13} className="text-[var(--faint)]" />
+                    <span className="text-xs text-[var(--muted)]">Log time with this reply</span>
+                    <input type="number" step="0.25" min="0" value={replyHours} onChange={(e) => setReplyHours(e.target.value)}
+                      placeholder="0.00" aria-label="Hours to log with this reply"
+                      className="w-20 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs outline-none focus:border-brand" />
+                    {parseFloat(replyHours) > 0 && (
+                      <select value={replyBillable} onChange={(e) => setReplyBillable(e.target.value)} aria-label="Billable"
+                        className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs outline-none focus:border-brand">
+                        <option value="Billable">Billable</option>
+                        <option value="DoNotBill">Do not bill</option>
+                        <option value="NoCharge">No charge</option>
+                      </select>
+                    )}
+                    <span className="text-[11px] text-[var(--faint)]">optional — the reply text becomes the entry&apos;s notes</span>
+                  </div>
+                  <div className="flex items-center justify-between px-4 pb-3 pt-2">
                     <span className="text-xs text-[var(--faint)]">{comment.length} / 4000</span>
                     <div className="flex items-center gap-2">
                       <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
@@ -675,11 +712,23 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                       </button>
                       <button type="submit" disabled={addComment.isPending || !comment.trim()}
                         className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50">
-                        <Send size={15} /> {addComment.isPending ? 'Sending…' : pendingFiles.length > 0 ? `Send reply + ${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''}` : 'Send reply'}
+                        <Send size={15} /> {addComment.isPending ? 'Sending…'
+                          : [
+                              'Send reply',
+                              pendingFiles.length > 0 ? `${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''}` : null,
+                              parseFloat(replyHours) > 0 ? `${replyHours}h` : null,
+                            ].filter(Boolean).join(' + ')}
                       </button>
                     </div>
                   </div>
-                  {addComment.isError && <p className="px-4 pb-3 text-xs text-red-600 dark:text-red-400">Couldn&apos;t send — is the API reachable?</p>}
+                  {addComment.isError && (
+                    <p className="px-4 pb-3 text-xs text-red-600 dark:text-red-400">
+                      Couldn&apos;t send{addComment.error instanceof Error && addComment.error.message ? ` — ${addComment.error.message}` : ' — is the API reachable?'}
+                    </p>
+                  )}
+                  {replySideError && !addComment.isPending && (
+                    <p className="px-4 pb-3 text-xs text-amber-700 dark:text-amber-300">{replySideError}</p>
+                  )}
                 </form>
               </div>
             </div>

@@ -65,12 +65,12 @@ public sealed class PublicEnquiriesController(IEnquiryService enquiries) : Contr
 public sealed class AdminEnquiriesController(IEnquiryService enquiries) : ControllerBase
 {
     [HttpGet]
-    [Authorize(Policy = Permissions.EnquiriesView)]
+    [RequirePermission(Permissions.EnquiriesView)]
     public async Task<IActionResult> List([FromQuery] EnquiryStatus? status, CancellationToken ct) =>
         Ok(await enquiries.ListAsync(status, ct));
 
     [HttpPost("{id:guid}/status")]
-    [Authorize(Policy = Permissions.EnquiriesView)]
+    [RequirePermission(Permissions.EnquiriesView)]
     public async Task<IActionResult> SetStatus(Guid id, [FromBody] SetEnquiryStatusRequest body, CancellationToken ct) =>
         await enquiries.SetStatusAsync(id, body.Status, ct) ? NoContent() : NotFound();
 }
