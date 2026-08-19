@@ -44,19 +44,21 @@ export default function ConnectionsPage() {
   }
 
   const save = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const entered = Object.fromEntries(providerDef.creds.map((c) => [c, form[c] ?? '']).filter(([, v]) => v !== ''));
+      const credentialsChanged = Object.keys(entered).length > 0;
       if (editingId) {
-        return api.updateConnection(editingId, {
+        const updated = await api.updateConnection(editingId, {
           name: form.name,
           apiEndpoint: form.apiEndpoint,
           tenantIdentifier: form.tenantIdentifier || undefined,
           isEnabled: true,
           logoUrl: form.logoUrl,
-          credentials: Object.keys(entered).length ? entered : undefined,
+          credentials: credentialsChanged ? entered : undefined,
         });
+        return { id: updated.id, credentialsChanged };
       }
-      return api.createConnection({
+      const created = await api.createConnection({
         name: form.name,
         provider,
         apiEndpoint: form.apiEndpoint,
@@ -64,10 +66,15 @@ export default function ConnectionsPage() {
         logoUrl: form.logoUrl,
         credentials: Object.fromEntries(providerDef.creds.map((c) => [c, form[c] ?? ''])),
       });
+      return { id: created.id, credentialsChanged: true };
     },
-    onSuccess: () => {
+    onSuccess: ({ id, credentialsChanged }) => {
       setOpen(false);
       qc.invalidateQueries({ queryKey: ['connections'] });
+      // New or rotated credentials get tested immediately — the whole reason someone re-enters keys
+      // is to find out whether they work, and making them hunt for the Test button after saving is
+      // an extra round-trip through a Degraded card. The result lands on the card like a manual test.
+      if (credentialsChanged) test.mutate(id);
     },
   });
 

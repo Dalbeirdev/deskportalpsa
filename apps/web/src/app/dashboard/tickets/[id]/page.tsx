@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Pencil, MoreHorizontal, Paperclip,
-  Send, Bold, Smile, Link2, ArrowUpDown, Lock, Monitor, Wifi, Mail, KeyRound, Cpu, Ticket,
+  Send, ArrowUpDown, Lock, Monitor, Wifi, Mail, KeyRound, Cpu, Ticket,
   Copy, RefreshCw, Download, Clock, Trash2, Check, X, ClipboardList, UserCog, ExternalLink} from 'lucide-react';
 import { useTimer } from '@/components/TimerProvider';
 import { api, type AssigneeOptions } from '@/lib/api';
@@ -664,14 +664,16 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 ))}
 
                 {/* Composer */}
+                {/* No formatting toolbar: the Bold/emoji/link buttons it used to show were wired to
+                    nothing — decoration presented as function. Attach lives on the real button below. */}
                 <form onSubmit={(e) => { e.preventDefault(); if (comment.trim()) addComment.mutate(comment.trim()); }} className="rounded-xl border border-[var(--border)] bg-[var(--bg)]">
-                  <div className="flex items-center gap-1 border-b border-[var(--border)] px-3 py-2 text-[var(--muted)]">
-                    <button type="button" className="rounded p-1.5 hover:bg-[var(--surface)]"><Bold size={15} /></button>
-                    <button type="button" onClick={() => fileRef.current?.click()} className="rounded p-1.5 hover:bg-[var(--surface)]"><Paperclip size={15} /></button>
-                    <button type="button" className="rounded p-1.5 hover:bg-[var(--surface)]"><Smile size={15} /></button>
-                    <button type="button" className="rounded p-1.5 hover:bg-[var(--surface)]"><Link2 size={15} /></button>
-                  </div>
                   <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} maxLength={4000}
+                    onKeyDown={(e) => {
+                      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && comment.trim() && !addComment.isPending) {
+                        e.preventDefault();
+                        addComment.mutate(comment.trim());
+                      }
+                    }}
                     placeholder="Add a reply…" className="w-full resize-y bg-transparent px-4 py-3 text-sm outline-none" />
                   {pendingFiles.length > 0 && (
                     <ul className="flex flex-wrap gap-2 px-4 pb-2">
@@ -701,6 +703,17 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                         <option value="NoCharge">No charge</option>
                       </select>
                     )}
+                    {timer.seconds > 0 && timer.target?.ticketId === id && (
+                      <button type="button"
+                        onClick={() => {
+                          const rounded = Math.max(0.25, Math.round((timer.seconds / 3600) / 0.25) * 0.25);
+                          setReplyHours(rounded.toFixed(2));
+                          timer.pause();
+                        }}
+                        className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[11px] font-medium hover:bg-[var(--bg)]">
+                        Use timer ({String(Math.floor(timer.seconds / 60)).padStart(2, '0')}:{String(timer.seconds % 60).padStart(2, '0')})
+                      </button>
+                    )}
                     <span className="text-[11px] text-[var(--faint)]">optional — the reply text becomes the entry&apos;s notes</span>
                   </div>
                   <div className="flex items-center justify-between px-4 pb-3 pt-2">
@@ -710,7 +723,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                         className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium hover:bg-[var(--bg)] disabled:opacity-50">
                         <Paperclip size={15} /> Attach file
                       </button>
-                      <button type="submit" disabled={addComment.isPending || !comment.trim()}
+                      <button type="submit" disabled={addComment.isPending || !comment.trim()} title="Ctrl+Enter"
                         className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50">
                         <Send size={15} /> {addComment.isPending ? 'Sending…'
                           : [
