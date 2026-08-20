@@ -25,6 +25,10 @@ export const TicketNoteSchema = z.object({
   isPublic: z.boolean().default(true),
   // Set when the note is a time entry's notes — pairs it with the live entry list.
   timeEntryExternalId: z.string().nullable().default(null),
+  // Carried directly for portal-logged entries (reply + time), so the thread can state the time
+  // without waiting on the live entry list. Null for provider-side te- notes.
+  timeEntryHours: z.number().nullable().default(null),
+  timeEntryBillable: z.boolean().nullable().default(null),
 });
 
 export const AttachmentSchema = z.object({

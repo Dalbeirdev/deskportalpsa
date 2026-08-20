@@ -127,7 +127,7 @@ export const api = {
   // from the PSA and returns those, not the created entry. The old schema here demanded an
   // externalId the response never carried, so every SUCCESSFUL log threw at the parse and showed
   // as a failure while the entry quietly landed in the PSA.
-  logTime: (id: string, body: { hours: number; billable: string; notes?: string; workType?: string; workRole?: string }) =>
+  logTime: (id: string, body: { hours: number; billable: string; notes?: string; workType?: string; workRole?: string; noteId?: string }) =>
     request(`/api/tickets/${id}/time`, TimeAggregateSchema, { method: 'POST', body: JSON.stringify(body) }),
   ticketTimeOptions: (id: string) =>
     request(`/api/tickets/${id}/time-options`,

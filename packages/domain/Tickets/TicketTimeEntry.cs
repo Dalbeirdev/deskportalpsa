@@ -36,6 +36,13 @@ public class TicketTimeEntry : TenantEntity
     /// <summary>The PSA's own entry id. Null while pending, and after a failed push.</summary>
     public string? ExternalEntryId { get; set; }
 
+    /// <summary>
+    /// The conversation note this entry was logged WITH, when time came in on a reply. The PSA
+    /// keeps the two as unrelated records, so without this link the thread cannot say how long
+    /// the work in a reply took — the one question a time-and-materials reader always has.
+    /// </summary>
+    public Guid? NoteId { get; set; }
+
     public decimal Hours { get; set; }
     public bool Billable { get; set; }
     public string? Notes { get; set; }
