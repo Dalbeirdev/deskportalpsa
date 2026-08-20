@@ -97,6 +97,50 @@ public class NoteImportTests
     }
 
     [Fact]
+    public async Task A_time_entrys_notes_join_the_thread_as_internal_unless_the_portal_logged_them()
+    {
+        // The second half of the live CWM finding: the technician's rich note was written through a
+        // TIME ENTRY, and the ticket-notes API never returns those — ConnectWise's "All notes" view
+        // is ticket notes PLUS time-entry notes. The provider-authored one must join the thread as
+        // internal; the portal-logged one must NOT, because its text already sits in the thread as
+        // the reply that logged it.
+        var dbName = Guid.NewGuid().ToString();
+        var clock = new TestClock();
+        await using var db = await SeedAsync(dbName);
+        var connector = new StubConnector { SupportsTimeEntries = true };
+        connector.Tickets.Add(Incoming("7809"));
+        connector.Notes["7809"] = [Note("101", "Jane Tech", "Public reply.", clock.GetUtcNow())];
+        connector.TimeEntries["7809"] =
+        [
+            new UnifiedTimeEntry("500", "tech-1", 0.17m, false, clock.GetUtcNow(), "1. Like\n2. Dislike\nWindows Admin Center is a free tool.") { TechnicianName = "Sarabjit Singh" },
+            new UnifiedTimeEntry("501", "tech-1", 0.25m, true, clock.GetUtcNow(), "Reply text the portal already holds.") { TechnicianName = "Sarabjit Singh" },
+        ];
+
+        // First run creates the ticket; then stamp entry 501 as portal-origin, as logging from the
+        // reply composer does, and re-run.
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+        var ticket = await db.Tickets.SingleAsync();
+        db.TicketTimeEntries.Add(new TicketTimeEntry
+        {
+            MspOrganizationId = Org, TicketId = ticket.Id, Hours = 0.25m, Billable = true,
+            Source = TimeEntrySource.Portal, SyncStatus = TimeEntrySyncStatus.Synced,
+            ExternalEntryId = "501", EntryDate = clock.GetUtcNow(),
+        });
+        // Remove the echo imported before the portal stamp existed, then prove it STAYS gone.
+        db.TicketNotes.RemoveRange(db.TicketNotes.Where(n => n.ExternalNoteId == "te-501"));
+        await db.SaveChangesAsync();
+
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        var teNote = await db.TicketNotes.SingleAsync(n => n.ExternalNoteId == "te-500");
+        teNote.IsPublic.Should().BeFalse("a time entry's notes are internal by default");
+        teNote.AuthorName.Should().Be("Sarabjit Singh");
+        teNote.Body.Should().StartWith("1. Like", "the FULL text must arrive, not a truncation");
+        (await db.TicketNotes.AnyAsync(n => n.ExternalNoteId == "te-501"))
+            .Should().BeFalse("the portal-logged entry's text is already in the thread as the reply");
+    }
+
+    [Fact]
     public async Task Provider_notes_are_imported_once_and_keep_their_author()
     {
         var dbName = Guid.NewGuid().ToString();

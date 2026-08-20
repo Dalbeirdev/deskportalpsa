@@ -162,6 +162,45 @@ public sealed class ConnectionSyncRunner(
         try { incoming = await connector.GetNotesAsync(externalTicketId, ct); }
         catch (ConnectorException) { return (0, 0); } // one ticket's notes must not fail the whole run
 
+        // TIME-ENTRY notes. Both PSAs show a time entry's notes in the ticket's own note stream —
+        // ConnectWise's "All notes" view is ticket notes PLUS time-entry notes — but the ticket-notes
+        // API returns only the former, which is how a technician's note written through a time entry
+        // never reached the portal. Imported as INTERNAL: the provider's own UI treats them that way,
+        // and a time note can carry candid detail no client should see. The te- id prefix keeps them
+        // from ever colliding with real note ids.
+        var timeNotesFetched = false;
+        if ((await connector.GetCapabilitiesAsync(ct)).SupportsTimeEntries)
+        {
+            try
+            {
+                var entries = await connector.GetTimeEntriesAsync(externalTicketId, ct);
+                // A time entry logged FROM the portal carries the reply that logged it — that text is
+                // already in the thread as the reply itself, so importing it back would double every
+                // portal reply that logged time.
+                var portalOrigin = (await db.TicketTimeEntries
+                        .Where(t => t.TicketId == ticket.Id && t.Source == TimeEntrySource.Portal && t.ExternalEntryId != null)
+                        .Select(t => t.ExternalEntryId!)
+                        .ToListAsync(ct))
+                    .ToHashSet();
+
+                var merged = new List<UnifiedTicketNote>(incoming);
+                foreach (var e in entries)
+                {
+                    if (string.IsNullOrWhiteSpace(e.Notes) || string.IsNullOrEmpty(e.ExternalId)) continue;
+                    if (portalOrigin.Contains(e.ExternalId)) continue;
+                    merged.Add(new UnifiedTicketNote(
+                        $"te-{e.ExternalId}", e.TechnicianName ?? "", e.Notes, IsPublic: false, e.EntryDate));
+                }
+                incoming = merged;
+                timeNotesFetched = true;
+            }
+            catch (ConnectorException)
+            {
+                // Unknown list again — previously imported time notes are shielded from
+                // reconciliation below rather than mistaken for deletions.
+            }
+        }
+
         var existing = await db.TicketNotes
             .Where(n => n.TicketId == ticket.Id && n.ExternalNoteId != null)
             .Select(n => n.ExternalNoteId!)
@@ -192,7 +231,7 @@ public sealed class ConnectionSyncRunner(
             added++;
         }
 
-        var removed = await ReconcileDeletedNotesAsync(ticket.Id, incoming, ct);
+        var removed = await ReconcileDeletedNotesAsync(ticket.Id, incoming, timeNotesFetched, ct);
         if (added > 0 || removed > 0) await db.SaveChangesAsync(ct);
         return (added, removed);
     }
@@ -208,7 +247,8 @@ public sealed class ConnectionSyncRunner(
     /// The comparison uses every note the provider returned, not the filtered subset, so a note
     /// skipped by the system-note setting is never mistaken for a deleted one.
     /// </summary>
-    private async Task<int> ReconcileDeletedNotesAsync(Guid ticketId, IReadOnlyList<UnifiedTicketNote> incoming, CancellationToken ct)
+    private async Task<int> ReconcileDeletedNotesAsync(
+        Guid ticketId, IReadOnlyList<UnifiedTicketNote> incoming, bool timeNotesFetched, CancellationToken ct)
     {
         var stillPresent = incoming
             .Select(n => n.ExternalId)
@@ -221,6 +261,9 @@ public sealed class ConnectionSyncRunner(
                         // Provider-origin: every imported note is stamped this way, and every portal
                         // reply the opposite, so this separates the two without a redundant column.
                         && !n.AuthoredByClient
+                        // When the time-entry read failed, its notes are missing from `incoming` for
+                        // that reason alone — absence there is not evidence of deletion.
+                        && (timeNotesFetched || !n.ExternalNoteId.StartsWith("te-"))
                         && !stillPresent.Contains(n.ExternalNoteId))
             .ToListAsync(ct);
         if (orphans.Count == 0) return 0;
