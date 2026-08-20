@@ -34,7 +34,7 @@ public class RoleAdminTests
         }
         await h.Db.SaveChangesAsync();
         var audit = new AuditWriter(h.Db, h.User, h.Tenant, h.Clock);
-        var roles = new RoleAdminService(h.Db, audit, h.Tenant, h.User);
+        var roles = new RoleAdminService(h.Db, audit, h.Tenant, h.User, new EffectivePermissionService(h.Db));
         var users = new UserAdminService(h.Db, audit, h.Tenant, h.User,
             new InMemoryObjectStorage(new AttachmentStorageOptions(), h.Clock), new EffectivePermissionService(h.Db), h.Clock);
         return (h, roles, users, seeded);
@@ -96,7 +96,7 @@ public class RoleAdminTests
         await h.Db.SaveChangesAsync();
 
         var selfActor = new TestCurrentUser(Org, userId: me.Id);
-        var svc = new RoleAdminService(h.Db, new AuditWriter(h.Db, selfActor, h.Tenant, h.Clock), h.Tenant, selfActor);
+        var svc = new RoleAdminService(h.Db, new AuditWriter(h.Db, selfActor, h.Tenant, h.Clock), h.Tenant, selfActor, new EffectivePermissionService(h.Db));
         var mine = await svc.CreateAsync(SeniorTech());
         h.Db.UserRoles.Add(new Desk.Domain.Identity.UserRole { AppUserId = me.Id, RoleId = mine.Id });
         await h.Db.SaveChangesAsync();
@@ -160,6 +160,56 @@ public class RoleAdminTests
             await act.Should().ThrowAsync<ValidationFailedException>();
         }
         (await h.Db.UserRoles.CountAsync(r => r.AppUserId == jane.Id)).Should().Be(1, "only the Technician role from creation");
+    }
+
+    [Fact]
+    public async Task Holders_reports_each_users_engine_resolved_access_including_overrides()
+    {
+        // §13's whole claim is "this is the ENGINE's answer, not a role-row report". Proven by a
+        // user whose ROLE grants the key but whose OVERRIDE denies it: a role-row derivation would
+        // list them as having access; the engine says None/OverrideDeny.
+        var (h, roles, users, seeded) = await SetupAsync();
+        await using var _ = h.Db;
+        var custom = await roles.CreateAsync(SeniorTech());
+
+        var granted = await users.CreateAsync(new CreateStaffUserInput("Granted User", "granted@msp.test", [seeded[RoleType.Technician]]));
+        await users.AssignRoleAsync(granted.Id, custom.Id);
+
+        var denied = await users.CreateAsync(new CreateStaffUserInput("Denied User", "denied@msp.test", [seeded[RoleType.Technician]]));
+        await users.AssignRoleAsync(denied.Id, custom.Id);
+        h.Db.UserPermissionOverrides.Add(new UserPermissionOverride
+        {
+            MspOrganizationId = Org, AppUserId = denied.Id,
+            PermissionKey = Permissions.TicketsViewAll, Effect = PermissionEffect.Deny,
+        });
+        await h.Db.SaveChangesAsync();
+
+        var none = await users.CreateAsync(new CreateStaffUserInput("No Access", "none@msp.test", [seeded[RoleType.Technician]]));
+
+        var rows = await roles.HoldersAsync(Permissions.TicketsViewAll);
+
+        var g = rows.Single(r => r.UserId == granted.Id);
+        g.Scope.Should().Be(PermissionScope.All);
+        g.Source.Should().Be("RoleGrant");
+        g.ViaRoles.Should().Contain("Senior Technician");
+
+        var d = rows.Single(r => r.UserId == denied.Id);
+        d.Source.Should().Be("OverrideDeny");
+        d.Scope.Should().Be(PermissionScope.None, "the deny must beat the role grant");
+        d.ViaRoles.Should().Contain("Senior Technician", "the via column still explains what the override overrode");
+
+        rows.Single(r => r.UserId == none.Id).Source.Should().Be("NoGrant");
+    }
+
+    [Fact]
+    public async Task Holders_refuses_an_unknown_permission_key()
+    {
+        var (h, roles, _, _) = await SetupAsync();
+        await using var _ = h.Db;
+
+        var act = () => roles.HoldersAsync("made.up.key");
+
+        await act.Should().ThrowAsync<ValidationFailedException>().WithMessage("*not a known permission*");
     }
 
     [Fact]

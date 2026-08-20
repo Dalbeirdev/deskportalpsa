@@ -166,6 +166,13 @@ public sealed record RoleDetailDto(
 
 public sealed record SaveRoleInput(string Name, IReadOnlyList<RoleGrantDto> Grants);
 
+/// <summary>One user's row on the org-wide Effective Permissions screen: their resolved access to
+/// ONE permission, with enough provenance to explain it — the resolved answer comes from the same
+/// engine enforcement uses, and ViaRoles names which of their roles grant the key at all.</summary>
+public sealed record UserEffectivePermissionDto(
+    Guid UserId, string DisplayName, string Email, string? PhotoUrl, bool IsActive,
+    PermissionScope Scope, string Source, string BoardAccessMode, IReadOnlyList<string> ViaRoles);
+
 /// <summary>
 /// SignInLinked distinguishes "can log in today" from "invited, binds on first login": a created
 /// user has no IdP subject until they first sign in and their verified email matches.

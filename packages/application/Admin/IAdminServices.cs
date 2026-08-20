@@ -99,6 +99,11 @@ public interface IRoleAdminService
     /// <summary>Custom roles only, and refused while any user still holds it — losing permissions
     /// as a side effect of someone else's cleanup is an outage, not a deletion.</summary>
     Task DeleteAsync(Guid roleId, CancellationToken ct = default);
+
+    /// <summary>Every staff user's EFFECTIVE access to one permission — the org-wide answer to
+    /// "who can do this?", resolved through the same engine enforcement consults (roles unioned,
+    /// overrides replacing), never re-derived from role rows alone.</summary>
+    Task<IReadOnlyList<UserEffectivePermissionDto>> HoldersAsync(string permissionKey, CancellationToken ct = default);
 }
 
 public interface IUserAdminService

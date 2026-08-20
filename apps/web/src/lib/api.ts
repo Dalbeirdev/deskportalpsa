@@ -264,6 +264,8 @@ export const api = {
     request(`/api/admin/roles/${id}`, RoleDetailSchema, { method: 'PUT', body: JSON.stringify(body) }),
   deleteRole: (id: string) =>
     request(`/api/admin/roles/${id}`, z.void(), { method: 'DELETE' }),
+  effectivePermissionHolders: (key: string) =>
+    request(`/api/admin/effective-permissions?key=${encodeURIComponent(key)}`, z.array(UserEffectivePermissionSchema)),
   staffDepartments: () => request('/api/admin/departments', z.array(DepartmentWithTeamsSchema)),
   staffBoards: () => request('/api/admin/boards', z.array(BoardOptionSchema)),
   permissionTemplates: () => request('/api/admin/permission-templates', z.array(PermissionTemplateOptionSchema)),
@@ -568,6 +570,13 @@ const RoleDetailSchema = z.object({
   userCount: z.number(), heldByCaller: z.boolean(), grants: z.array(RoleGrantSchema),
 });
 export type RoleDetail = z.infer<typeof RoleDetailSchema>;
+
+const UserEffectivePermissionSchema = z.object({
+  userId: z.string(), displayName: z.string(), email: z.string(), photoUrl: z.string().nullable(),
+  isActive: z.boolean(), scope: z.number(), source: z.string(), boardAccessMode: z.string(),
+  viaRoles: z.array(z.string()),
+});
+export type UserEffectivePermission = z.infer<typeof UserEffectivePermissionSchema>;
 
 // BoardAccessMode: All = 0, Selected = 1, None = 2.
 export const BoardAccessMode = { All: 0, Selected: 1, None: 2 } as const;

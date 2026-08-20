@@ -298,6 +298,14 @@ public sealed class AdminReadController(
     public async Task<IActionResult> DeleteRole([FromServices] IRoleAdminService roles, Guid id, CancellationToken ct)
     { await roles.DeleteAsync(id, ct); return NoContent(); }
 
+    /// <summary>§13 — every staff user's effective access to one permission. Key as a query param
+    /// because permission keys contain dots.</summary>
+    [HttpGet("effective-permissions")]
+    [RequirePermission(Permissions.RolesManage)]
+    public async Task<IActionResult> EffectivePermissionHolders(
+        [FromServices] IRoleAdminService roles, [FromQuery] string key, CancellationToken ct)
+        => Ok(await roles.HoldersAsync(key, ct));
+
     [HttpGet("departments")]
     [RequirePermission(Permissions.UsersManage)]
     public async Task<IActionResult> Departments(CancellationToken ct) => Ok(await users.DepartmentsAsync(ct));
