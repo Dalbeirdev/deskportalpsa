@@ -27,9 +27,15 @@ public sealed record TicketNoteDto(
     // Trailing + defaulted so existing construction sites are unaffected. False only ever reaches
     // STAFF readers — the client detail path filters internal notes out server-side.
     bool IsPublic = true,
-    // Set when this note IS a time entry's notes (imported as "te-{id}") — the UI pairs it with the
-    // live entry so the thread says whose time it was, how much, and whether it bills.
-    string? TimeEntryExternalId = null);
+    // Set when this note IS a time entry's notes (imported as "te-{id}") OR a reply that logged
+    // time — the UI pairs it with the live entry so the thread says whose time it was, how much,
+    // and whether it bills.
+    string? TimeEntryExternalId = null,
+    // Hours/billable carried directly for portal-logged entries, so the thread can state the time
+    // even before (or without) the live entry list loading. Null for provider-side te- notes,
+    // whose hours only the live PSA fetch knows.
+    decimal? TimeEntryHours = null,
+    bool? TimeEntryBillable = null);
 
 /// <summary>
 /// Ticket detail for the client portal. Contains ONLY public conversation — internal PSA notes

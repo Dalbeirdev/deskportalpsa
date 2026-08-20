@@ -269,7 +269,8 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
       }
       const hrs = parseFloat(replyHours);
       if (hrs > 0) {
-        try { await api.logTime(id, { hours: hrs, billable: replyBillable, notes: body }); }
+        // noteId links the entry to this reply, so the thread shows the hours on the reply itself.
+        try { await api.logTime(id, { hours: hrs, billable: replyBillable, notes: body, noteId: note.id }); }
         catch (e) { sideErrors.push(`the time entry failed${e instanceof Error && e.message ? ` — ${e.message}` : ''} (use the Log time panel to retry)`); }
       }
       if (replyStatus) {
@@ -668,46 +669,55 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
               <div className="space-y-4 px-5 py-4">
                 {convo.length === 0 && <p className="rounded-lg border border-dashed border-[var(--border)] p-4 text-sm text-[var(--muted)]">No public replies yet.</p>}
                 {convo.map((n) => {
-                  // Semantic coloring, not per-author rainbow: the box itself says what KIND of
-                  // post this is. Client messages neutral, staff replies brand-tinted, internal
-                  // notes amber, time entries blue — same palette as the badges they carry.
-                  const tone = n.timeEntryExternalId
+                  // Chat layout: the client's messages sit LEFT, everything from the MSP side sits
+                  // RIGHT — direction is readable before a single word is. Coloring stays semantic,
+                  // not per-author rainbow: client neutral, staff replies brand-tinted, internal
+                  // notes amber, internal time entries blue.
+                  const incoming = n.authoredByClient;
+                  const isTimeCard = !!n.timeEntryExternalId && !n.isPublic;
+                  const tone = isTimeCard
                     ? 'border-blue-200 bg-blue-50/60 dark:border-blue-900/50 dark:bg-blue-950/25'
                     : !n.isPublic
                       ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900/50 dark:bg-amber-950/25'
-                      : n.authoredByClient
+                      : incoming
                         ? 'border-[var(--border)] bg-[var(--bg)]'
                         : 'border-brand/25 bg-brand/5';
+                  // The time this note's work took, from the live entry when loaded, else from the
+                  // note itself (portal-logged replies carry their hours) — never fabricated.
+                  const te = n.timeEntryExternalId ? entries?.find((e) => e.externalId === n.timeEntryExternalId) : undefined;
+                  const teHours = te?.hours ?? n.timeEntryHours;
+                  const teBillable = te ? billableLabel(te.billableOption, te.billable)
+                    : n.timeEntryBillable == null ? null : n.timeEntryBillable ? 'Billable' : 'Do not bill';
                   return (
-                  <div key={n.id} className="flex gap-3">
-                    <span className="relative">
+                  <div key={n.id} className={`flex gap-3 ${incoming ? '' : 'flex-row-reverse'}`}>
+                    <span className="relative shrink-0">
                       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand text-xs font-semibold text-brand-fg">{initials(n.authorName)}</span>
                       <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[var(--surface)] bg-green-500" />
                     </span>
-                    <div className={`min-w-0 flex-1 rounded-lg border p-3 ${tone}`}>
-                      <div className="flex items-center justify-between gap-2">
+                    <div className={`min-w-0 max-w-[85%] rounded-lg border p-3 ${tone}`}>
+                      <div className="flex items-center justify-between gap-4">
                         <span className="flex flex-wrap items-center gap-2 text-sm">
                           <span className="font-semibold">{n.authorName}</span>
-                          <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${n.authoredByClient ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'}`}>{n.authoredByClient ? 'Client' : 'Technician'}</span>
-                          {!n.isPublic && !n.timeEntryExternalId && (
+                          <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${incoming ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'}`}>{incoming ? 'Client' : 'Technician'}</span>
+                          {!n.isPublic && !isTimeCard && (
                             <span title="Internal note from the PSA — never shown to the client"
                               className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">Internal</span>
                           )}
-                          {n.timeEntryExternalId && (() => {
-                            // The entry and its note share one box: the header states the time
-                            // this work took and whether it bills, the body below is its note.
-                            const te = entries?.find((e) => e.externalId === n.timeEntryExternalId);
-                            return (
-                              <span title={`Time entry #${n.timeEntryExternalId} — internal, never shown to the client`}
-                                className="inline-flex items-center gap-1 rounded bg-blue-100 px-1.5 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-                                <Clock size={11} />
-                                {te ? `Time entry · ${fmtDuration(te.hours)} · ${billableLabel(te.billableOption, te.billable)}` : 'Time entry'}
-                              </span>
-                            );
-                          })()}
+                          {isTimeCard && (
+                            <span title={`Time entry #${n.timeEntryExternalId} — internal, never shown to the client`}
+                              className="rounded bg-blue-100 px-1.5 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">Time entry</span>
+                          )}
                         </span>
                         <span className="shrink-0 text-xs text-[var(--faint)]">{fmt(n.createdAt, true)}</span>
                       </div>
+                      {n.timeEntryExternalId && (
+                        // The one question a time-and-materials reader always has, answered in the
+                        // note itself: how long did this take, and does it bill.
+                        <div className="mt-1.5 flex items-center gap-1.5 text-sm font-semibold text-blue-700 dark:text-blue-300">
+                          <Clock size={14} />
+                          {teHours != null ? fmtDuration(teHours) : 'Time logged'}{teBillable ? ` · ${teBillable}` : ''}
+                        </div>
+                      )}
                       <NoteBody body={n.body} />
                       {filesByNote.get(n.id)?.length ? (
                         <ul className="mt-2 flex flex-wrap gap-2">

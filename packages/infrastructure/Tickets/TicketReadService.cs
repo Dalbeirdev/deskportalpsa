@@ -89,6 +89,17 @@ public sealed class TicketReadService(DeskDbContext db, ITicketScopeQuery scopeQ
             .FirstOrDefaultAsync(t => t.Id == ticketId, ct);
         if (ticket is null) return null; // not found OR not permitted — indistinguishable to the client
 
+        // Portal entries logged WITH a reply: keyed by note so the thread can state the time on
+        // the reply itself. Provider-side te- notes are paired by external id instead (below).
+        // STAFF only — hours are billing data; the client detail never carries time pairing, the
+        // same way the client never reaches the time panel.
+        var entriesByNote = includeInternal
+            ? (await db.TicketTimeEntries.AsNoTracking()
+                .Where(e => e.TicketId == ticketId && e.NoteId != null)
+                .ToListAsync(ct))
+                .ToDictionary(e => e.NoteId!.Value)
+            : [];
+
         var customerName = await db.ClientCompanies
             .AsNoTracking()
             .Where(c => c.Id == ticket.ClientCompanyId)
@@ -121,8 +132,15 @@ public sealed class TicketReadService(DeskDbContext db, ITicketScopeQuery scopeQ
             Conversation: ticket.Notes
                 .Where(n => includeInternal || n.IsPublic) // clients NEVER receive internal notes
                 .OrderBy(n => n.NoteCreatedAt)
-                .Select(n => new TicketNoteDto(n.Id, n.AuthorName, n.AuthoredByClient, n.Body, n.NoteCreatedAt, n.IsPublic,
-                    n.ExternalNoteId != null && n.ExternalNoteId.StartsWith("te-") ? n.ExternalNoteId[3..] : null))
+                .Select(n =>
+                {
+                    var te = entriesByNote.GetValueOrDefault(n.Id);
+                    return new TicketNoteDto(n.Id, n.AuthorName, n.AuthoredByClient, n.Body, n.NoteCreatedAt, n.IsPublic,
+                        n.ExternalNoteId != null && n.ExternalNoteId.StartsWith("te-")
+                            ? n.ExternalNoteId[3..]
+                            : te?.ExternalEntryId ?? te?.Id.ToString(),
+                        te?.Hours, te?.Billable);
+                })
                 .ToList(),
             Attachments: ticket.Attachments
                 .OrderBy(a => a.UploadedAt)

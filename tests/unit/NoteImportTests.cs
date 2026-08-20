@@ -147,6 +147,53 @@ public class NoteImportTests
     }
 
     [Fact]
+    public async Task A_reply_that_logged_time_carries_its_hours_for_staff_but_never_for_the_client()
+    {
+        // "Reply + 0.5h" in one send: the PSA keeps the note and the entry as unrelated records,
+        // so the link lives here (TicketTimeEntry.NoteId) and the STAFF thread states the hours on
+        // the reply itself. The CLIENT path must stay silent about time — hours are billing data,
+        // and clients don't reach the time panel either.
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString());
+        var connector = new StubConnector();
+        connector.Tickets.Add(Incoming("7809"));
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+        var ticket = await db.Tickets.SingleAsync();
+
+        var note = new TicketNote
+        {
+            MspOrganizationId = Org, TicketId = ticket.Id, ExternalNoteId = "801",
+            AuthorName = "Jane Tech", AuthoredByClient = false, Body = "Patched the server.",
+            IsPublic = true, NoteCreatedAt = clock.GetUtcNow(),
+        };
+        db.TicketNotes.Add(note);
+        db.TicketTimeEntries.Add(new TicketTimeEntry
+        {
+            MspOrganizationId = Org, TicketId = ticket.Id, NoteId = note.Id,
+            Hours = 0.5m, Billable = true, ExternalEntryId = "600",
+            Source = TimeEntrySource.Portal, SyncStatus = TimeEntrySyncStatus.Synced,
+            EntryDate = clock.GetUtcNow(),
+        });
+        await db.SaveChangesAsync();
+
+        var reads = new Desk.Infrastructure.Tickets.TicketReadService(
+            db, new NoopTicketScopeQuery(), new TestCurrentUser(Org, userId: Guid.NewGuid()));
+
+        var staffNote = (await reads.GetDetailForStaffAsync(ticket.Id))!
+            .Conversation.Single(n => n.Body == "Patched the server.");
+        staffNote.TimeEntryExternalId.Should().Be("600");
+        staffNote.TimeEntryHours.Should().Be(0.5m);
+        staffNote.TimeEntryBillable.Should().Be(true);
+
+        var company = await db.ClientCompanies.SingleAsync();
+        var clientNote = (await reads.GetDetailAsync(
+                new Desk.Application.Tickets.ClientAccess(Org, company.Id, Guid.NewGuid(), IsCompanyAdministrator: true), ticket.Id))!
+            .Conversation.Single(n => n.Body == "Patched the server.");
+        clientNote.TimeEntryExternalId.Should().BeNull("hours are billing data — the client thread stays silent about time");
+        clientNote.TimeEntryHours.Should().BeNull();
+    }
+
+    [Fact]
     public async Task Provider_notes_are_imported_once_and_keep_their_author()
     {
         var dbName = Guid.NewGuid().ToString();

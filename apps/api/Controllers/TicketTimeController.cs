@@ -114,6 +114,8 @@ public sealed class TicketTimeController(
         {
             MspOrganizationId = ticket.MspOrganizationId,
             TicketId = ticket.Id,
+            NoteId = req.NoteId is { } nid && await db.TicketNotes.AnyAsync(n => n.Id == nid && n.TicketId == id, ct)
+                ? nid : null,
             Hours = req.Hours,
             Billable = billable == BillableOption.Billable,
             Notes = req.Notes,
@@ -300,7 +302,11 @@ public sealed class TicketTimeController(
         string? Billable,
         [StringLength(2000)] string? Notes,
         string? WorkType,
-        string? WorkRole);
+        string? WorkRole,
+        // The conversation note this time was logged with (reply + time in one send), so the
+        // thread can show the hours on the reply itself. Silently dropped if it isn't a note
+        // on THIS ticket — a bad link is worse than no link.
+        Guid? NoteId = null);
 
     public sealed record UpdateTimeRequest(
         [Range(0.01, 1000)] decimal? Hours,
