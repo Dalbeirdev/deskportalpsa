@@ -9,7 +9,7 @@ import {
   Send, ArrowUpDown, Lock, Monitor, Wifi, Mail, KeyRound, Cpu, Ticket,
   Copy, RefreshCw, Download, Clock, Trash2, Check, X, ClipboardList, UserCog, ExternalLink} from 'lucide-react';
 import { useTimer } from '@/components/TimerProvider';
-import { NoteBody } from '@/components/NoteBody';
+import { NoteBody, notePreview } from '@/components/NoteBody';
 import { api, type AssigneeOptions } from '@/lib/api';
 import type { TicketDetail } from '@/lib/types';
 
@@ -585,12 +585,25 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                             </span>
                             <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium ${e.billable ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{billableLabel(e.billableOption, e.billable)}</span>
                             {e.workType && <span className="hidden shrink-0 rounded bg-[var(--bg)] px-1.5 py-0.5 text-[11px] text-[var(--muted)] sm:inline">{e.workType}</span>}
-                            <button type="button"
-                              onClick={() => setExpandedNotes((p) => { const n = new Set(p); if (n.has(e.externalId)) n.delete(e.externalId); else n.add(e.externalId); return n; })}
-                              title={expandedNotes.has(e.externalId) ? 'Collapse notes' : 'Show full notes'}
-                              className={`min-w-0 flex-1 text-left text-sm text-[var(--muted)] hover:text-[var(--fg)] ${expandedNotes.has(e.externalId) ? 'whitespace-pre-wrap break-words' : 'truncate'}`}>
-                              {e.notes || '—'}
-                            </button>
+                            {expandedNotes.has(e.externalId) ? (
+                              // Expanded notes go through the same renderer as the conversation —
+                              // raw here, a CW note is a wall of 500-char pre-signed URLs.
+                              <div className="min-w-0 flex-1">
+                                <button type="button"
+                                  onClick={() => setExpandedNotes((p) => { const n = new Set(p); n.delete(e.externalId); return n; })}
+                                  className="text-xs font-medium text-brand hover:underline">
+                                  Collapse notes
+                                </button>
+                                <NoteBody body={e.notes ?? ''} />
+                              </div>
+                            ) : (
+                              <button type="button"
+                                onClick={() => setExpandedNotes((p) => { const n = new Set(p); n.add(e.externalId); return n; })}
+                                title="Show full notes"
+                                className="min-w-0 flex-1 truncate text-left text-sm text-[var(--muted)] hover:text-[var(--fg)]">
+                                {e.notes ? notePreview(e.notes) : '—'}
+                              </button>
+                            )}
                             {e.technicianName && <span className="hidden shrink-0 text-xs text-[var(--muted)] md:inline">{e.technicianName}</span>}
                             {/* Which system logged it: a technician's own entry reads differently from
                                 one raised through the portal, and only one of them can go wrong here. */}
