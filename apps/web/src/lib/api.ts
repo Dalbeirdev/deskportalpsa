@@ -256,6 +256,14 @@ export const api = {
   },
   staffUser: (id: string) => request(`/api/admin/users/${id}`, UserSummarySchema),
   staffRoles: () => request('/api/admin/roles', z.array(RoleOptionSchema)),
+  rolesCatalog: () => request('/api/admin/roles/catalog', z.array(PermissionDefinitionSchema)),
+  rolesDetailed: () => request('/api/admin/roles/detailed', z.array(RoleDetailSchema)),
+  createRole: (body: { name: string; grants: { permissionKey: string; scope: number }[] }) =>
+    request('/api/admin/roles', RoleDetailSchema, { method: 'POST', body: JSON.stringify(body) }),
+  updateRole: (id: string, body: { name: string; grants: { permissionKey: string; scope: number }[] }) =>
+    request(`/api/admin/roles/${id}`, RoleDetailSchema, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteRole: (id: string) =>
+    request(`/api/admin/roles/${id}`, z.void(), { method: 'DELETE' }),
   staffDepartments: () => request('/api/admin/departments', z.array(DepartmentWithTeamsSchema)),
   staffBoards: () => request('/api/admin/boards', z.array(BoardOptionSchema)),
   permissionTemplates: () => request('/api/admin/permission-templates', z.array(PermissionTemplateOptionSchema)),
@@ -545,6 +553,21 @@ const DepartmentManageSchema = z.object({
   sortOrder: z.number(), teams: z.array(TeamManageSchema), primaryUserCount: z.number(), secondaryUserCount: z.number(),
 });
 export type DepartmentManage = z.infer<typeof DepartmentManageSchema>;
+
+const PermissionDefinitionSchema = z.object({
+  key: z.string(), module: z.string(), displayName: z.string(),
+  supportedScopes: z.array(z.number()), defaultScope: z.number(), isBoardAware: z.boolean(),
+});
+export type PermissionDefinition = z.infer<typeof PermissionDefinitionSchema>;
+
+const RoleGrantSchema = z.object({ permissionKey: z.string(), scope: z.number() });
+export type RoleGrant = z.infer<typeof RoleGrantSchema>;
+
+const RoleDetailSchema = z.object({
+  id: z.string(), name: z.string(), isSystemRole: z.boolean(), builtInType: z.number().nullable(),
+  userCount: z.number(), heldByCaller: z.boolean(), grants: z.array(RoleGrantSchema),
+});
+export type RoleDetail = z.infer<typeof RoleDetailSchema>;
 
 // BoardAccessMode: All = 0, Selected = 1, None = 2.
 export const BoardAccessMode = { All: 0, Selected: 1, None: 2 } as const;

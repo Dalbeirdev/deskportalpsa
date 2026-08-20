@@ -80,6 +80,27 @@ public interface IAuditQueryService
         int take = 100, string? action = null, string? entityId = null, CancellationToken ct = default);
 }
 
+/// <summary>
+/// The Roles &amp; Permissions module (§6): read the permission catalogue, see every staff role's
+/// grants, and create/edit/delete CUSTOM roles for this tenant. Built-in roles are read-only here —
+/// they are shared rows across every tenant, so editing one would silently change other
+/// organizations' access (and could lock this tenant's own administrators out).
+/// </summary>
+public interface IRoleAdminService
+{
+    IReadOnlyList<PermissionDefinitionDto> Catalog();
+    Task<IReadOnlyList<RoleDetailDto>> ListAsync(CancellationToken ct = default);
+    Task<RoleDetailDto> CreateAsync(SaveRoleInput input, CancellationToken ct = default);
+
+    /// <summary>Custom roles only. Refused for a role the CALLER holds — editing a role you hold is
+    /// editing your own permissions, the same self-escalation the per-user guards already block.</summary>
+    Task<RoleDetailDto> UpdateAsync(Guid roleId, SaveRoleInput input, CancellationToken ct = default);
+
+    /// <summary>Custom roles only, and refused while any user still holds it — losing permissions
+    /// as a side effect of someone else's cleanup is an outage, not a deletion.</summary>
+    Task DeleteAsync(Guid roleId, CancellationToken ct = default);
+}
+
 public interface IUserAdminService
 {
     Task<UserListResultDto> ListAsync(UserListQuery query, CancellationToken ct = default);
