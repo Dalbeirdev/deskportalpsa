@@ -15,7 +15,8 @@ namespace Desk.Infrastructure.Admin;
 /// tenant's own custom roles — client and platform roles are neither shown nor manageable here.
 /// </summary>
 public sealed class RoleAdminService(
-    DeskDbContext db, IAuditWriter audit, ITenantContext tenant, ICurrentUser currentUser) : IRoleAdminService
+    DeskDbContext db, IAuditWriter audit, ITenantContext tenant, ICurrentUser currentUser,
+    Desk.Application.Authorization.IEffectivePermissionService permissions) : IRoleAdminService
 {
     private static readonly RoleType[] StaffRoleTypes =
         [RoleType.MspAdministrator, RoleType.Manager, RoleType.Technician, RoleType.Auditor];
@@ -107,6 +108,41 @@ public sealed class RoleAdminService(
         db.Roles.Remove(role);
         await db.SaveChangesAsync(ct);
         await audit.WriteAsync("role.deleted", "Role", roleId.ToString(), new { name }, ct);
+    }
+
+    public async Task<IReadOnlyList<UserEffectivePermissionDto>> HoldersAsync(string permissionKey, CancellationToken ct = default)
+    {
+        if (!PermissionCatalog.TryGet(permissionKey, out _))
+            throw new ValidationFailedException($"'{permissionKey}' is not a known permission.");
+
+        var users = await db.AppUsers.AsNoTracking()
+            .Where(u => u.MspOrganizationId == tenant.OrganizationId)
+            .OrderBy(u => u.DisplayName)
+            .ToListAsync(ct);
+        var userIds = users.Select(u => u.Id).ToList();
+
+        // Which of each user's roles grant this key at all — the "via" column. The RESOLVED answer
+        // below still comes from the engine; this only names the contributing roles.
+        var viaRoles = (await db.UserRoles.AsNoTracking()
+                .Where(ur => userIds.Contains(ur.AppUserId))
+                .Join(db.Roles.AsNoTracking().Where(r => r.Permissions.Any(p => p.PermissionKey == permissionKey)),
+                    ur => ur.RoleId, r => r.Id, (ur, r) => new { ur.AppUserId, r.Name })
+                .ToListAsync(ct))
+            .GroupBy(x => x.AppUserId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)g.Select(x => x.Name).Order().ToList());
+
+        var result = new List<UserEffectivePermissionDto>(users.Count);
+        foreach (var u in users)
+        {
+            // Per-user resolution, not a hand-rolled bulk query: the engine is the single place the
+            // union/override rules live, and this screen exists to show ITS answer.
+            var eff = await permissions.ResolveAsync(u.Id, permissionKey, ct);
+            result.Add(new UserEffectivePermissionDto(
+                u.Id, u.DisplayName, u.Email, u.PhotoUrl, u.IsActive,
+                eff.Scope, eff.Source.ToString(), eff.BoardMode.ToString(),
+                viaRoles.GetValueOrDefault(u.Id, [])));
+        }
+        return result;
     }
 
     /// <summary>The staff built-ins plus this tenant's custom roles — nothing else exists here.</summary>
