@@ -23,6 +23,8 @@ export const TicketNoteSchema = z.object({
   createdAt: z.string(),
   // Staff-only detail responses carry false for internal notes; client responses never contain them.
   isPublic: z.boolean().default(true),
+  // Set when the note is a time entry's notes — pairs it with the live entry list.
+  timeEntryExternalId: z.string().nullable().default(null),
 });
 
 export const AttachmentSchema = z.object({

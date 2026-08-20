@@ -138,6 +138,12 @@ public class NoteImportTests
         teNote.Body.Should().StartWith("1. Like", "the FULL text must arrive, not a truncation");
         (await db.TicketNotes.AnyAsync(n => n.ExternalNoteId == "te-501"))
             .Should().BeFalse("the portal-logged entry's text is already in the thread as the reply");
+
+        // And the staff detail names the entry the note came from, so the UI can pair them.
+        var reads = new Desk.Infrastructure.Tickets.TicketReadService(
+            db, new NoopTicketScopeQuery(), new TestCurrentUser(Org, userId: Guid.NewGuid()));
+        var staff = await reads.GetDetailForStaffAsync(ticket.Id);
+        staff!.Conversation.Single(n => n.Body.StartsWith("1. Like")).TimeEntryExternalId.Should().Be("500");
     }
 
     [Fact]
