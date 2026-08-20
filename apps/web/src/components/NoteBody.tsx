@@ -118,11 +118,11 @@ export function NoteBody({ body }: { body: string }) {
 
   return (
     <div className="mt-1 text-sm">
-      <div className={`min-w-0 break-words ${long && !expanded ? 'relative max-h-52 overflow-hidden' : ''}`}>
+      {/* The clipped preview fades out via a mask, not a painted gradient — notes sit on
+          differently-colored cards (internal amber, time blue…) and a gradient would have to
+          guess the background. */}
+      <div className={`min-w-0 break-words ${long && !expanded ? 'max-h-52 overflow-hidden [mask-image:linear-gradient(180deg,#000_calc(100%-3rem),transparent)]' : ''}`}>
         {body.split('\n').map((line, i) => renderLine(line, i))}
-        {long && !expanded && (
-          <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-[var(--surface)] to-transparent" />
-        )}
       </div>
       {long && (
         <button type="button" onClick={() => setExpanded((v) => !v)}

@@ -667,30 +667,41 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
 
               <div className="space-y-4 px-5 py-4">
                 {convo.length === 0 && <p className="rounded-lg border border-dashed border-[var(--border)] p-4 text-sm text-[var(--muted)]">No public replies yet.</p>}
-                {convo.map((n) => (
+                {convo.map((n) => {
+                  // Semantic coloring, not per-author rainbow: the box itself says what KIND of
+                  // post this is. Client messages neutral, staff replies brand-tinted, internal
+                  // notes amber, time entries blue — same palette as the badges they carry.
+                  const tone = n.timeEntryExternalId
+                    ? 'border-blue-200 bg-blue-50/60 dark:border-blue-900/50 dark:bg-blue-950/25'
+                    : !n.isPublic
+                      ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900/50 dark:bg-amber-950/25'
+                      : n.authoredByClient
+                        ? 'border-[var(--border)] bg-[var(--bg)]'
+                        : 'border-brand/25 bg-brand/5';
+                  return (
                   <div key={n.id} className="flex gap-3">
                     <span className="relative">
                       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand text-xs font-semibold text-brand-fg">{initials(n.authorName)}</span>
                       <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[var(--surface)] bg-green-500" />
                     </span>
-                    <div className="min-w-0 flex-1">
+                    <div className={`min-w-0 flex-1 rounded-lg border p-3 ${tone}`}>
                       <div className="flex items-center justify-between gap-2">
-                        <span className="flex items-center gap-2 text-sm">
+                        <span className="flex flex-wrap items-center gap-2 text-sm">
                           <span className="font-semibold">{n.authorName}</span>
                           <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${n.authoredByClient ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'}`}>{n.authoredByClient ? 'Client' : 'Technician'}</span>
-                          {!n.isPublic && (
+                          {!n.isPublic && !n.timeEntryExternalId && (
                             <span title="Internal note from the PSA — never shown to the client"
                               className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">Internal</span>
                           )}
                           {n.timeEntryExternalId && (() => {
-                            // Pair the note with its live time entry so the thread itself says how
-                            // much time this work took and whether it bills.
+                            // The entry and its note share one box: the header states the time
+                            // this work took and whether it bills, the body below is its note.
                             const te = entries?.find((e) => e.externalId === n.timeEntryExternalId);
                             return (
-                              <span title={`This note was written on time entry #${n.timeEntryExternalId}`}
+                              <span title={`Time entry #${n.timeEntryExternalId} — internal, never shown to the client`}
                                 className="inline-flex items-center gap-1 rounded bg-blue-100 px-1.5 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
                                 <Clock size={11} />
-                                {te ? `${fmtDuration(te.hours)} · ${billableLabel(te.billableOption, te.billable)}` : 'Time entry'}
+                                {te ? `Time entry · ${fmtDuration(te.hours)} · ${billableLabel(te.billableOption, te.billable)}` : 'Time entry'}
                               </span>
                             );
                           })()}
@@ -709,7 +720,8 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                       ) : null}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
 
                 {/* Composer */}
                 {/* No formatting toolbar: the Bold/emoji/link buttons it used to show were wired to
