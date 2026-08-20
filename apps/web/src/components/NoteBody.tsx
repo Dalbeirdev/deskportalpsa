@@ -32,6 +32,18 @@ function shortUrl(url: string): string {
   }
 }
 
+/** One-line plain-text teaser for truncated previews: markdown stripped, images named, URLs shortened. */
+export function notePreview(body: string): string {
+  return body
+    .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_m: string, alt: string) => `[${alt || 'image'}]`)
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '$1')
+    .replace(/\*\*([^*\n]+)\*\*/g, '$1')
+    .replace(/`([^`\n]+)`/g, '$1')
+    .replace(/https?:\/\/[^\s<>()"']+/g, (u: string) => shortUrl(u))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function InlineImage({ src, alt }: { src: string; alt: string }) {
   const [failed, setFailed] = useState(false);
   if (failed) {
