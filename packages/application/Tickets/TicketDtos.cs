@@ -26,7 +26,10 @@ public sealed record TicketNoteDto(
     DateTimeOffset CreatedAt,
     // Trailing + defaulted so existing construction sites are unaffected. False only ever reaches
     // STAFF readers — the client detail path filters internal notes out server-side.
-    bool IsPublic = true);
+    bool IsPublic = true,
+    // Set when this note IS a time entry's notes (imported as "te-{id}") — the UI pairs it with the
+    // live entry so the thread says whose time it was, how much, and whether it bills.
+    string? TimeEntryExternalId = null);
 
 /// <summary>
 /// Ticket detail for the client portal. Contains ONLY public conversation — internal PSA notes

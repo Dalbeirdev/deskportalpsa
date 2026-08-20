@@ -121,7 +121,8 @@ public sealed class TicketReadService(DeskDbContext db, ITicketScopeQuery scopeQ
             Conversation: ticket.Notes
                 .Where(n => includeInternal || n.IsPublic) // clients NEVER receive internal notes
                 .OrderBy(n => n.NoteCreatedAt)
-                .Select(n => new TicketNoteDto(n.Id, n.AuthorName, n.AuthoredByClient, n.Body, n.NoteCreatedAt, n.IsPublic))
+                .Select(n => new TicketNoteDto(n.Id, n.AuthorName, n.AuthoredByClient, n.Body, n.NoteCreatedAt, n.IsPublic,
+                    n.ExternalNoteId != null && n.ExternalNoteId.StartsWith("te-") ? n.ExternalNoteId[3..] : null))
                 .ToList(),
             Attachments: ticket.Attachments
                 .OrderBy(a => a.UploadedAt)

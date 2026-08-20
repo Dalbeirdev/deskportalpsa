@@ -658,6 +658,18 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                             <span title="Internal note from the PSA — never shown to the client"
                               className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">Internal</span>
                           )}
+                          {n.timeEntryExternalId && (() => {
+                            // Pair the note with its live time entry so the thread itself says how
+                            // much time this work took and whether it bills.
+                            const te = entries?.find((e) => e.externalId === n.timeEntryExternalId);
+                            return (
+                              <span title={`This note was written on time entry #${n.timeEntryExternalId}`}
+                                className="inline-flex items-center gap-1 rounded bg-blue-100 px-1.5 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                                <Clock size={11} />
+                                {te ? `${fmtDuration(te.hours)} · ${billableLabel(te.billableOption, te.billable)}` : 'Time entry'}
+                              </span>
+                            );
+                          })()}
                         </span>
                         <span className="shrink-0 text-xs text-[var(--faint)]">{fmt(n.createdAt, true)}</span>
                       </div>
