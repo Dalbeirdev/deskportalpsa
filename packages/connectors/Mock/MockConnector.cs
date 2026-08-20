@@ -127,10 +127,10 @@ public sealed class MockConnector : IServiceManagementConnector
         return Task.FromResult(new UpdateTicketResult(true, null));
     }
 
-    public Task<IReadOnlyList<UnifiedTicketNote>> GetPublicNotesAsync(string ticketId, CancellationToken ct = default)
+    public Task<IReadOnlyList<UnifiedTicketNote>> GetNotesAsync(string ticketId, CancellationToken ct = default)
     {
         Guard();
-        var list = _notes.GetValueOrDefault(ticketId, []).Where(n => n.IsPublic).ToList();
+        var list = _notes.GetValueOrDefault(ticketId, []).ToList(); // all notes; IsPublic marks visibility
         return Task.FromResult<IReadOnlyList<UnifiedTicketNote>>(list);
     }
 

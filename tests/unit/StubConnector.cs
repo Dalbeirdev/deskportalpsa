@@ -70,7 +70,7 @@ public sealed class StubConnector(ProviderType provider = ProviderType.AutotaskP
     public Task<PaginatedResult<UnifiedTicket>> GetTicketsAsync(TicketFilter filter, CancellationToken ct = default)
         => Task.FromResult(new PaginatedResult<UnifiedTicket>(Tickets, null, false));
 
-    public Task<IReadOnlyList<UnifiedTicketNote>> GetPublicNotesAsync(string ticketId, CancellationToken ct = default)
+    public Task<IReadOnlyList<UnifiedTicketNote>> GetNotesAsync(string ticketId, CancellationToken ct = default)
     {
         NoteReads++;
         if (NoteReadFailure is not null) throw NoteReadFailure;

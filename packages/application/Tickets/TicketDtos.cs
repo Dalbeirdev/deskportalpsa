@@ -23,7 +23,10 @@ public sealed record TicketNoteDto(
     string AuthorName,
     bool AuthoredByClient,
     string Body,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    // Trailing + defaulted so existing construction sites are unaffected. False only ever reaches
+    // STAFF readers — the client detail path filters internal notes out server-side.
+    bool IsPublic = true);
 
 /// <summary>
 /// Ticket detail for the client portal. Contains ONLY public conversation — internal PSA notes

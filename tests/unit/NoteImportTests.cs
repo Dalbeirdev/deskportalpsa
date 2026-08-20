@@ -17,7 +17,8 @@ namespace Desk.Tests.Unit;
 
 /// <summary>
 /// Inbound conversation sync: provider notes must reach the portal thread exactly once, keep their
-/// real author, and never carry a provider-side internal note into a customer-visible conversation.
+/// real author, and preserve the provider's visibility flag — internal notes ARE stored (staff see
+/// the whole thread) but marked IsPublic=false, and the client read path filters them at read time.
 /// </summary>
 public class NoteImportTests
 {
@@ -55,6 +56,45 @@ public class NoteImportTests
 
     private static UnifiedTicketNote Note(string id, string author, string body, DateTimeOffset at) =>
         new(id, author, body, IsPublic: true, at);
+
+    [Fact]
+    public async Task An_internal_provider_note_is_stored_marked_internal_and_hidden_from_clients_but_not_staff()
+    {
+        // The live CWM finding this pins: a technician's rich internal note in ConnectWise never
+        // appeared in the portal, because the connector used to drop internal notes before sync.
+        // Now it must arrive with IsPublic=false, show for STAFF, and stay invisible to the CLIENT.
+        var dbName = Guid.NewGuid().ToString();
+        var clock = new TestClock();
+        await using var db = await SeedAsync(dbName);
+        var connector = new StubConnector();
+        connector.Tickets.Add(Incoming("7809"));
+        connector.Notes["7809"] =
+        [
+            Note("101", "Jane Tech", "Public reply.", clock.GetUtcNow()),
+            new UnifiedTicketNote("102", "Jane Tech", "Internal analysis: password was expired.", IsPublic: false, clock.GetUtcNow().AddMinutes(1)),
+        ];
+
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        var stored = await db.TicketNotes.OrderBy(n => n.NoteCreatedAt).ToListAsync();
+        stored.Should().HaveCount(2);
+        stored[1].IsPublic.Should().BeFalse("the provider's internal flag must survive the sync");
+
+        // Read-time enforcement, both directions — not just the direction that happens to pass.
+        var ticket = await db.Tickets.SingleAsync();
+        var company = await db.ClientCompanies.SingleAsync();
+        // Staff resolution needs a linked AppUser id — a caller without one sees nothing by design.
+        var reads = new Desk.Infrastructure.Tickets.TicketReadService(db, new NoopTicketScopeQuery(), new TestCurrentUser(Org, userId: Guid.NewGuid()));
+
+        var staff = await reads.GetDetailForStaffAsync(ticket.Id);
+        staff!.Conversation.Should().HaveCount(2, "staff see the whole thread");
+        staff.Conversation.Should().ContainSingle(n => !n.IsPublic && n.Body.StartsWith("Internal analysis"));
+
+        var client = await reads.GetDetailAsync(
+            new Desk.Application.Tickets.ClientAccess(Org, company.Id, Guid.NewGuid(), IsCompanyAdministrator: true), ticket.Id);
+        client!.Conversation.Should().ContainSingle("clients receive only the public note")
+            .Which.Body.Should().Be("Public reply.");
+    }
 
     [Fact]
     public async Task Provider_notes_are_imported_once_and_keep_their_author()
