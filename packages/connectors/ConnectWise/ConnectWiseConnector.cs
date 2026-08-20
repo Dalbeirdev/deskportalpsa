@@ -189,13 +189,17 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         return new UpdateTicketResult(true, null);
     }
 
-    public async Task<IReadOnlyList<UnifiedTicketNote>> GetPublicNotesAsync(string ticketId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<UnifiedTicketNote>> GetNotesAsync(string ticketId, CancellationToken ct = default)
     {
         var notes = await GetListAsync<CwTicketNote>($"service/tickets/{ticketId}/notes", new() { ["pageSize"] = "1000" }, ct);
-        return notes.Where(n => !n.InternalAnalysisFlag)
+        // ALL notes, internal included — visibility is a per-reader decision the portal makes at
+        // read time (staff see internal, clients never do), not something to pre-filter here where
+        // it silently hides half the thread from technicians.
+        return notes
             .Select(n => new UnifiedTicketNote(
                 // Empty author = provider-generated note; the sync layer treats that as a system note.
-                n.Id.ToString(), n.Member?.Name ?? n.Contact?.Name ?? "", n.Text ?? "", IsPublic: true, n.DateCreated ?? clock.GetUtcNow()))
+                n.Id.ToString(), n.Member?.Name ?? n.Contact?.Name ?? "", n.Text ?? "",
+                IsPublic: !n.InternalAnalysisFlag, n.DateCreated ?? clock.GetUtcNow()))
             .ToList();
     }
 

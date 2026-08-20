@@ -21,6 +21,8 @@ export const TicketNoteSchema = z.object({
   authoredByClient: z.boolean(),
   body: z.string(),
   createdAt: z.string(),
+  // Staff-only detail responses carry false for internal notes; client responses never contain them.
+  isPublic: z.boolean().default(true),
 });
 
 export const AttachmentSchema = z.object({

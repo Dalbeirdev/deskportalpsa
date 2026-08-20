@@ -206,6 +206,8 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const [workType, setWorkType] = useState('');
   const [workRole, setWorkRole] = useState('');
   const [editEntry, setEditEntry] = useState<{ id: string; hours: string; notes: string } | null>(null);
+  // Which entries' notes are expanded — a long CW note clipped to one line was unreadable with no way to open it.
+  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const timer = useTimer();
   function applyTimer() {
     const rounded = Math.max(0.25, Math.round((timer.seconds / 3600) / 0.25) * 0.25); // nearest 0.25h, min 15 min
@@ -571,7 +573,12 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                             </span>
                             <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium ${e.billable ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{billableLabel(e.billableOption, e.billable)}</span>
                             {e.workType && <span className="hidden shrink-0 rounded bg-[var(--bg)] px-1.5 py-0.5 text-[11px] text-[var(--muted)] sm:inline">{e.workType}</span>}
-                            <span className="min-w-0 flex-1 truncate text-sm text-[var(--muted)]">{e.notes || '—'}</span>
+                            <button type="button"
+                              onClick={() => setExpandedNotes((p) => { const n = new Set(p); if (n.has(e.externalId)) n.delete(e.externalId); else n.add(e.externalId); return n; })}
+                              title={expandedNotes.has(e.externalId) ? 'Collapse notes' : 'Show full notes'}
+                              className={`min-w-0 flex-1 text-left text-sm text-[var(--muted)] hover:text-[var(--fg)] ${expandedNotes.has(e.externalId) ? 'whitespace-pre-wrap break-words' : 'truncate'}`}>
+                              {e.notes || '—'}
+                            </button>
                             {e.technicianName && <span className="hidden shrink-0 text-xs text-[var(--muted)] md:inline">{e.technicianName}</span>}
                             {/* Which system logged it: a technician's own entry reads differently from
                                 one raised through the portal, and only one of them can go wrong here. */}
@@ -646,6 +653,10 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                         <span className="flex items-center gap-2 text-sm">
                           <span className="font-semibold">{n.authorName}</span>
                           <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${n.authoredByClient ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'}`}>{n.authoredByClient ? 'Client' : 'Technician'}</span>
+                          {!n.isPublic && (
+                            <span title="Internal note from the PSA — never shown to the client"
+                              className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">Internal</span>
+                          )}
                         </span>
                         <span className="shrink-0 text-xs text-[var(--faint)]">{fmt(n.createdAt, true)}</span>
                       </div>

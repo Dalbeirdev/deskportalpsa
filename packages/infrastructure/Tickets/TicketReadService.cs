@@ -65,7 +65,7 @@ public sealed class TicketReadService(DeskDbContext db, ITicketScopeQuery scopeQ
             : db.Tickets.Where(_ => false);
 
     public Task<TicketDetailDto?> GetDetailAsync(ClientAccess access, Guid ticketId, CancellationToken ct = default)
-        => DetailAsync(t => Visible(access), ticketId, ct);
+        => DetailAsync(t => Visible(access), ticketId, includeInternal: false, ct);
 
     /// <summary>Staff detail, narrowed to the caller's effective TicketsViewAll scope — NOT every
     /// ticket in the tenant, despite the name; the coarse permission check that used to gate the
@@ -73,10 +73,14 @@ public sealed class TicketReadService(DeskDbContext db, ITicketScopeQuery scopeQ
     public async Task<TicketDetailDto?> GetDetailForStaffAsync(Guid ticketId, CancellationToken ct = default)
     {
         var visible = await StaffVisibleAsync(ct);
-        return await DetailAsync(_ => visible, ticketId, ct);
+        // Staff see the WHOLE thread, internal notes included — that is what distinguishes the
+        // technician view from the client one, and hiding them here is how CW-side internal notes
+        // silently vanished from the portal.
+        return await DetailAsync(_ => visible, ticketId, includeInternal: true, ct);
     }
 
-    private async Task<TicketDetailDto?> DetailAsync(Func<object?, IQueryable<Ticket>> scope, Guid ticketId, CancellationToken ct)
+    private async Task<TicketDetailDto?> DetailAsync(
+        Func<object?, IQueryable<Ticket>> scope, Guid ticketId, bool includeInternal, CancellationToken ct)
     {
         var ticket = await scope(null)
             .AsNoTracking()
@@ -115,9 +119,9 @@ public sealed class TicketReadService(DeskDbContext db, ITicketScopeQuery scopeQ
             ticket.PortalStatus, ticket.PortalPriority, ticket.PortalCategory, ticket.QueueOrBoard,
             ticket.CreatedAt, ticket.ResolvedAt,
             Conversation: ticket.Notes
-                .Where(n => n.IsPublic) // defensive: only public notes ever reach a client
+                .Where(n => includeInternal || n.IsPublic) // clients NEVER receive internal notes
                 .OrderBy(n => n.NoteCreatedAt)
-                .Select(n => new TicketNoteDto(n.Id, n.AuthorName, n.AuthoredByClient, n.Body, n.NoteCreatedAt))
+                .Select(n => new TicketNoteDto(n.Id, n.AuthorName, n.AuthoredByClient, n.Body, n.NoteCreatedAt, n.IsPublic))
                 .ToList(),
             Attachments: ticket.Attachments
                 .OrderBy(a => a.UploadedAt)

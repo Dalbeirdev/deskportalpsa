@@ -142,11 +142,13 @@ public sealed class ConnectionSyncRunner(
     }
 
     /// <summary>
-    /// Mirrors the provider's PUBLIC notes into the portal thread. Deduplication is by the provider's
-    /// own note id, which doubles as echo suppression: a reply written in the portal already stored
-    /// that id when the provider accepted it, so it is recognised rather than duplicated.
-    /// Internal notes never reach here — the connector's GetPublicNotesAsync filters them out, so a
-    /// private note cannot leak into a customer-visible thread.
+    /// Mirrors the provider's notes into the portal thread — internal ones included, carrying
+    /// IsPublic=false. Deduplication is by the provider's own note id, which doubles as echo
+    /// suppression: a reply written in the portal already stored that id when the provider accepted
+    /// it, so it is recognised rather than duplicated.
+    /// Storing an internal note is safe because visibility is enforced at READ time: the client
+    /// ticket paths filter to IsPublic, so a private note reaches staff screens only. Filtering at
+    /// sync instead (the old behaviour) hid half the thread from technicians.
     /// </summary>
     private async Task<(int Added, int Removed)> ImportNotesAsync(PsaConnection connection, IServiceManagementConnector connector, string externalTicketId, CancellationToken ct)
     {
@@ -157,7 +159,7 @@ public sealed class ConnectionSyncRunner(
         IReadOnlyList<UnifiedTicketNote> incoming;
         // A read that throws leaves an UNKNOWN list, not an empty one — returning here also means
         // nothing is reconciled, so a rate-limited ticket never loses its thread.
-        try { incoming = await connector.GetPublicNotesAsync(externalTicketId, ct); }
+        try { incoming = await connector.GetNotesAsync(externalTicketId, ct); }
         catch (ConnectorException) { return (0, 0); } // one ticket's notes must not fail the whole run
 
         var existing = await db.TicketNotes
@@ -183,7 +185,7 @@ public sealed class ConnectionSyncRunner(
                 AuthorName = string.IsNullOrWhiteSpace(n.AuthorName) ? $"{connection.Provider} automation" : n.AuthorName,
                 AuthoredByClient = false,
                 Body = n.Body,
-                IsPublic = true,
+                IsPublic = n.IsPublic,
                 NoteCreatedAt = n.CreatedAt,
             });
             known.Add(n.ExternalId);

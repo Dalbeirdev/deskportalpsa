@@ -113,14 +113,20 @@ public abstract class ConnectorCertificationSuite
     }
 
     [Fact]
-    public async Task Public_note_is_added_and_only_public_notes_are_returned()
+    public async Task Notes_round_trip_with_their_visibility_flag_intact()
     {
+        // GetNotesAsync returns the WHOLE thread — internal notes included, each carrying the
+        // provider's own visibility flag. The portal decides per reader who may see what; a
+        // connector that pre-filters internal notes hides half the thread from technicians.
         var c = CreateConnector();
         var t = await c.CreateTicketAsync(new UnifiedTicketCreateRequest { Title = "T", ExternalCompanyId = SeededOrganizationId, IdempotencyKey = "n1" });
         await c.AddPublicNoteAsync(t.ExternalId!, new UnifiedTicketNoteCreateRequest("hello", IsPublic: true, "note-key"));
-        var notes = await c.GetPublicNotesAsync(t.ExternalId!);
-        notes.Should().NotBeEmpty();
-        notes.Should().OnlyContain(n => n.IsPublic);
+        await c.AddPublicNoteAsync(t.ExternalId!, new UnifiedTicketNoteCreateRequest("internal analysis", IsPublic: false, "note-key-2"));
+
+        var notes = await c.GetNotesAsync(t.ExternalId!);
+
+        notes.Should().Contain(n => n.Body == "hello" && n.IsPublic);
+        notes.Should().Contain(n => n.Body == "internal analysis" && !n.IsPublic);
         // Every connector must attribute a human-written note, so the portal thread never shows a
         // reply bylined with the provider's name instead of its actual author.
         notes.Should().OnlyContain(n => !string.IsNullOrWhiteSpace(n.AuthorName));

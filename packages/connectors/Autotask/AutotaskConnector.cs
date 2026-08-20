@@ -166,10 +166,11 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
         return new UpdateTicketResult(true, null);
     }
 
-    public async Task<IReadOnlyList<UnifiedTicketNote>> GetPublicNotesAsync(string ticketId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<UnifiedTicketNote>> GetNotesAsync(string ticketId, CancellationToken ct = default)
     {
+        // ALL notes — internal ones carry IsPublic=false and the portal decides who may read them.
         var items = await QueryAsync<AtTicketNote>("TicketNotes",
-            [Filter("ticketID", "eq", long.Parse(ticketId)), Filter("publish", "eq", config.PublicPublishValue)], 500, ct);
+            [Filter("ticketID", "eq", long.Parse(ticketId))], 500, ct);
 
         // Resolve the real author. Autotask puts only an id on the note — a resource (technician) or,
         // when a customer contact wrote it, a contact — so translate both to display names. A thread
@@ -190,7 +191,7 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
         return items.Select(n => new UnifiedTicketNote(
             n.Id.ToString(),
             AuthorOf(n, names, contactNames),
-            n.Description ?? "", IsPublic: true, n.CreateDateTime ?? clock.GetUtcNow())).ToList();
+            n.Description ?? "", IsPublic: n.Publish == config.PublicPublishValue, n.CreateDateTime ?? clock.GetUtcNow())).ToList();
     }
 
     private static string AuthorOf(AtTicketNote note, IReadOnlyDictionary<long, string> resources, IReadOnlyDictionary<long, string> contacts)
@@ -230,7 +231,7 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
         };
         // TicketNotes is a CHILD collection in Autotask: creates go to the parent ticket's /Notes
         // route. Posting to the top-level /V1.0/TicketNotes returns 404 ("entity not found").
-        // Querying still uses the top-level TicketNotes entity (see GetPublicNotesAsync).
+        // Querying still uses the top-level TicketNotes entity (see GetNotesAsync).
         var result = await SendAsync<AtCreateResult>(HttpMethod.Post, $"V1.0/Tickets/{long.Parse(ticketId)}/Notes", body, ct);
         return new CreateNoteResult(true, result!.ItemId.ToString(), null);
     }
