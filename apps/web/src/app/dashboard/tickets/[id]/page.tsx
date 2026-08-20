@@ -9,6 +9,7 @@ import {
   Send, ArrowUpDown, Lock, Monitor, Wifi, Mail, KeyRound, Cpu, Ticket,
   Copy, RefreshCw, Download, Clock, Trash2, Check, X, ClipboardList, UserCog, ExternalLink} from 'lucide-react';
 import { useTimer } from '@/components/TimerProvider';
+import { NoteBody } from '@/components/NoteBody';
 import { api, type AssigneeOptions } from '@/lib/api';
 import type { TicketDetail } from '@/lib/types';
 
@@ -660,7 +661,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                         </span>
                         <span className="shrink-0 text-xs text-[var(--faint)]">{fmt(n.createdAt, true)}</span>
                       </div>
-                      <p className="mt-1 whitespace-pre-line text-sm">{n.body}</p>
+                      <NoteBody body={n.body} />
                       {filesByNote.get(n.id)?.length ? (
                         <ul className="mt-2 flex flex-wrap gap-2">
                           {filesByNote.get(n.id)!.map((a) => (
