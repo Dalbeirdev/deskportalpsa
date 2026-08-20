@@ -272,6 +272,32 @@ public sealed class AdminReadController(
     [RequirePermission(Permissions.UsersManage)]
     public async Task<IActionResult> StaffRoles(CancellationToken ct) => Ok(await users.StaffRolesAsync(ct));
 
+    // ---- Roles & Permissions module (§6) — gated by roles.manage, not users.manage ----
+
+    [HttpGet("roles/catalog")]
+    [RequirePermission(Permissions.RolesManage)]
+    public IActionResult RoleCatalog([FromServices] IRoleAdminService roles) => Ok(roles.Catalog());
+
+    [HttpGet("roles/detailed")]
+    [RequirePermission(Permissions.RolesManage)]
+    public async Task<IActionResult> RolesDetailed([FromServices] IRoleAdminService roles, CancellationToken ct)
+        => Ok(await roles.ListAsync(ct));
+
+    [HttpPost("roles")]
+    [RequirePermission(Permissions.RolesManage)]
+    public async Task<IActionResult> CreateRole([FromServices] IRoleAdminService roles, [FromBody] SaveRoleInput input, CancellationToken ct)
+        => Ok(await roles.CreateAsync(input, ct));
+
+    [HttpPut("roles/{id:guid}")]
+    [RequirePermission(Permissions.RolesManage)]
+    public async Task<IActionResult> UpdateRole([FromServices] IRoleAdminService roles, Guid id, [FromBody] SaveRoleInput input, CancellationToken ct)
+        => Ok(await roles.UpdateAsync(id, input, ct));
+
+    [HttpDelete("roles/{id:guid}")]
+    [RequirePermission(Permissions.RolesManage)]
+    public async Task<IActionResult> DeleteRole([FromServices] IRoleAdminService roles, Guid id, CancellationToken ct)
+    { await roles.DeleteAsync(id, ct); return NoContent(); }
+
     [HttpGet("departments")]
     [RequirePermission(Permissions.UsersManage)]
     public async Task<IActionResult> Departments(CancellationToken ct) => Ok(await users.DepartmentsAsync(ct));

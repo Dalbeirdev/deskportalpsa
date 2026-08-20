@@ -81,6 +81,7 @@ const NAV_GROUPS: { label: string | null; tone: Tone; items: NavItem[] }[] = [
     tone: 'sky',
     items: [
       { href: '/dashboard/users', label: 'Users', icon: Users, permissions: ['users.manage'] },
+      { href: '/dashboard/roles', label: 'Roles & Permissions', icon: ShieldCheck, permissions: ['roles.manage'] },
       { href: '/dashboard/departments', label: 'Departments & Teams', icon: Building2, permissions: ['users.manage'] },
       { href: '/dashboard/jobs', label: 'Background Jobs', icon: ListChecks, permissions: ['jobs.manage'] },
       { href: '/dashboard/audit', label: 'Audit Log', icon: ShieldCheck, permissions: ['audit.view'] },

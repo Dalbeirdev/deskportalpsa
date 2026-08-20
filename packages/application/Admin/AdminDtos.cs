@@ -150,6 +150,22 @@ public sealed record UpdateTeamInput(string Name);
 
 public sealed record PermissionTemplateOptionDto(Guid Id, string Name, string? Description, RoleType BaseRoleType);
 
+/// <summary>One catalogue entry, as the Roles &amp; Permissions matrix renders it — which scopes are
+/// legal for the key, so the UI can only offer what enforcement can honour.</summary>
+public sealed record PermissionDefinitionDto(
+    string Key, string Module, string DisplayName,
+    IReadOnlyList<PermissionScope> SupportedScopes, PermissionScope DefaultScope, bool IsBoardAware);
+
+public sealed record RoleGrantDto(string PermissionKey, PermissionScope Scope);
+
+/// <summary>HeldByCaller drives the UI's self-escalation guard: a role you hold is read-only to
+/// you, because editing it is editing your own permissions.</summary>
+public sealed record RoleDetailDto(
+    Guid Id, string Name, bool IsSystemRole, RoleType? BuiltInType, int UserCount, bool HeldByCaller,
+    IReadOnlyList<RoleGrantDto> Grants);
+
+public sealed record SaveRoleInput(string Name, IReadOnlyList<RoleGrantDto> Grants);
+
 /// <summary>
 /// SignInLinked distinguishes "can log in today" from "invited, binds on first login": a created
 /// user has no IdP subject until they first sign in and their verified email matches.

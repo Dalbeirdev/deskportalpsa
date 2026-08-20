@@ -196,10 +196,17 @@ public sealed class UserAdminService(
 
     public async Task<IReadOnlyList<RoleOptionDto>> StaffRolesAsync(CancellationToken ct = default)
         => await db.Roles.AsNoTracking()
-            .Where(r => r.BuiltInType != null && StaffRoleTypes.Contains(r.BuiltInType.Value))
-            .OrderBy(r => r.BuiltInType)
+            .Where(StaffAssignable(tenant.OrganizationId))
+            .OrderBy(r => r.IsSystemRole ? 0 : 1).ThenBy(r => r.BuiltInType).ThenBy(r => r.Name)
             .Select(r => new RoleOptionDto(r.Id, r.Name))
             .ToListAsync(ct);
+
+    /// <summary>Which roles staff may hold: the 4 staff built-ins plus THIS tenant's custom roles.
+    /// Client and platform roles are excluded, as is any other tenant's custom role. Shared by the
+    /// picker, creation, and assignment so the three can never disagree about assignability.</summary>
+    private static System.Linq.Expressions.Expression<Func<Desk.Domain.Identity.Role, bool>> StaffAssignable(Guid? orgId)
+        => r => (r.IsSystemRole && r.BuiltInType != null && StaffRoleTypes.Contains(r.BuiltInType.Value))
+             || (!r.IsSystemRole && r.MspOrganizationId == orgId);
 
     public async Task<IReadOnlyList<DepartmentWithTeamsDto>> DepartmentsAsync(CancellationToken ct = default)
         => await db.Departments.AsNoTracking()
@@ -395,8 +402,8 @@ public sealed class UserAdminService(
             throw new ValidationFailedException("A user with that email already exists.");
 
         var validRoles = await db.Roles
-            .Where(r => input.RoleIds.Contains(r.Id)
-                        && r.BuiltInType != null && StaffRoleTypes.Contains(r.BuiltInType.Value))
+            .Where(StaffAssignable(tenant.OrganizationId))
+            .Where(r => input.RoleIds.Contains(r.Id))
             .Select(r => new RoleOptionDto(r.Id, r.Name))
             .ToListAsync(ct);
         if (validRoles.Count != input.RoleIds.Distinct().Count())
@@ -518,6 +525,12 @@ public sealed class UserAdminService(
     public async Task AssignRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default)
     {
         EnsureNotActingOnSelf(userId);
+        // Same assignability rule as creation. Without this, assignment accepted ANY role id —
+        // including ClientUser and PlatformSuperAdministrator — so two admins could escalate each
+        // other to platform scope. Creation refused those roles; assignment has to as well.
+        var assignable = await db.Roles.Where(StaffAssignable(tenant.OrganizationId)).AnyAsync(r => r.Id == roleId, ct);
+        if (!assignable)
+            throw new ValidationFailedException("That role cannot be assigned to staff.");
         var exists = await db.UserRoles.AnyAsync(r => r.AppUserId == userId && r.RoleId == roleId, ct);
         if (!exists)
         {
