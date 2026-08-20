@@ -72,7 +72,9 @@ public sealed class TicketsController(
             throw new ForbiddenException("This endpoint is for client portal users.");
         if (user.UserId is not { } uid)
             throw new ForbiddenException("This endpoint is for client portal users.");
-        return Ok(await commands.AddStaffCommentAsync(uid, user.DisplayName ?? user.Email ?? "Staff", id, req.Body, ct));
+        // isPublic reaches only this STAFF path — the client branch above never passes it, so a
+        // client cannot post (or request) an internal note.
+        return Ok(await commands.AddStaffCommentAsync(uid, user.DisplayName ?? user.Email ?? "Staff", id, req.Body, req.IsPublic ?? true, ct));
     }
 
     // Resolves the client identity or refuses the request — staff use the dashboard endpoints instead.
@@ -88,5 +90,7 @@ public sealed class TicketsController(
         string? QueueOrBoard);
 
     public sealed record AddCommentRequest(
-        [Required, StringLength(10000, MinimumLength = 1)] string Body);
+        [Required, StringLength(10000, MinimumLength = 1)] string Body,
+        // Staff only; the client path ignores it. Null means public.
+        bool? IsPublic = null);
 }

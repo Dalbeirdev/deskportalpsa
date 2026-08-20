@@ -251,10 +251,16 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const [replyHours, setReplyHours] = useState('');
   const [replyBillable, setReplyBillable] = useState('Billable');
   const [replySideError, setReplySideError] = useState<string | null>(null);
+  // Staff-only composer powers (mirrors the old help desk: note + time + status in ONE post).
+  // Gated on view-all — the same signal the API's staff branch keys on.
+  const { data: me } = useQuery({ queryKey: ['me'], queryFn: api.me, staleTime: 5 * 60_000, retry: false });
+  const isStaff = me?.permissions.includes('tickets.view.all') ?? false;
+  const [replyInternal, setReplyInternal] = useState(false);
+  const [replyStatus, setReplyStatus] = useState('');
 
   const addComment = useMutation({
     mutationFn: async (body: string) => {
-      const note = await api.addComment(id, body);
+      const note = await api.addComment(id, body, isStaff ? !replyInternal : undefined);
       const sideErrors: string[] = [];
       // Upload after the reply exists, so each file carries its note id all the way to the PSA.
       for (const file of pendingFiles) {
@@ -266,13 +272,18 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
         try { await api.logTime(id, { hours: hrs, billable: replyBillable, notes: body }); }
         catch (e) { sideErrors.push(`the time entry failed${e instanceof Error && e.message ? ` — ${e.message}` : ''} (use the Log time panel to retry)`); }
       }
+      if (replyStatus) {
+        try { await api.updateTicketStatus(id, replyStatus); }
+        catch (e) { sideErrors.push(`the status change failed${e instanceof Error && e.message ? ` — ${e.message}` : ''} (use the status buttons to retry)`); }
+      }
       return { note, sideErrors };
     },
     onSuccess: ({ sideErrors }) => {
-      setComment(''); setPendingFiles([]); setReplyHours('');
+      setComment(''); setPendingFiles([]); setReplyHours(''); setReplyStatus('');
       setReplySideError(sideErrors.length > 0 ? `Reply sent, but ${sideErrors.join('; ')}.` : null);
       qc.invalidateQueries({ queryKey: ['ticket', id] });
       if (parseFloat(replyHours) > 0) refreshTime();
+      if (replyStatus) [['tickets'], ['team'], ['trend']].forEach((k) => qc.invalidateQueries({ queryKey: k }));
     },
   });
 
@@ -698,7 +709,8 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                         addComment.mutate(comment.trim());
                       }
                     }}
-                    placeholder="Add a reply…" className="w-full resize-y bg-transparent px-4 py-3 text-sm outline-none" />
+                    placeholder={replyInternal ? 'Add an internal note — the client will not see this…' : 'Add a reply…'}
+                    className="w-full resize-y bg-transparent px-4 py-3 text-sm outline-none" />
                   {pendingFiles.length > 0 && (
                     <ul className="flex flex-wrap gap-2 px-4 pb-2">
                       {pendingFiles.map((f, i) => (
@@ -712,6 +724,32 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                         </li>
                       ))}
                     </ul>
+                  )}
+                  {isStaff && (
+                    <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] px-4 py-2">
+                      <div className="flex overflow-hidden rounded-lg border border-[var(--border)] text-xs font-medium">
+                        <button type="button" onClick={() => setReplyInternal(false)}
+                          className={`px-2.5 py-1 ${!replyInternal ? 'bg-brand text-brand-fg' : 'bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--fg)]'}`}>
+                          Public reply
+                        </button>
+                        <button type="button" onClick={() => setReplyInternal(true)}
+                          title="Visible to your team and pushed to the PSA as an internal note — never shown to the client"
+                          className={`px-2.5 py-1 ${replyInternal ? 'bg-amber-500 text-white' : 'bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--fg)]'}`}>
+                          Internal note
+                        </button>
+                      </div>
+                      <span className="min-w-0 flex-1" />
+                      <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+                        Set status
+                        <select value={replyStatus} onChange={(e) => setReplyStatus(e.target.value)} aria-label="Set status with this reply"
+                          className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs outline-none focus:border-brand">
+                          <option value="">Keep {ticket.portalStatus.replace(/_/g, ' ')}</option>
+                          {STATUSES.filter((st) => st !== ticket.portalStatus).map((st) => (
+                            <option key={st} value={st}>{st.replace(/_/g, ' ')}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
                   )}
                   <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] px-4 py-2">
                     <Clock size={13} className="text-[var(--faint)]" />
@@ -751,9 +789,10 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                         className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50">
                         <Send size={15} /> {addComment.isPending ? 'Sending…'
                           : [
-                              'Send reply',
+                              replyInternal ? 'Post internal note' : 'Send reply',
                               pendingFiles.length > 0 ? `${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''}` : null,
                               parseFloat(replyHours) > 0 ? `${replyHours}h` : null,
+                              replyStatus ? replyStatus.replace(/_/g, ' ') : null,
                             ].filter(Boolean).join(' + ')}
                       </button>
                     </div>

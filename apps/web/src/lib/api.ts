@@ -109,8 +109,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  addComment: (id: string, body: string) =>
-    request(`/api/tickets/${id}/comments`, TicketNoteResponse, { method: 'POST', body: JSON.stringify({ body }) }),
+  addComment: (id: string, body: string, isPublic?: boolean) =>
+    request(`/api/tickets/${id}/comments`, TicketNoteResponse, { method: 'POST', body: JSON.stringify({ body, isPublic }) }),
   ticketAssignees: (id: string) =>
     request(`/api/tickets/${id}/assignees`, AssigneeOptionsSchema),
   assignTicket: (id: string, body: { technicianExternalId?: string; queueOrBoardId?: string; roleId?: string }) =>
