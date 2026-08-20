@@ -162,8 +162,11 @@ public sealed class TicketCommandService(
     /// <summary>
     /// A technician reply from the staff dashboard. Same provider push and echo bookkeeping as a
     /// client comment; only the attribution differs — the staff display name, never a client flag.
+    /// isPublic=false posts an INTERNAL note: pushed to the PSA flagged internal (ConnectWise
+    /// internalAnalysisFlag / Autotask internal publish value) and stored IsPublic=false, so the
+    /// client read path never returns it. Only the staff endpoint can reach this parameter.
     /// </summary>
-    public async Task<TicketNoteDto> AddStaffCommentAsync(Guid appUserId, string authorName, Guid ticketId, string body, CancellationToken ct = default)
+    public async Task<TicketNoteDto> AddStaffCommentAsync(Guid appUserId, string authorName, Guid ticketId, string body, bool isPublic = true, CancellationToken ct = default)
     {
         var ticket = await scopeQuery.FindAsync(db.Tickets, ticketId, appUserId, Permissions.TicketsAddPublicNote, ct)
             ?? throw new NotFoundException("Ticket");
@@ -173,7 +176,7 @@ public sealed class TicketCommandService(
         var idempotencyKey = Guid.NewGuid().ToString("N");
         var connector = await connectors.ResolveAsync(ticket.PsaConnectionId, ct);
         var result = await connector.AddPublicNoteAsync(
-            ticket.ExternalTicketId, new UnifiedTicketNoteCreateRequest(body, IsPublic: true, idempotencyKey), ct);
+            ticket.ExternalTicketId, new UnifiedTicketNoteCreateRequest(body, IsPublic: isPublic, idempotencyKey), ct);
         if (!result.Success)
             throw new ValidationFailedException(result.Error ?? "The PSA rejected the comment.");
 
@@ -185,7 +188,7 @@ public sealed class TicketCommandService(
             AuthorName = authorName,
             AuthoredByClient = false,
             Body = body,
-            IsPublic = true,
+            IsPublic = isPublic,
             NoteCreatedAt = clock.GetUtcNow(),
             OriginCorrelationId = ticket.CorrelationId,
         };

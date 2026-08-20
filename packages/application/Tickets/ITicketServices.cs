@@ -35,5 +35,5 @@ public interface ITicketCommandService
 
     /// <summary>A technician reply on a ticket within the caller's effective TicketsAddPublicNote
     /// scope, attributed by display name.</summary>
-    Task<TicketNoteDto> AddStaffCommentAsync(Guid appUserId, string authorName, Guid ticketId, string body, CancellationToken ct = default);
+    Task<TicketNoteDto> AddStaffCommentAsync(Guid appUserId, string authorName, Guid ticketId, string body, bool isPublic = true, CancellationToken ct = default);
 }

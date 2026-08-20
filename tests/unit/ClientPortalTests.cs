@@ -125,6 +125,31 @@ public class ClientPortalTests
     }
 
     [Fact]
+    public async Task A_staff_internal_note_is_stored_internal_and_pushed_flagged_internal()
+    {
+        // The composer's "Internal note" toggle. Two things must BOTH be true or a private remark
+        // leaks: the stored row carries IsPublic=false (the client read path filters on it), and
+        // the provider push carries IsPublic=false (so the PSA flags it internal on its side too).
+        var dbName = Guid.NewGuid().ToString();
+        var clock = new TestClock();
+        await using var db = await SeedAsync(dbName);
+        var mock = new MockConnector(new MockConnectorOptions(), clock);
+        var svc = new TicketCommandService(db, new FakeResolver(mock),
+            new MappingEngine(), new SyncEventStore(db, clock), new NoopTicketScopeQuery(), clock);
+
+        // Create through the service so the ticket exists in the mock PSA before commenting.
+        var created = await svc.CreateAsync(Access(CompanyA, RegularUser, false),
+            new CreateTicketInput("New issue", null, null, null, null));
+
+        await svc.AddStaffCommentAsync(Guid.NewGuid(), "Jane Tech", created.Id, "Internal analysis.", isPublic: false);
+
+        var stored = await db.TicketNotes.SingleAsync(n => n.Body == "Internal analysis.");
+        stored.IsPublic.Should().BeFalse();
+        var pushed = (await mock.GetNotesAsync(created.ExternalTicketId!)).Single(n => n.Body == "Internal analysis.");
+        pushed.IsPublic.Should().BeFalse("the PSA must receive the internal flag, not just our copy");
+    }
+
+    [Fact]
     public async Task Comment_posts_public_note_and_records_portal_event()
     {
         var dbName = Guid.NewGuid().ToString();
