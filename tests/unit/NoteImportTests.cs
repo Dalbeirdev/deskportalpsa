@@ -234,6 +234,34 @@ public class NoteImportTests
     }
 
     [Fact]
+    public async Task Notification_history_merges_real_events_and_never_leaks_internal_notes()
+    {
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString());
+        var connector = new StubConnector();
+        connector.Tickets.Add(Incoming("7809"));
+        connector.Notes["7809"] =
+        [
+            Note("1", "Jane Tech", "Public reply.", clock.GetUtcNow().AddMinutes(5)),
+            new UnifiedTicketNote("2", "Jane Tech", "Internal analysis.", IsPublic: false, clock.GetUtcNow().AddMinutes(6)),
+            new UnifiedTicketNote("3", "Ravi Customer", "Thanks!", IsPublic: true, clock.GetUtcNow().AddMinutes(7), FromClient: true),
+        ];
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        var company = await db.ClientCompanies.SingleAsync();
+        var reads = new Desk.Infrastructure.Tickets.TicketReadService(
+            db, new NoopTicketScopeQuery(), new TestCurrentUser(Org, userId: Guid.NewGuid()));
+        var access = new Desk.Application.Tickets.ClientAccess(Org, company.Id, Guid.NewGuid(), IsCompanyAdministrator: true);
+
+        var feed = await reads.ActivityHistoryAsync(access);
+
+        feed.Select(e => e.Kind).Should().Contain(["ticket-created", "staff-reply", "client-reply"]);
+        feed.Should().HaveCount(3, "created + two PUBLIC replies — the internal note must NOT appear as an event");
+        feed.Should().BeInDescendingOrder(e => e.At);
+        feed.First(e => e.Kind == "client-reply").Actor.Should().Be("Ravi Customer");
+    }
+
+    [Fact]
     public async Task Provider_notes_are_imported_once_and_keep_their_author()
     {
         var dbName = Guid.NewGuid().ToString();
