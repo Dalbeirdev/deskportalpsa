@@ -255,6 +255,10 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   // Gated on view-all — the same signal the API's staff branch keys on.
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: api.me, staleTime: 5 * 60_000, retry: false });
   const isStaff = me?.permissions.includes('tickets.view.all') ?? false;
+  // Mirror the API's own gates: a pure CLIENT login carries neither of these, and showing the
+  // control anyway just manufactures a 403. Same keys the endpoints demand, not guesses.
+  const canLogTime = me?.permissions.includes('tickets.time.log') ?? false;
+  const canUpdate = me?.permissions.includes('tickets.update') ?? false;
   const [replyInternal, setReplyInternal] = useState(false);
   const [replyStatus, setReplyStatus] = useState('');
 
@@ -288,7 +292,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
     },
   });
 
-  const { data: entries } = useQuery({ queryKey: ['time-entries', id], queryFn: () => api.listTimeEntries(id), enabled: !!ticket, retry: false });
+  const { data: entries } = useQuery({ queryKey: ['time-entries', id], queryFn: () => api.listTimeEntries(id), enabled: !!ticket && canLogTime, retry: false });
 
   const refreshTime = () =>
     [['time-entries', id], ['ticket', id], ['team'], ['trend']].forEach((k) => qc.invalidateQueries({ queryKey: k }));
@@ -400,6 +404,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {canUpdate ? (
                   <span className="relative">
                     <select value={ticket.portalStatus} disabled={statusMut.isPending}
                       onChange={(e) => statusMut.mutate(e.target.value)} aria-label="Ticket status"
@@ -409,6 +414,11 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                     </select>
                     <ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 opacity-70" />
                   </span>
+                  ) : (
+                  <span className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold ${STATUS_TONE[ticket.portalStatus] ?? STATUS_TONE.NEW}`}>
+                    {ticket.portalStatus.replace(/_/g, ' ')}
+                  </span>
+                  )}
                   <span className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold ${PRIORITY_TONE[ticket.portalPriority.toUpperCase()] ?? PRIORITY_TONE.NORMAL}`}>{ticket.portalPriority.toUpperCase()}</span>
                 </div>
               </div>
@@ -428,6 +438,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 <Meta label="Updated" value={fmt(ticket.updatedAt)} />
               </dl>
 
+              {canUpdate && (
               <div className="mt-4 border-t border-[var(--border)] pt-4">
                 {!assignOpen ? (
                   <button onClick={() => setAssignOpen(true)}
@@ -446,6 +457,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   />
                 )}
               </div>
+              )}
             </div>
 
             {/* Service instructions the client set for technicians (from the Control Panel). */}
@@ -459,7 +471,9 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
               </div>
             )}
 
-            {/* Log time */}
+            {/* Log time — staff only; the endpoint demands tickets.time.log and clients have no
+                business writing billable hours. */}
+            {canLogTime && (
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
               <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--faint)]"><Clock size={14} /> Log time</h2>
               <form onSubmit={(e) => { e.preventDefault(); if (parseFloat(hours) > 0) logTime.mutate(); }} className="space-y-3">
@@ -534,8 +548,9 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 )}
               </form>
             </div>
+            )}
 
-            {/* Time entries */}
+            {/* Time entries (query disabled without tickets.time.log, so this stays absent for clients) */}
             {entries && entries.length > 0 && (
               <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
                 <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-3">
@@ -788,6 +803,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                       </label>
                     </div>
                   )}
+                  {canLogTime && (
                   <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] px-4 py-2">
                     <Clock size={13} className="text-[var(--faint)]" />
                     <span className="text-xs text-[var(--muted)]">Log time with this reply</span>
@@ -815,6 +831,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                     )}
                     <span className="text-[11px] text-[var(--faint)]">optional — the reply text becomes the entry&apos;s notes</span>
                   </div>
+                  )}
                   <div className="flex items-center justify-between px-4 pb-3 pt-2">
                     <span className="text-xs text-[var(--faint)]">{comment.length} / 4000</span>
                     <div className="flex items-center gap-2">
