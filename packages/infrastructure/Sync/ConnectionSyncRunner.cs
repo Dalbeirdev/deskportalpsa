@@ -203,9 +203,23 @@ public sealed class ConnectionSyncRunner(
 
         var existing = await db.TicketNotes
             .Where(n => n.TicketId == ticket.Id && n.ExternalNoteId != null)
-            .Select(n => n.ExternalNoteId!)
             .ToListAsync(ct);
-        var known = new HashSet<string>(existing);
+        var known = existing.Select(n => n.ExternalNoteId!).ToHashSet();
+
+        // Heal the side of notes imported before FromClient existed (they were ALL stored as
+        // staff-authored) — and any later PSA-side correction. Provider-imported rows only:
+        // a portal reply's byline is the portal's own record, never the provider's to rewrite.
+        var healed = 0;
+        foreach (var n in incoming)
+        {
+            if (string.IsNullOrEmpty(n.ExternalId)) continue;
+            var row = existing.FirstOrDefault(e => e.ExternalNoteId == n.ExternalId && e.ImportedFromProvider);
+            if (row is not null && row.AuthoredByClient != n.FromClient)
+            {
+                row.AuthoredByClient = n.FromClient;
+                healed++;
+            }
+        }
 
         var added = 0;
         foreach (var n in incoming)
@@ -235,7 +249,7 @@ public sealed class ConnectionSyncRunner(
         }
 
         var removed = await ReconcileDeletedNotesAsync(ticket.Id, incoming, timeNotesFetched, ct);
-        if (added > 0 || removed > 0) await db.SaveChangesAsync(ct);
+        if (added > 0 || removed > 0 || healed > 0) await db.SaveChangesAsync(ct);
         return (added, removed);
     }
 

@@ -171,6 +171,14 @@ public class NoteImportTests
         contactNote.AuthoredByClient.Should().BeTrue("the provider says a customer contact wrote it");
         (await db.TicketNotes.SingleAsync(n => n.ExternalNoteId == "1")).AuthoredByClient.Should().BeFalse();
 
+        // Healing: notes imported BEFORE FromClient existed were all stored staff-side. A re-sync
+        // must put them back on their real side — provider-imported rows only.
+        contactNote.AuthoredByClient = false;
+        await db.SaveChangesAsync();
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+        (await db.TicketNotes.SingleAsync(n => n.ExternalNoteId == "2")).AuthoredByClient
+            .Should().BeTrue("a re-sync heals the side recorded before the fix");
+
         // Deleted in the PSA → gone here too, client-authored or not.
         connector.Notes["7809"] = [Note("1", "Jane Tech", "Working on it.", clock.GetUtcNow())];
         var run = await Runner(db, connector, clock).RunAsync(Conn, full: true);
