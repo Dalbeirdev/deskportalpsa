@@ -165,4 +165,39 @@ public sealed class TicketReadService(DeskDbContext db, ITicketScopeQuery scopeQ
                 t.Id, t.Title, "ticket-updated",
                 "Status: " + t.PortalStatus, t.LastSyncedAt ?? t.CreatedAt))
             .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<ActivityEventDto>> ActivityHistoryAsync(ClientAccess access, int take = 50, CancellationToken ct = default)
+    {
+        // Three real record types merged into one feed. Everything routes through Visible(), so
+        // non-admins see only their own tickets' history, and only PUBLIC replies ever appear —
+        // this is a client surface, and internal analysis has no business in it.
+        var created = await Visible(access).AsNoTracking()
+            .OrderByDescending(t => t.CreatedAt).Take(take)
+            .Select(t => new ActivityEventDto(t.Id, t.Title, "ticket-created", null, t.CreatedAt))
+            .ToListAsync(ct);
+
+        var resolved = await Visible(access).AsNoTracking()
+            .Where(t => t.ResolvedAt != null)
+            .OrderByDescending(t => t.ResolvedAt).Take(take)
+            .Select(t => new ActivityEventDto(t.Id, t.Title, "ticket-resolved", null, t.ResolvedAt!.Value))
+            .ToListAsync(ct);
+
+        // Join + anonymous projection, DTO mapped in memory: SelectMany over the navigation with a
+        // record constructor is exactly the shape query providers refuse to translate.
+        var replyRows = await db.TicketNotes.AsNoTracking()
+            .Where(n => n.IsPublic)
+            .Join(Visible(access), n => n.TicketId, t => t.Id,
+                (n, t) => new { t.Id, t.Title, n.AuthoredByClient, n.AuthorName, n.NoteCreatedAt })
+            .OrderByDescending(x => x.NoteCreatedAt).Take(take)
+            .ToListAsync(ct);
+        var replies = replyRows
+            .Select(x => new ActivityEventDto(
+                x.Id, x.Title, x.AuthoredByClient ? "client-reply" : "staff-reply", x.AuthorName, x.NoteCreatedAt))
+            .ToList();
+
+        return created.Concat(resolved).Concat(replies)
+            .OrderByDescending(e => e.At)
+            .Take(take)
+            .ToList();
+    }
 }

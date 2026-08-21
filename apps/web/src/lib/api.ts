@@ -172,6 +172,14 @@ export const api = {
   attachmentDownloadUrl: (ticketId: string, attachmentId: string) =>
     request(`/api/tickets/${ticketId}/attachments/${attachmentId}/download`, z.object({ url: z.string() })),
   notifications: () => request('/api/notifications', z.array(NotificationSchema)) as Promise<Notification[]>,
+  notificationHistory: () =>
+    request('/api/notifications/history', z.array(z.object({
+      ticketId: z.string(),
+      ticketTitle: z.string(),
+      kind: z.enum(['ticket-created', 'client-reply', 'staff-reply', 'ticket-resolved']),
+      actor: z.string().nullable(),
+      at: z.string(),
+    }))),
   me: () => request('/api/me', MeSchema),
   storageUsage: () =>
     request('/api/admin/storage', z.object({ usedBytes: z.number(), fileCount: z.number(), ticketCount: z.number() })),
