@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Mail, ArrowUpRight, RefreshCw, ServerCog, ShieldCheck } from 'lucide-react';
 import { BrandMark } from '@/components/BrandMark';
 import { PSA_PLATFORMS, platformHref } from '@/lib/psaPlatforms';
+import { FEATURE_DOCS, featureHref } from '@/lib/featureDocs';
 
 /** The one address a visitor can actually reach a human on. */
 export const CONTACT_EMAIL = 'proapps@techpio.com';
@@ -9,11 +10,16 @@ export const CONTACT_EMAIL = 'proapps@techpio.com';
 const PRODUCT = [
   { href: '/', label: 'Overview' },
   { href: '/platform', label: 'Platform' },
+  { href: '/features', label: 'Features' },
   { href: '/integrations', label: 'Integrations' },
   { href: '/security', label: 'Security' },
   { href: '/faq', label: 'FAQ' },
   { href: '/book', label: 'Book a demo' },
 ];
+
+// Driven by the docs themselves — a new feature document appears here for free, and a footer
+// link can never point at a page that does not exist.
+const FEATURES = FEATURE_DOCS.map((d) => ({ href: featureHref(d), label: d.name }));
 
 const COMPANY = [
   { href: '/about', label: 'About' },
@@ -86,7 +92,7 @@ export function MarketingFooter() {
       </div>
 
       <div className="mx-auto max-w-shell px-5 py-14 sm:px-8">
-        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.5fr_1.2fr_1fr_1fr_1fr]">
           <div>
             <div className="flex items-center gap-3">
               <BrandMark size={52} variant="inverse" className="rounded-xl" />
@@ -122,6 +128,15 @@ export function MarketingFooter() {
               </a>
             </div>
           </div>
+
+          <nav aria-label="Features">
+            <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-brand-soft">
+              Features
+            </h2>
+            <ul className="space-y-2.5">
+              {FEATURES.map((l) => <FooterLink key={l.label} {...l} />)}
+            </ul>
+          </nav>
 
           <nav aria-label="Product">
             <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-brand-soft">
