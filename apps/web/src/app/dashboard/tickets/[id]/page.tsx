@@ -683,7 +683,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
 
               <div className="space-y-4 px-5 py-4">
                 {convo.length === 0 && <p className="rounded-lg border border-dashed border-[var(--border)] p-4 text-sm text-[var(--muted)]">No public replies yet.</p>}
-                {convo.map((n) => {
+                {convo.map((n, i) => {
                   // Chat layout: the client's messages sit LEFT, everything from the MSP side sits
                   // RIGHT — direction is readable before a single word is. Coloring stays semantic,
                   // not per-author rainbow: client neutral, staff replies brand-tinted, internal
@@ -703,19 +703,29 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   const teHours = te?.hours ?? n.timeEntryHours;
                   const teBillable = te ? billableLabel(te.billableOption, te.billable)
                     : n.timeEntryBillable == null ? null : n.timeEntryBillable ? 'Billable' : 'Do not bill';
+                  // The rail only bridges to the NEXT message when it is from the same side, so
+                  // each burst of consecutive messages reads as one connected thread segment.
+                  const nextSameSide = convo[i + 1] !== undefined && convo[i + 1].authoredByClient === n.authoredByClient;
                   return (
                   <div key={n.id} className={`flex gap-3 ${incoming ? '' : 'flex-row-reverse'}`}>
-                    <span className="relative shrink-0">
-                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand text-xs font-semibold text-brand-fg">{initials(n.authorName)}</span>
-                      <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[var(--surface)] bg-green-500" />
-                    </span>
+                    {/* Identity column: who spoke, stated once beside the bubble — avatar, name,
+                        side — with a timeline rail linking consecutive messages from this side. */}
+                    <div className="relative flex w-24 shrink-0 flex-col items-center gap-1 pt-1">
+                      {nextSameSide && (
+                        <span aria-hidden className={`absolute -bottom-4 top-14 w-px ${incoming ? 'bg-blue-200 dark:bg-blue-900/60' : 'bg-brand/25'}`} />
+                      )}
+                      <span className={`relative z-10 flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold ${incoming ? 'bg-blue-600 text-white' : 'bg-brand text-brand-fg'}`}>{initials(n.authorName)}</span>
+                      <span className="max-w-full truncate text-center text-xs font-medium leading-tight">{n.authorName}</span>
+                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${incoming ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' : 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300'}`}>{incoming ? 'Client' : 'Technician'}</span>
+                    </div>
                     {/* flex-1 + max-w: every card the same width, edges aligned — content-sized
-                        cards gave the thread a ragged, unprofessional left edge. */}
-                    <div className={`min-w-0 flex-1 max-w-[85%] rounded-lg border p-3 ${tone}`}>
+                        cards gave the thread a ragged, unprofessional left edge. The rotated square
+                        is the speech-bubble tail, pointing at the author's identity column. */}
+                    <div className={`relative min-w-0 max-w-[85%] flex-1 rounded-lg border p-3 before:absolute before:top-5 before:h-3 before:w-3 before:rotate-45 before:border-inherit before:bg-inherit ${incoming ? 'before:-left-[6.5px] before:border-b before:border-l' : 'before:-right-[6.5px] before:border-r before:border-t'} ${tone}`}>
                       <div className="flex items-center justify-between gap-4">
                         <span className="flex flex-wrap items-center gap-2 text-sm">
-                          <span className="font-semibold">{n.authorName}</span>
-                          <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${incoming ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'}`}>{incoming ? 'Client' : 'Technician'}</span>
+                          <span className={`font-semibold ${incoming ? 'text-blue-700 dark:text-blue-400' : 'text-green-700 dark:text-green-400'}`}>{n.authorName}</span>
+                          <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${incoming ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' : 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300'}`}>{incoming ? 'Client' : 'Technician'}</span>
                           {!n.isPublic && !isTimeCard && (
                             <span title="Internal note from the PSA — never shown to the client"
                               className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">Internal</span>
