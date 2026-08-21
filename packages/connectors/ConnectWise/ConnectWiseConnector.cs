@@ -196,13 +196,21 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         // read time (staff see internal, clients never do), not something to pre-filter here where
         // it silently hides half the thread from technicians.
         return notes
-            .Select(n => new UnifiedTicketNote(
-                // Empty author = provider-generated note; the sync layer treats that as a system note.
-                n.Id.ToString(), n.Member?.Name ?? n.Contact?.Name ?? "", n.Text ?? "",
-                IsPublic: !n.InternalAnalysisFlag, n.DateCreated ?? clock.GetUtcNow(),
-                // A note with a contact and no member was written by the CUSTOMER (their portal or
-                // email into CW) — it must land on the client side of the thread, not the MSP's.
-                FromClient: n.Member is null && n.Contact is not null))
+            .Select(n =>
+            {
+                // Side detection follows ATTRIBUTION, not mere presence: CW has been seen returning
+                // an empty member stub (no name) on contact-authored notes, so `member != null`
+                // over-claims for the MSP. Whichever side actually supplies the display name wrote
+                // the note — a customer's note (their portal or email into CW) then lands on the
+                // client side of the thread instead of reading as the MSP's own words.
+                var memberName = string.IsNullOrWhiteSpace(n.Member?.Name) ? null : n.Member!.Name;
+                var contactName = string.IsNullOrWhiteSpace(n.Contact?.Name) ? null : n.Contact!.Name;
+                return new UnifiedTicketNote(
+                    // Empty author = provider-generated note; the sync layer treats that as a system note.
+                    n.Id.ToString(), memberName ?? contactName ?? "", n.Text ?? "",
+                    IsPublic: !n.InternalAnalysisFlag, n.DateCreated ?? clock.GetUtcNow(),
+                    FromClient: memberName is null && contactName is not null);
+            })
             .ToList();
     }
 

@@ -46,6 +46,45 @@ public sealed class ConnectWiseConnectorCertificationTests : ConnectorCertificat
     protected override string WebhookSecret => Secret;
 
     /// <summary>
+    /// The live finding this pins: a customer contact's notes rendered as the MSP's own words.
+    /// Side detection must follow ATTRIBUTION — whichever of member/contact supplies the display
+    /// name — because CW can return an empty member stub (no name) on contact-authored notes, so
+    /// checking only `member != null` claims every note for the MSP.
+    /// </summary>
+    [Fact]
+    public async Task Note_author_side_follows_whoever_supplies_the_name()
+    {
+        var server = new FakeConnectWiseServer(Clock);
+        server.SeedNote(777, new() // technician note: member named
+        {
+            ["text"] = "Working on it.",
+            ["member"] = new Dictionary<string, object?> { ["id"] = 20L, ["name"] = "Tech One" },
+        });
+        server.SeedNote(777, new() // customer portal note: contact named, no member
+        {
+            ["text"] = "Still broken.",
+            ["contact"] = new Dictionary<string, object?> { ["id"] = 10L, ["name"] = "Harpal Singh" },
+        });
+        server.SeedNote(777, new() // the live quirk: empty member stub alongside the real contact
+        {
+            ["text"] = "Broken again.",
+            ["member"] = new Dictionary<string, object?> { ["id"] = 0L },
+            ["contact"] = new Dictionary<string, object?> { ["id"] = 10L, ["name"] = "Harpal Singh" },
+        });
+        var c = Build(server);
+
+        var notes = await c.GetNotesAsync("777");
+
+        notes.Should().HaveCount(3);
+        notes[0].FromClient.Should().BeFalse("a named member wrote it");
+        notes[0].AuthorName.Should().Be("Tech One");
+        notes[1].FromClient.Should().BeTrue("the contact is the only author CW names");
+        notes[1].AuthorName.Should().Be("Harpal Singh");
+        notes[2].FromClient.Should().BeTrue("an empty member stub is not an author — the named contact is");
+        notes[2].AuthorName.Should().Be("Harpal Singh");
+    }
+
+    /// <summary>
     /// CW validates status against the ticket's BOARD on create. A mapped status is typically the
     /// verbose global name ("New (not responded)") while a board names it tersely ("New") — the
     /// connector must resolve one to the other, or every portal create on that board fails.
