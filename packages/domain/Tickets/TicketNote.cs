@@ -23,4 +23,13 @@ public class TicketNote : TenantEntity
 
     /// <summary>Set when this note originated from the portal, so the inbound sync can skip its own echo.</summary>
     public Guid? OriginCorrelationId { get; set; }
+
+    /// <summary>
+    /// True when the inbound sync wrote this row from the provider's thread. This — not the author's
+    /// side — is what deletion reconciliation keys on: a client CONTACT can author a note in the PSA
+    /// (imported, reconcilable), and the portal's own replies carry a provider id after the push
+    /// (portal-origin, never reconciled away). AuthoredByClient answers "who wrote it";
+    /// this answers "whose copy is authoritative".
+    /// </summary>
+    public bool ImportedFromProvider { get; set; }
 }

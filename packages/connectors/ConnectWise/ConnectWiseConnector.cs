@@ -199,7 +199,10 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
             .Select(n => new UnifiedTicketNote(
                 // Empty author = provider-generated note; the sync layer treats that as a system note.
                 n.Id.ToString(), n.Member?.Name ?? n.Contact?.Name ?? "", n.Text ?? "",
-                IsPublic: !n.InternalAnalysisFlag, n.DateCreated ?? clock.GetUtcNow()))
+                IsPublic: !n.InternalAnalysisFlag, n.DateCreated ?? clock.GetUtcNow(),
+                // A note with a contact and no member was written by the CUSTOMER (their portal or
+                // email into CW) — it must land on the client side of the thread, not the MSP's.
+                FromClient: n.Member is null && n.Contact is not null))
             .ToList();
     }
 

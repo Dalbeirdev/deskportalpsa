@@ -147,6 +147,38 @@ public class NoteImportTests
     }
 
     [Fact]
+    public async Task A_customer_contacts_note_imports_on_the_client_side_and_stays_reconcilable()
+    {
+        // The live finding this pins: EVERY imported note rendered as the MSP's own words, because
+        // the unified model discarded the provider's member-vs-contact distinction. A contact's
+        // note must land AuthoredByClient — and, since AuthoredByClient used to double as the
+        // "provider-origin" marker for deletion reconciliation, it must STILL be removable when
+        // deleted in the PSA. Both halves, or the thread either loses its sides or grows ghosts.
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString());
+        var connector = new StubConnector();
+        connector.Tickets.Add(Incoming("7809"));
+        connector.Notes["7809"] =
+        [
+            Note("1", "Jane Tech", "Working on it.", clock.GetUtcNow()),
+            new UnifiedTicketNote("2", "Ravi Customer", "Still broken on my side.", IsPublic: true,
+                clock.GetUtcNow().AddMinutes(1), FromClient: true),
+        ];
+
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        var contactNote = await db.TicketNotes.SingleAsync(n => n.ExternalNoteId == "2");
+        contactNote.AuthoredByClient.Should().BeTrue("the provider says a customer contact wrote it");
+        (await db.TicketNotes.SingleAsync(n => n.ExternalNoteId == "1")).AuthoredByClient.Should().BeFalse();
+
+        // Deleted in the PSA → gone here too, client-authored or not.
+        connector.Notes["7809"] = [Note("1", "Jane Tech", "Working on it.", clock.GetUtcNow())];
+        var run = await Runner(db, connector, clock).RunAsync(Conn, full: true);
+        run.NotesRemoved.Should().Be(1);
+        (await db.TicketNotes.AnyAsync(n => n.ExternalNoteId == "2")).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task A_reply_that_logged_time_carries_its_hours_for_staff_but_never_for_the_client()
     {
         // "Reply + 0.5h" in one send: the PSA keeps the note and the entry as unrelated records,

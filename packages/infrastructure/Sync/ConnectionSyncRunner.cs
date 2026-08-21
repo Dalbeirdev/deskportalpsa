@@ -222,7 +222,10 @@ public sealed class ConnectionSyncRunner(
                 // An empty author means the provider generated the note itself (workflow/SLA); name it
                 // after the provider rather than leaving a blank byline in the thread.
                 AuthorName = string.IsNullOrWhiteSpace(n.AuthorName) ? $"{connection.Provider} automation" : n.AuthorName,
-                AuthoredByClient = false,
+                // The provider's word on which SIDE wrote it — a customer contact's note must land
+                // on the client side of the thread, not read as the MSP's own words.
+                AuthoredByClient = n.FromClient,
+                ImportedFromProvider = true,
                 Body = n.Body,
                 IsPublic = n.IsPublic,
                 NoteCreatedAt = n.CreatedAt,
@@ -258,9 +261,11 @@ public sealed class ConnectionSyncRunner(
         var orphans = await db.TicketNotes
             .Where(n => n.TicketId == ticketId
                         && n.ExternalNoteId != null
-                        // Provider-origin: every imported note is stamped this way, and every portal
-                        // reply the opposite, so this separates the two without a redundant column.
-                        && !n.AuthoredByClient
+                        // Provider-origin only. AuthoredByClient used to stand in for this, which
+                        // held exactly as long as no imported note was ever client-authored — now
+                        // that customer-contact notes import with their real side, origin needs its
+                        // own flag or every one of them would be shielded from deletion forever.
+                        && n.ImportedFromProvider
                         // When the time-entry read failed, its notes are missing from `incoming` for
                         // that reason alone — absence there is not evidence of deletion.
                         && (timeNotesFetched || !n.ExternalNoteId.StartsWith("te-"))

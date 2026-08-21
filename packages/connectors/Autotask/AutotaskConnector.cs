@@ -191,7 +191,9 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
         return items.Select(n => new UnifiedTicketNote(
             n.Id.ToString(),
             AuthorOf(n, names, contactNames),
-            n.Description ?? "", IsPublic: n.Publish == config.PublicPublishValue, n.CreateDateTime ?? clock.GetUtcNow())).ToList();
+            n.Description ?? "", IsPublic: n.Publish == config.PublicPublishValue, n.CreateDateTime ?? clock.GetUtcNow(),
+            // createdByContactID set = the CUSTOMER's contact wrote it — client side of the thread.
+            FromClient: n.CreatedByContactId is > 0)).ToList();
     }
 
     private static string AuthorOf(AtTicketNote note, IReadOnlyDictionary<long, string> resources, IReadOnlyDictionary<long, string> contacts)
