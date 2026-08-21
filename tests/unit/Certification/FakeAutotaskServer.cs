@@ -65,7 +65,7 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
 
         // Create / update
         if (path.EndsWith("V1.0/Tickets", StringComparison.OrdinalIgnoreCase) && request.Method == HttpMethod.Post)
-            return Json(CreateTicket(body));
+            return CreateTicketChecked(body);
         if (path.EndsWith("V1.0/Tickets", StringComparison.OrdinalIgnoreCase) && request.Method == HttpMethod.Patch)
             return UpdateTicket(body);
         // Notes are a CHILD collection: creates go to the parent ticket's /Notes route. Posting to
@@ -98,6 +98,31 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
         return Resp(HttpStatusCode.NotFound, "{}");
     }
 
+    /// <summary>
+    /// Autotask's numeric picklist fields. The live API answers a label with
+    /// HTTP 500 "Could not convert string to integer", so the fake must too — the connector shipped
+    /// sending "In Progress" for months because this fake accepted anything.
+    /// </summary>
+    private static readonly string[] NumericFields = ["status", "priority", "queueID", "ticketCategory"];
+
+    private HttpResponseMessage? RejectNonNumericPicklists(Dictionary<string, object?> input)
+    {
+        foreach (var field in NumericFields)
+        {
+            if (input.GetValueOrDefault(field) is not string s || string.IsNullOrEmpty(s)) continue;
+            if (!long.TryParse(s, out _))
+                return Resp(HttpStatusCode.InternalServerError,
+                    $"{{\"errors\":[\"Could not convert string to integer: {s}. Path '{field}', line 1, position 33.\"]}}");
+        }
+        return null;
+    }
+
+    private HttpResponseMessage CreateTicketChecked(string body)
+    {
+        var input = Parse(body);
+        return RejectNonNumericPicklists(input) ?? Json(CreateTicket(body));
+    }
+
     private string CreateTicket(string body)
     {
         var input = Parse(body);
@@ -122,6 +147,7 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
     private HttpResponseMessage UpdateTicket(string body)
     {
         var input = Parse(body);
+        if (RejectNonNumericPicklists(input) is { } rejected) return rejected;
         var id = Convert.ToInt64(input["id"]);
         var ticket = _tickets.FirstOrDefault(x => (long)x["id"]! == id);
         if (ticket is null) return Resp(HttpStatusCode.NotFound, "{}");
@@ -237,7 +263,7 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
 
     private static string FieldInfoJson() =>
         "{\"fields\":[" +
-        "{\"name\":\"status\",\"picklistValues\":[{\"value\":\"1\",\"label\":\"New\",\"isActive\":true},{\"value\":\"5\",\"label\":\"Complete\",\"isActive\":true}]}," +
+        "{\"name\":\"status\",\"picklistValues\":[{\"value\":\"1\",\"label\":\"New\",\"isActive\":true},{\"value\":\"5\",\"label\":\"Complete\",\"isActive\":true},{\"value\":\"7\",\"label\":\"Resolved\",\"isActive\":true}]}," +
         "{\"name\":\"priority\",\"picklistValues\":[{\"value\":\"1\",\"label\":\"High\",\"isActive\":true}]}," +
         "{\"name\":\"queueID\",\"picklistValues\":[{\"value\":\"8\",\"label\":\"Service Desk\",\"isActive\":true}]}]}";
 

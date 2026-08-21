@@ -112,13 +112,15 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
             filters.Add(Filter("lastActivityDate", "gte", clock.GetUtcNow().AddDays(-days).ToString("o")));
 
         var items = await QueryAsync<AtTicket>("Tickets", filters, filter.PageSize, ct);
-        return new PaginatedResult<UnifiedTicket>(items.Select(ToUnified).ToList(), null, false);
+        var mapped = new List<UnifiedTicket>(items.Count);
+        foreach (var item in items) mapped.Add(await ToUnifiedAsync(item, ct));
+        return new PaginatedResult<UnifiedTicket>(mapped, null, false);
     }
 
     public async Task<UnifiedTicket?> GetTicketAsync(string ticketId, CancellationToken ct = default)
     {
         var item = await GetByIdAsync<AtTicket>("Tickets", ticketId, ct);
-        return item is null ? null : ToUnified(item);
+        return item is null ? null : await ToUnifiedAsync(item, ct);
     }
 
     public async Task<CreateTicketResult> CreateTicketAsync(UnifiedTicketCreateRequest ticket, CancellationToken ct = default)
@@ -127,10 +129,11 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
         {
             ["title"] = ticket.Title,
             ["description"] = ticket.Description,
-            ["status"] = ticket.Status,
-            ["priority"] = ticket.Priority,
-            ["queueID"] = ticket.QueueOrBoard,
-            ["ticketCategory"] = ticket.Category,
+            // Numeric picklists — same label→id resolution the update path needs.
+            ["status"] = await IdForAsync("status", ticket.Status, ct),
+            ["priority"] = await IdForAsync("priority", ticket.Priority, ct),
+            ["queueID"] = await IdForAsync("queueID", ticket.QueueOrBoard, ct),
+            ["ticketCategory"] = await IdForAsync("ticketCategory", ticket.Category, ct),
             ["companyID"] = long.Parse(ticket.ExternalCompanyId),
         };
         // Optional classification — Autotask tenants differ on which of these are mandatory, so
@@ -149,10 +152,11 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
             ?? throw new ConnectorException(ConnectorFailureKind.NotFound, $"Ticket {ticketId} not found.");
 
         var body = new Dictionary<string, object?> { ["id"] = long.Parse(ticketId) };
-        if (update.Status is not null) body["status"] = update.Status;
-        if (update.Priority is not null) body["priority"] = update.Priority;
-        if (update.Category is not null) body["ticketCategory"] = update.Category;
-        if (update.QueueOrBoard is not null) body["queueID"] = update.QueueOrBoard;
+        // Every one of these is a numeric picklist in Autotask — resolve labels to ids first.
+        if (update.Status is not null) body["status"] = await IdForAsync("status", update.Status, ct);
+        if (update.Priority is not null) body["priority"] = await IdForAsync("priority", update.Priority, ct);
+        if (update.Category is not null) body["ticketCategory"] = await IdForAsync("ticketCategory", update.Category, ct);
+        if (update.QueueOrBoard is not null) body["queueID"] = await IdForAsync("queueID", update.QueueOrBoard, ct);
         if (update.AssignedTechnicianExternalId is not null)
         {
             body["assignedResourceID"] = update.AssignedTechnicianExternalId;
@@ -554,6 +558,71 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
     private Task<IReadOnlyList<ExternalFieldOption>> PicklistAsync(string fieldName, CancellationToken ct)
         => PicklistAsync("Tickets", fieldName, ct);
 
+    // Ticket field metadata, fetched at most once per connector instance: a sync run maps hundreds
+    // of tickets and every one of them needs the same picklists.
+    private Task<AtFieldInfoResult?>? _ticketFields;
+    private Task<AtFieldInfoResult?> TicketFieldsAsync(CancellationToken ct)
+        => _ticketFields ??= SendAsync<AtFieldInfoResult>(HttpMethod.Get, "V1.0/Tickets/entityInformation/fields", null, ct);
+
+    private async Task<List<AtPicklistValue>> TicketPicklistAsync(string field, CancellationToken ct)
+    {
+        try
+        {
+            var info = await TicketFieldsAsync(ct);
+            return info?.Fields.FirstOrDefault(f => string.Equals(f.Name, field, StringComparison.OrdinalIgnoreCase))
+                ?.PicklistValues ?? [];
+        }
+        catch (ConnectorException)
+        {
+            // Metadata is an enhancement, not a dependency: without it values pass through
+            // unresolved, exactly as they did before — never fail a sync over a label lookup.
+            return [];
+        }
+    }
+
+    private static string Norm(string s) => new([.. s.ToLowerInvariant().Where(char.IsLetterOrDigit)]);
+
+    /// <summary>
+    /// Picklist id → the tenant's own label, for values coming FROM Autotask. Without this the
+    /// portal stored raw ids and showed users a status of "1".
+    /// </summary>
+    private async Task<string?> LabelForAsync(string field, string? id, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return id;
+        var values = await TicketPicklistAsync(field, ct);
+        return values.FirstOrDefault(v => v.Value == id)?.Label ?? id;
+    }
+
+    /// <summary>
+    /// The reverse, for values going TO Autotask: every one of these fields is a numeric picklist,
+    /// so sending a label ("In Progress") earns a 500 "Could not convert string to integer". Already
+    /// numeric values pass straight through; unmatched labels are sent as-is so Autotask's own
+    /// validation — not a guess here — has the final say.
+    /// </summary>
+    private async Task<object?> IdForAsync(string field, string? value, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return value;
+        if (long.TryParse(value, out var already)) return already;
+
+        var values = await TicketPicklistAsync(field, ct);
+        // No metadata (older tenant, or the call failed) — pass through and let Autotask judge,
+        // exactly as this connector behaved before label resolution existed.
+        if (values.Count == 0) return value;
+
+        var want = Norm(value);
+        var match = values.FirstOrDefault(v => Norm(v.Label ?? "") == want)
+                 ?? values.FirstOrDefault(v => Norm(v.Label ?? "").StartsWith(want))
+                 ?? values.FirstOrDefault(v => want.Length >= 3 && Norm(v.Label ?? "").Contains(want));
+        if (match?.Value is { } m && long.TryParse(m, out var id)) return id;
+
+        // Unmappable. Autotask's own answer here is HTTP 500 "Could not convert string to integer",
+        // which tells the reader nothing about how to fix it. Name the real options instead — the
+        // fix is a field mapping, and this is the message that says so.
+        throw new ConnectorException(ConnectorFailureKind.InvalidRequest,
+            $"\"{value}\" is not a valid Autotask {field}. Map it to one of: " +
+            $"{string.Join(", ", values.Where(v => v.IsActive).Select(v => v.Label))}.");
+    }
+
     private async Task<IReadOnlyList<ExternalFieldOption>> PicklistAsync(string entity, string fieldName, CancellationToken ct)
     {
         var info = await SendAsync<AtFieldInfoResult>(HttpMethod.Get, $"V1.0/{entity}/entityInformation/fields", null, ct);
@@ -662,15 +731,21 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
         };
     }
 
-    private UnifiedTicket ToUnified(AtTicket t) => new()
+    /// <summary>
+    /// Autotask answers with numeric picklist IDS, so an unmapped ticket reached the portal with a
+    /// status of "1". Resolve each one to the tenant's own label before it leaves the connector —
+    /// the mapping engine then has something meaningful to match on, and an unmapped value at least
+    /// reads as words. Metadata is memoized, so this costs one request per sync run, not per ticket.
+    /// </summary>
+    private async Task<UnifiedTicket> ToUnifiedAsync(AtTicket t, CancellationToken ct) => new()
     {
         ExternalId = t.Id.ToString(),
         Title = t.Title ?? "",
         Description = t.Description,
-        Status = t.Status,
-        Priority = t.Priority,
-        Category = t.Category,
-        QueueOrBoard = t.QueueId,
+        Status = await LabelForAsync("status", t.Status, ct),
+        Priority = await LabelForAsync("priority", t.Priority, ct),
+        Category = await LabelForAsync("ticketCategory", t.Category, ct),
+        QueueOrBoard = await LabelForAsync("queueID", t.QueueId, ct),
         AssignedTechnicianExternalId = t.AssignedResourceId,
         RequesterExternalId = t.CompanyId.ToString(),
         CreatedAt = t.CreateDate,
