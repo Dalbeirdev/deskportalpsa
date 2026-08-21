@@ -103,3 +103,12 @@ public sealed record NotificationDto(
     string Kind,
     string Summary,
     DateTimeOffset At);
+
+/// <summary>One entry in the client's notification history. Kind: ticket-created | client-reply |
+/// staff-reply | ticket-resolved. Actor is the author for replies, null for lifecycle events.</summary>
+public sealed record ActivityEventDto(
+    Guid TicketId,
+    string TicketTitle,
+    string Kind,
+    string? Actor,
+    DateTimeOffset At);

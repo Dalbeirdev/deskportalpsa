@@ -9,11 +9,14 @@ import { UserMenu } from '@/components/UserMenu';
 import { api } from '@/lib/api';
 import {
   Rocket, FileText, Users, Server, UserCheck, ArrowUpCircle, Clock, CalendarDays,
-  Megaphone, BarChart3, LayoutDashboard, Lock, Palette, BookOpen,
+  Megaphone, BarChart3, LayoutDashboard, Lock, Palette, BookOpen, Bell,
 } from 'lucide-react';
 
 type Section = {
   key: string; href: string; label: string; icon: React.ElementType; live: boolean;
+  /// Shown to every client user regardless of section grants — for surfaces scoped to the
+  /// caller's own data (like notification history) where a grant concept doesn't apply.
+  always?: boolean;
 };
 
 // Sections mirror the client control panel; keys match the API's ControlPanelSection camelCase names.
@@ -32,6 +35,7 @@ const ACCOUNTS: Section[] = [
   { key: 'accounts', href: '/control-panel/accounts', label: 'Accounts & Devices', icon: Server, live: true },
   { key: 'reports', href: '/control-panel/reports', label: 'Reports', icon: BarChart3, live: true },
   { key: 'branding', href: '/control-panel/branding', label: 'Branding', icon: Palette, live: true },
+  { key: 'notificationHistory', href: '/control-panel/notifications', label: 'Notification History', icon: Bell, live: true, always: true },
 ];
 
 export default function ControlPanelLayout({ children }: { children: React.ReactNode }) {
@@ -50,7 +54,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   const renderGroup = (label: string, items: Section[]) => {
     // A section is shown when the caller can access it (admins get every key). Until capabilities
     // load we optimistically show the two live CP-1 sections so the panel isn't blank.
-    const visible = items.filter((s) => (caps ? allowed.has(s.key) : s.live));
+    const visible = items.filter((s) => s.always || (caps ? allowed.has(s.key) : s.live));
     if (visible.length === 0) return null;
     return (
       <div className="space-y-1">

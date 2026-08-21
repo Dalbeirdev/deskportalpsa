@@ -21,6 +21,13 @@ public interface ITicketReadService
     /// <summary>Any ticket in the tenant, for staff holding TicketsViewAll.</summary>
     Task<TicketDetailDto?> GetDetailForStaffAsync(Guid ticketId, CancellationToken ct = default);
     Task<IReadOnlyList<NotificationDto>> RecentActivityAsync(ClientAccess access, int take = 10, CancellationToken ct = default);
+
+    /// <summary>
+    /// Notification history for the client: a merged, dated feed of what actually happened on
+    /// their visible tickets — created, publicly replied to, resolved. Derived from real records,
+    /// company-scoped (own tickets only for non-admins), and internal notes never appear.
+    /// </summary>
+    Task<IReadOnlyList<ActivityEventDto>> ActivityHistoryAsync(ClientAccess access, int take = 50, CancellationToken ct = default);
 }
 
 /// <summary>

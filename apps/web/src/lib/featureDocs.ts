@@ -173,6 +173,7 @@ export const FEATURE_DOCS: FeatureDoc[] = [
           'Business hours (weekly schedule) and a holiday calendar — importable in one click from the PSA’s own holiday lists, with re-imports never duplicating a date.',
           'Announcements — pinned, published client-authored notices.',
           'Reports — live account reports, CSV export, and scheduled reports with a run history.',
+          'Notification history — a dated feed of everything that happened on their tickets (opened, replied to, resolved), derived from real records.',
           'Branding — display name, logo and accent color for their account.',
           'Knowledge base — per-account FAQ articles, drafted and published by category.',
         ],

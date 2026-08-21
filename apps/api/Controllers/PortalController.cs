@@ -20,6 +20,11 @@ public sealed class PortalController(
     public async Task<IActionResult> Notifications(CancellationToken ct)
         => Ok(await reads.RecentActivityAsync(await AccessAsync(ct), 10, ct));
 
+    /// <summary>Dated feed of what actually happened on the caller's visible tickets.</summary>
+    [HttpGet("notifications/history")]
+    public async Task<IActionResult> NotificationHistory(CancellationToken ct)
+        => Ok(await reads.ActivityHistoryAsync(await AccessAsync(ct), 50, ct));
+
     /// <summary>
     /// The caller's own profile. Unlike everything else on this controller it is
     /// NOT client-scoped: staff (technicians, managers, MSP admins) have profiles
