@@ -99,6 +99,7 @@ public sealed class StubConnector(ProviderType provider = ProviderType.AutotaskP
             SupportsAttachmentDownload = SupportsAttachmentDownload,
             SupportsAttachmentSweep = SupportsAttachmentSweep,
             SupportsContracts = SupportsContracts,
+            SupportsHolidayCalendars = SupportsHolidayCalendars,
         });
     public Task<ConnectionTestResult> TestConnectionAsync(CancellationToken ct = default) => No<ConnectionTestResult>();
     public Task<IReadOnlyList<ExternalOrganization>> GetOrganizationsAsync(CancellationToken ct = default) => No<IReadOnlyList<ExternalOrganization>>();
@@ -111,6 +112,11 @@ public sealed class StubConnector(ProviderType provider = ProviderType.AutotaskP
     public Dictionary<string, List<ExternalAgreement>> Agreements { get; } = [];
     public Task<IReadOnlyList<ExternalAgreement>> GetAgreementsAsync(string organizationId, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<ExternalAgreement>>(Agreements.GetValueOrDefault(organizationId, []));
+
+    public bool SupportsHolidayCalendars { get; set; }
+    public List<ExternalHoliday> Holidays { get; } = [];
+    public Task<IReadOnlyList<ExternalHoliday>> GetHolidaysAsync(CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<ExternalHoliday>>(Holidays);
     public Task<UnifiedTicket?> GetTicketAsync(string ticketId, CancellationToken ct = default) => No<UnifiedTicket?>();
     /// <summary>What the provider answers to the next create; default is acceptance.</summary>
     public CreateTicketResult NextCreateResult { get; set; } = new(true, "9001", null);

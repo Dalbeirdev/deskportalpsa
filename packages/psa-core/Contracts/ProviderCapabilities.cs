@@ -41,6 +41,9 @@ public record ProviderCapabilities
     public bool SupportsTimeEntries { get; init; }
     public bool SupportsAssets { get; init; }
     public bool SupportsContracts { get; init; }
+
+    /// <summary>Provider maintains a holiday calendar the portal can import (CW holiday lists, AT holiday sets).</summary>
+    public bool SupportsHolidayCalendars { get; init; }
     public bool SupportsSlaData { get; init; }
     public bool SupportsCustomFields { get; init; }
     public bool SupportsInboundWebhooks { get; init; }

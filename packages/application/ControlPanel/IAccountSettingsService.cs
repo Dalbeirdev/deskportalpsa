@@ -35,4 +35,7 @@ public interface IAccountSettingsService
 
     /// <summary>Live PSA view of the account: agreements/contracts + the queues its tickets flow through.</summary>
     Task<AccountPsaViewDto> PsaViewAsync(ClientAccess access, CancellationToken ct = default);
+
+    /// <summary>Imports the provider's holiday calendar into the account's holidays (no duplicates).</summary>
+    Task<HolidayImportResult> ImportHolidaysFromPsaAsync(ClientAccess access, CancellationToken ct = default);
 }

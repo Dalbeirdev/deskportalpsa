@@ -50,6 +50,10 @@ public sealed class FakeConnectWiseServer(TimeProvider clock) : HttpMessageHandl
         if (path.EndsWith("company/companies")) return Arr("[{\"id\":1,\"name\":\"Acme Corp\",\"deletedFlag\":false}]");
         if (path.EndsWith("company/contacts")) return Arr("[{\"id\":10,\"firstName\":\"Acme\",\"lastName\":\"User\",\"email\":\"user@acme.test\",\"inactiveFlag\":false}]");
         if (path.EndsWith("system/members")) return Arr("[{\"id\":20,\"firstName\":\"Tech\",\"lastName\":\"One\",\"primaryEmail\":\"tech@msp.test\",\"inactiveFlag\":false}]");
+        if (path.EndsWith("schedule/holidayLists"))
+            return Arr("[{\"id\":5,\"name\":\"Standard Holidays\"}]");
+        if (path.Contains("schedule/holidayLists/") && path.EndsWith("/holidays"))
+            return Arr("[{\"id\":50,\"name\":\"Christmas Day\",\"date\":\"2026-12-25T00:00:00Z\"},{\"id\":51,\"name\":\"Christmas Day\",\"date\":\"2026-12-25T00:00:00Z\"}]");
         if (path.EndsWith("finance/agreements"))
             return Arr("[{\"id\":40,\"name\":\"Managed Services\",\"type\":{\"id\":2,\"name\":\"Managed\"},\"agreementStatus\":\"Active\",\"startDate\":\"2026-01-01T00:00:00Z\",\"noEndingDateFlag\":true}]");
         if (path.EndsWith("service/boards")) return Arr("[{\"id\":1,\"name\":\"Service Desk\"}]");

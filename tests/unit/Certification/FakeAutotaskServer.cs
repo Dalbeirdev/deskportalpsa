@@ -24,6 +24,8 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
         [new() { ["id"] = 20L, ["email"] = "tech@msp.test", ["firstName"] = "Tech", ["lastName"] = "One", ["isActive"] = true }];
     private readonly List<Dictionary<string, object?>> _contracts =
         [new() { ["id"] = 30L, ["companyID"] = 1L, ["contractName"] = "Managed Services", ["contractType"] = 7L, ["status"] = 1L, ["startDate"] = "2026-01-01T00:00:00Z", ["endDate"] = "2026-12-31T00:00:00Z" }];
+    private readonly List<Dictionary<string, object?>> _holidays =
+        [new() { ["id"] = 60L, ["holidayName"] = "Christmas Day", ["holidayDate"] = "2026-12-25T00:00:00Z" }];
     private readonly List<Dictionary<string, object?>> _tickets = [];
     private readonly List<Dictionary<string, object?>> _notes = [];
     private readonly List<Dictionary<string, object?>> _attachments = [];
@@ -56,6 +58,7 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
         if (path.EndsWith("Contacts/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_contacts, body));
         if (path.EndsWith("Resources/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_resources, body));
         if (path.EndsWith("Contracts/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_contracts, body));
+        if (path.EndsWith("Holidays/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_holidays, body));
         if (path.EndsWith("Tickets/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_tickets, body));
         if (path.EndsWith("TicketNotes/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_notes, body));
         if (path.EndsWith("TicketAttachments/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(StripData(_attachments), body));

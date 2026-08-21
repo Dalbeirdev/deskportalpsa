@@ -375,6 +375,10 @@ export const api = {
   cpHolidays: () => request('/api/control-panel/holidays', z.array(HolidaySchema)) as Promise<Holiday[]>,
   cpSaveHoliday: (body: HolidayInput) => request('/api/control-panel/holidays', HolidaySchema, { method: 'PUT', body: JSON.stringify(body) }) as Promise<Holiday>,
   cpDeleteHoliday: (id: string) => request(`/api/control-panel/holidays/${id}`, z.unknown(), { method: 'DELETE' }),
+  cpImportHolidaysFromPsa: () =>
+    request('/api/control-panel/holidays/import-from-psa',
+      z.object({ supported: z.boolean(), created: z.number(), skipped: z.number() }),
+      { method: 'POST' }),
   cpImportFromPsa: () =>
     request('/api/control-panel/import-from-psa',
       z.object({ usersCreated: z.number(), usersUpdated: z.number(), devicesCreated: z.number(), devicesUpdated: z.number() }),

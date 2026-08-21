@@ -55,6 +55,47 @@ public sealed class AccountSettingsService(
         }
     }
 
+    public async Task<HolidayImportResult> ImportHolidaysFromPsaAsync(ClientAccess access, CancellationToken ct = default)
+    {
+        await EnsureSectionAsync(access, ControlPanelSection.Holidays, ct);
+
+        var company = await db.ClientCompanies.FirstOrDefaultAsync(c => c.Id == access.ClientCompanyId, ct)
+            ?? throw new NotFoundException("Account");
+        var connector = await connectors.ResolveAsync(company.PsaConnectionId, ct);
+        if (!(await connector.GetCapabilitiesAsync(ct)).SupportsHolidayCalendars)
+            return new HolidayImportResult(false, 0, 0);
+
+        var incoming = await connector.GetHolidaysAsync(ct);
+
+        // Dedupe by DATE alone, not date+name: a client who renamed "Christmas Day" to "Xmas
+        // closure" should not get a second row for the same closed day on every re-import.
+        var existingDates = (await db.Holidays
+                .Where(h => h.ClientCompanyId == company.Id)
+                .Select(h => h.Date)
+                .ToListAsync(ct))
+            .ToHashSet();
+
+        int created = 0, skipped = 0;
+        foreach (var h in incoming)
+        {
+            if (existingDates.Contains(h.Date)) { skipped++; continue; }
+            db.Holidays.Add(new Holiday
+            {
+                MspOrganizationId = company.MspOrganizationId,
+                ClientCompanyId = company.Id,
+                Date = h.Date,
+                Name = h.Name,
+            });
+            existingDates.Add(h.Date);
+            created++;
+        }
+        if (created > 0) await db.SaveChangesAsync(ct);
+
+        await audit.WriteAsync("control_panel.holidays.imported_from_psa", nameof(Holiday), company.Id.ToString(),
+            new { created, skipped }, ct);
+        return new HolidayImportResult(true, created, skipped);
+    }
+
     // ---- Import from the PSA (contacts → client users, devices/configurations → devices) ----
 
     public async Task<PsaImportResult> ImportFromPsaAsync(ClientAccess access, CancellationToken ct = default)

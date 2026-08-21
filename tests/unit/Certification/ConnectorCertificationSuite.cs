@@ -49,6 +49,23 @@ public abstract class ConnectorCertificationSuite
         => (await CreateConnector().TestConnectionAsync()).Success.Should().BeTrue();
 
     [Fact]
+    public async Task Holidays_come_back_as_iso_days_deduplicated_when_the_provider_has_a_calendar()
+    {
+        var c = CreateConnector();
+        var caps = await c.GetCapabilitiesAsync();
+        var items = await c.GetHolidaysAsync();
+        if (!caps.SupportsHolidayCalendars)
+        {
+            items.Should().BeEmpty("a provider without the concept answers empty, not with an exception");
+            return;
+        }
+        items.Should().NotBeEmpty("SupportsHolidayCalendars is a promise, not decoration");
+        items.Should().OnlyContain(h => System.Text.RegularExpressions.Regex.IsMatch(h.Date, @"^\d{4}-\d{2}-\d{2}$"),
+            "holidays are DAY-scoped — a timestamp invites timezone off-by-one-day bugs");
+        items.Should().OnlyHaveUniqueItems(h => h.Date + "|" + h.Name);
+    }
+
+    [Fact]
     public async Task Agreements_are_read_per_organization_when_the_provider_supports_contracts()
     {
         var c = CreateConnector();

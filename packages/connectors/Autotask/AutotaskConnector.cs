@@ -33,6 +33,7 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
             SupportsTicketCreate = true, SupportsTicketUpdate = true, SupportsTicketDelete = false,
             SupportsPublicNotes = true, SupportsPrivateNotes = true, SupportsAttachments = true, SupportsAttachmentDownload = true, SupportsAttachmentSweep = true,
             SupportsTimeEntries = true, SupportsAssets = true, SupportsContracts = true,
+            SupportsHolidayCalendars = true,
             SupportsSlaData = true, SupportsCustomFields = true, SupportsInboundWebhooks = true,
             SupportsOutboundWebhooks = false, SupportsIncrementalSync = true, SupportsBulkRead = true,
             SupportsBulkWrite = false, SupportsCompanies = true, SupportsContacts = true,
@@ -164,6 +165,19 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
 
         await SendAsync<AtCreateResult>(HttpMethod.Patch, "V1.0/Tickets", body, ct);
         return new UpdateTicketResult(true, null);
+    }
+
+    public async Task<IReadOnlyList<ExternalHoliday>> GetHolidaysAsync(CancellationToken ct = default)
+    {
+        // All holiday sets merged: an MSP typically maintains one, and the portal's holiday page
+        // is a flat calendar anyway.
+        var items = await QueryAsync<AtHoliday>("Holidays", [Filter("id", "gte", 0)], 500, ct);
+        return items
+            .Where(h => h.HolidayDate is not null)
+            .Select(h => new ExternalHoliday(h.HolidayDate!.Value.ToString("yyyy-MM-dd"), h.HolidayName ?? "Holiday"))
+            .DistinctBy(h => (h.Date, h.Name))
+            .OrderBy(h => h.Date)
+            .ToList();
     }
 
     public async Task<IReadOnlyList<ExternalAgreement>> GetAgreementsAsync(string organizationId, CancellationToken ct = default)

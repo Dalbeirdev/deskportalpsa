@@ -170,7 +170,7 @@ export const FEATURE_DOCS: FeatureDoc[] = [
           'Users — invite, deactivate and grant sectional access to their own people.',
           'Accounts & devices — account details, devices imported from the PSA, the agreements and contracts the PSA holds for the account (read live, never cached), and the service queues their tickets flow through.',
           'Approvers and escalation levels.',
-          'Business hours (weekly schedule) and holiday calendar.',
+          'Business hours (weekly schedule) and a holiday calendar — importable in one click from the PSA’s own holiday lists, with re-imports never duplicating a date.',
           'Announcements — pinned, published client-authored notices.',
           'Reports — live account reports, CSV export, and scheduled reports with a run history.',
           'Branding — display name, logo and accent color for their account.',
