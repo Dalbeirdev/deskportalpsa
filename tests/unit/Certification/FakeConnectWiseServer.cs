@@ -19,6 +19,16 @@ public sealed class FakeConnectWiseServer(TimeProvider clock) : HttpMessageHandl
     public string? ForceBody { get; set; }
 
     private long _seq = 5000;
+
+    /// <summary>Seed a note as the provider would return it — raw fields, so tests can reproduce
+    /// payload quirks the create route never emits (contact authors, empty member stubs).</summary>
+    public void SeedNote(long ticketId, Dictionary<string, object?> note)
+    {
+        note["ticketID"] = ticketId;
+        note.TryAdd("id", ++_seq);
+        _notes.Add(note);
+    }
+
     // Documents keyed by id, holding what the real API stores: the record it hangs off, plus bytes.
     private readonly Dictionary<long, (long RecordId, string FileName, byte[] Content)> _documents = [];
     private readonly List<Dictionary<string, object?>> _tickets = [];
