@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarDays, Plus, Trash2, Check, X } from 'lucide-react';
+import { CalendarDays, Plus, Trash2, Check, X, DownloadCloud } from 'lucide-react';
 import { api, type HolidayInput } from '@/lib/api';
 import { CpHeader, AccessError, Field } from '../_ui';
 
@@ -24,10 +24,37 @@ export default function HolidaysPage() {
     mutationFn: (id: string) => api.cpDeleteHoliday(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['cp-holidays'] }),
   });
+  // Pull the MSP's own holiday calendar from the PSA — re-running never duplicates a date.
+  const importPsa = useMutation({
+    mutationFn: () => api.cpImportHolidaysFromPsa(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['cp-holidays'] }),
+  });
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <CpHeader icon={CalendarDays} title="Holidays" subtitle="Days your organization is closed or on reduced coverage, so technicians plan around them." />
+
+      {!error && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+          <p className="text-xs text-[var(--muted)]">
+            Import your service provider&apos;s holiday calendar from the PSA.
+            {importPsa.isSuccess && importPsa.data && (
+              <span className="ml-1 font-medium text-green-600 dark:text-green-400">
+                {!importPsa.data.supported
+                  ? 'Your provider does not expose a holiday calendar.'
+                  : `Imported ${importPsa.data.created} new, ${importPsa.data.skipped} already present.`}
+              </span>
+            )}
+            {importPsa.isError && (
+              <span className="ml-1 text-red-600 dark:text-red-400">{(importPsa.error as Error)?.message ?? 'Import failed'}</span>
+            )}
+          </p>
+          <button onClick={() => importPsa.mutate()} disabled={importPsa.isPending}
+            className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--bg)] disabled:opacity-50">
+            <DownloadCloud size={15} /> {importPsa.isPending ? 'Importing…' : 'Import from PSA'}
+          </button>
+        </div>
+      )}
 
       {error ? <AccessError label="Holidays" /> : (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">

@@ -73,6 +73,11 @@ public sealed class AccountSettingsController(
     public async Task<IActionResult> PsaView(CancellationToken ct)
         => Ok(await svc.PsaViewAsync(await AccessAsync(ct), ct));
 
+    /// <summary>Imports the provider's holiday calendar into this account's holidays.</summary>
+    [HttpPost("holidays/import-from-psa")]
+    public async Task<IActionResult> ImportHolidays(CancellationToken ct)
+        => Ok(await svc.ImportHolidaysFromPsaAsync(await AccessAsync(ct), ct));
+
     // ---- Devices ----
     [HttpGet("devices")]
     public async Task<IActionResult> ListDevices(CancellationToken ct)

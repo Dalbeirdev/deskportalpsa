@@ -74,6 +74,32 @@ public class AccountSettingsTests
     }
 
     [Fact]
+    public async Task Holiday_import_pulls_the_psa_calendar_once_and_survives_renames()
+    {
+        var (_, h) = Build();
+        var stub = new StubConnector { SupportsHolidayCalendars = true };
+        stub.Holidays.Add(new Desk.PsaCore.Models.ExternalHoliday("2026-12-25", "Christmas Day"));
+        stub.Holidays.Add(new Desk.PsaCore.Models.ExternalHoliday("2027-01-01", "New Year's Day"));
+        var svc = new AccountSettingsService(h.Db, new AuditWriter(h.Db, h.User, h.Tenant, h.Clock), new FakeConnectorResolver(stub));
+
+        var first = await svc.ImportHolidaysFromPsaAsync(AdminAccess);
+        first.Should().Be(new HolidayImportResult(true, 2, 0));
+
+        // The client renames a day; a re-import must not resurrect a duplicate row for that date.
+        var xmas = (await svc.ListHolidaysAsync(AdminAccess)).Single(x => x.Date == "2026-12-25");
+        await svc.SaveHolidayAsync(AdminAccess, new HolidayInput(xmas.Id, "2026-12-25", "Xmas closure"));
+
+        var second = await svc.ImportHolidaysFromPsaAsync(AdminAccess);
+        second.Should().Be(new HolidayImportResult(true, 0, 2));
+        (await svc.ListHolidaysAsync(AdminAccess)).Should().HaveCount(2);
+
+        // A provider with no calendar concept says so, instead of a fake "0 imported" success.
+        var without = new AccountSettingsService(h.Db, new AuditWriter(h.Db, h.User, h.Tenant, h.Clock),
+            new FakeConnectorResolver(new StubConnector()));
+        (await without.ImportHolidaysFromPsaAsync(AdminAccess)).Supported.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Account_read_projects_the_client_company_with_connection_name()
     {
         var (svc, _) = Build();

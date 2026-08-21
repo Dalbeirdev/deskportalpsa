@@ -32,6 +32,7 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
             SupportsTicketCreate = true, SupportsTicketUpdate = true, SupportsTicketDelete = false,
             SupportsPublicNotes = true, SupportsPrivateNotes = true, SupportsAttachments = true, SupportsAttachmentDownload = true, SupportsAttachmentSweep = false,
             SupportsTimeEntries = true, SupportsAssets = true, SupportsContracts = true,
+            SupportsHolidayCalendars = true,
             SupportsSlaData = true, SupportsCustomFields = true, SupportsInboundWebhooks = true,
             SupportsOutboundWebhooks = true, SupportsIncrementalSync = true, SupportsBulkRead = true,
             SupportsBulkWrite = false, SupportsCompanies = true, SupportsContacts = true,
@@ -80,6 +81,24 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
             c.Type?.Name,
             c.SerialNumber ?? c.TagNumber,
             !string.Equals(c.Status?.Name, "Inactive", StringComparison.OrdinalIgnoreCase))).ToList();
+    }
+
+    public async Task<IReadOnlyList<ExternalHoliday>> GetHolidaysAsync(CancellationToken ct = default)
+    {
+        const int maxLists = 10; // an MSP keeps one or two; cap the fan-out regardless
+        var lists = await GetListAsync<CwRef>("schedule/holidayLists", new() { ["pageSize"] = "100" }, ct);
+
+        var all = new List<ExternalHoliday>();
+        foreach (var list in lists.Take(maxLists))
+        {
+            List<CwHoliday> holidays;
+            try { holidays = await GetListAsync<CwHoliday>($"schedule/holidayLists/{list.Id}/holidays", new() { ["pageSize"] = "1000" }, ct); }
+            catch (ConnectorException) { continue; } // one unreadable list must not lose the rest
+            all.AddRange(holidays
+                .Where(h => h.Date is not null)
+                .Select(h => new ExternalHoliday(h.Date!.Value.ToString("yyyy-MM-dd"), h.Name ?? "Holiday")));
+        }
+        return all.DistinctBy(h => (h.Date, h.Name)).OrderBy(h => h.Date).ToList();
     }
 
     public async Task<IReadOnlyList<ExternalAgreement>> GetAgreementsAsync(string organizationId, CancellationToken ct = default)

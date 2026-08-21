@@ -27,6 +27,9 @@ public sealed record PsaImportResult(int UsersCreated, int UsersUpdated, int Dev
 
 public sealed record AgreementDto(string Name, string? Type, string? Status, DateTimeOffset? StartDate, DateTimeOffset? EndDate);
 
+/// <summary>Supported=false: the provider has no holiday calendar — different from an empty one.</summary>
+public sealed record HolidayImportResult(bool Supported, int Created, int Skipped);
+
 /// <summary>
 /// The PSA's view of this account, read live: the agreements/contracts that govern it, and the
 /// queues its tickets actually flow through. Supported=false means the provider has no contract

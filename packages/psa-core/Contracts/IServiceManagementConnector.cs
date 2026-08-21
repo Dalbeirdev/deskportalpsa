@@ -39,6 +39,13 @@ public interface IServiceManagementConnector
     /// </summary>
     Task<IReadOnlyList<ExternalAgreement>> GetAgreementsAsync(string organizationId, CancellationToken ct = default);
 
+    /// <summary>
+    /// The provider's holiday calendar (all lists/sets merged, deduplicated by date+name) — an MSP
+    /// typically maintains one. Only meaningful when
+    /// <see cref="ProviderCapabilities.SupportsHolidayCalendars"/>; others return empty.
+    /// </summary>
+    Task<IReadOnlyList<ExternalHoliday>> GetHolidaysAsync(CancellationToken ct = default);
+
     // Tickets
     Task<PaginatedResult<UnifiedTicket>> GetTicketsAsync(TicketFilter filter, CancellationToken ct = default);
     Task<UnifiedTicket?> GetTicketAsync(string ticketId, CancellationToken ct = default);

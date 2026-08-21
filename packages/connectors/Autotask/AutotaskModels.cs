@@ -109,6 +109,13 @@ internal sealed class AtTicketNote
     [JsonPropertyName("createdByContactID")] public long? CreatedByContactId { get; set; }
 }
 
+internal sealed class AtHoliday
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("holidayName")] public string? HolidayName { get; set; }
+    [JsonPropertyName("holidayDate")] public DateTimeOffset? HolidayDate { get; set; }
+}
+
 internal sealed class AtContract
 {
     [JsonPropertyName("id")] public long Id { get; set; }

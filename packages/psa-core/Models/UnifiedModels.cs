@@ -128,6 +128,13 @@ public enum BillableOption { Billable, DoNotBill, NoCharge }
 /// shows the client what already governs their account. Type and Status carry the provider's own
 /// labels, resolved by the connector, never a hardcoded translation table.
 /// </summary>
+/// <summary>
+/// A holiday from the provider's own calendar (CW holiday list, Autotask holiday set). Date is the
+/// ISO day (yyyy-MM-dd) — holidays are day-scoped, and carrying a timestamp would invite timezone
+/// off-by-one-day bugs for nothing.
+/// </summary>
+public record ExternalHoliday(string Date, string Name);
+
 public record ExternalAgreement(
     string ExternalId,
     string Name,
