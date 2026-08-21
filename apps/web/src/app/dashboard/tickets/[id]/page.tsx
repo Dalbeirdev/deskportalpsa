@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Pencil, MoreHorizontal, Paperclip,
   Send, ArrowUpDown, Lock, Monitor, Wifi, Mail, KeyRound, Cpu, Ticket,
-  Copy, RefreshCw, Download, Clock, Trash2, Check, X, ClipboardList, UserCog, ExternalLink} from 'lucide-react';
+  Copy, RefreshCw, Download, Clock, Trash2, Check, X, ClipboardList, UserCog, ExternalLink, AlertTriangle} from 'lucide-react';
 import { useTimer } from '@/components/TimerProvider';
 import { NoteBody, notePreview } from '@/components/NoteBody';
 import { api, type AssigneeOptions } from '@/lib/api';
@@ -514,16 +514,19 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs text-[var(--muted)]">Global timer</span>
+                {/* The timer is an alternative way to fill Hours, so it sits in its own tinted
+                    strip rather than floating between form fields as two bare buttons. */}
+                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-[var(--bg)] px-3 py-2">
+                  <span className="text-xs font-medium text-[var(--muted)]">Global timer</span>
                   <button type="button" onClick={startTimerHere}
-                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium ${timer.running && timer.target?.ticketId === id ? 'border-brand/40 bg-brand/5 text-brand' : 'border-[var(--border)] hover:bg-[var(--bg)]'}`}>
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium ${timer.running && timer.target?.ticketId === id ? 'border-brand/40 bg-brand/5 text-brand' : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--bg)]'}`}>
                     <Clock size={14} /> {timer.running && timer.target?.ticketId === id ? 'Timing…' : 'Start timer here'}
                   </button>
                   <button type="button" onClick={applyTimer} disabled={timer.seconds === 0}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm font-medium tabular-nums hover:bg-[var(--bg)] disabled:opacity-50">
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium tabular-nums hover:bg-[var(--bg)] disabled:opacity-50">
                     Use {String(Math.floor(timer.seconds / 60)).padStart(2, '0')}:{String(timer.seconds % 60).padStart(2, '0')}
                   </button>
+                  <span className="text-[11px] text-[var(--faint)]">Fills Hours from the tracked time.</span>
                 </div>
 
                 <label className="block">
@@ -532,19 +535,26 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                     className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
                 </label>
 
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs text-[var(--faint)]">Posts a time entry to the PSA against this ticket. Use the timer to track live, or enter hours directly.</p>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-3">
+                  <p className="text-xs text-[var(--faint)]">Posts a time entry to the PSA against this ticket.</p>
                   <button type="submit" disabled={logTime.isPending || !(parseFloat(hours) > 0)}
                     className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50">
-                    <Clock size={15} /> {logTime.isPending ? 'Logging…' : 'Log time'}
+                    <Clock size={15} /> {logTime.isPending ? 'Logging…' : `Log ${parseFloat(hours) > 0 ? fmtDuration(parseFloat(hours)) : 'time'}`}
                   </button>
                 </div>
 
                 {logTime.isSuccess && logTime.data && (
-                  <p className="text-xs font-medium text-green-600 dark:text-green-400">Logged to the PSA · ticket total {logTime.data.timeWorkedHours}h ({logTime.data.billableHours}h billable).</p>
+                  <p className="flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-2 text-xs font-medium text-green-700 dark:bg-green-950/40 dark:text-green-300">
+                    <Check size={13} /> Logged to the PSA · ticket total {logTime.data.timeWorkedHours}h ({logTime.data.billableHours}h billable).
+                  </p>
                 )}
                 {logTime.isError && (
-                  <p className="text-xs text-red-600 dark:text-red-400">Couldn&apos;t log time — the PSA rejected it or the connection is unreachable.</p>
+                  // The provider's own words, not a guess: "rejected it or unreachable" made every
+                  // failure look identical and told nobody which one they were looking at.
+                  <p className="flex gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                    <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                    <span>Couldn&apos;t log time{logTime.error instanceof Error && logTime.error.message ? `: ${logTime.error.message}` : ' — the PSA rejected it or the connection is unreachable.'}</span>
+                  </p>
                 )}
               </form>
             </div>
@@ -553,9 +563,9 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
             {/* Time entries (query disabled without tickets.time.log, so this stays absent for clients) */}
             {entries && entries.length > 0 && (
               <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-                <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-3">
                   <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--faint)]">
-                    Time entries <span className="rounded-full bg-[var(--bg)] px-2 py-0.5 text-xs text-[var(--muted)]">{entries.length}</span>
+                    <Clock size={14} /> Time entries <span className="rounded-full bg-[var(--bg)] px-2 py-0.5 text-xs text-[var(--muted)]">{entries.length}</span>
                   </h2>
                   {(() => {
                     // Totals count only time the PSA actually holds, so this figure reconciles with
@@ -565,16 +575,25 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                     const failed = entries.filter((e) => e.syncStatus !== 'Synced');
                     const total = synced.reduce((a, e) => a + e.hours, 0);
                     const billable = synced.filter((e) => e.billable).reduce((a, e) => a + e.hours, 0);
-                    return (
-                      <span className="text-xs text-[var(--muted)]">
-                        Total: <strong className="text-[var(--fg)]">{fmtDuration(total)}</strong>{' '}
-                        ({total.toFixed(4)} h){' · '}billable {fmtDuration(billable)}
-                        {failed.length > 0 && (
-                          <span className="text-red-600 dark:text-red-400">
-                            {' · '}{failed.length} not recorded ({fmtDuration(failed.reduce((a, e) => a + e.hours, 0))})
-                          </span>
-                        )}
+                    // Figures, not a sentence: three labelled numbers scan in a glance where a
+                    // run-on line of "Total: … (0.0000 h) · billable …" did not. The 4-decimal raw
+                    // value moves to a tooltip — it is reconciliation detail, not headline data.
+                    const Stat = ({ label, value, tone = '' }: { label: string; value: string; tone?: string }) => (
+                      <span className="flex flex-col items-end leading-tight">
+                        <span className={`text-sm font-semibold tabular-nums ${tone}`}>{value}</span>
+                        <span className="text-[10px] uppercase tracking-wide text-[var(--faint)]">{label}</span>
                       </span>
+                    );
+                    return (
+                      <div className="flex items-center gap-4" title={`${total.toFixed(4)} hours recorded`}>
+                        <Stat label="Recorded" value={fmtDuration(total)} />
+                        <Stat label="Billable" value={fmtDuration(billable)} tone="text-green-700 dark:text-green-400" />
+                        {failed.length > 0 && (
+                          <Stat label={`Not recorded (${failed.length})`}
+                            value={fmtDuration(failed.reduce((a, e) => a + e.hours, 0))}
+                            tone="text-red-600 dark:text-red-400" />
+                        )}
+                      </div>
                     );
                   })()}
                 </div>
@@ -593,79 +612,102 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                           <button onClick={() => setEditEntry(null)} className="rounded-md border border-[var(--border)] p-1.5 text-[var(--muted)] hover:bg-[var(--bg)]"><X size={15} /></button>
                         </div>
                       ) : (
-                        <div>
-                          <div className="flex items-center gap-3">
-                            <span className="w-24 shrink-0 tabular-nums">
-                              <strong>{fmtDuration(e.hours)}</strong>{' '}
-                              <span className="text-xs text-[var(--faint)]">({e.hours.toFixed(4)} h)</span>
+                        // Two rows, not one: the old layout raced ten elements along a single line
+                        // and hid half of them below `lg`, so on a laptop the technician, the source
+                        // and the sync state simply vanished. Duration leads, meta follows, and the
+                        // note gets the full width it needs.
+                        <div className="group">
+                          <div className="flex items-start gap-3">
+                            <span className="flex w-16 shrink-0 flex-col items-start" title={`${e.hours.toFixed(4)} hours`}>
+                              <strong className="text-[15px] leading-tight tabular-nums">{fmtDuration(e.hours)}</strong>
                             </span>
-                            <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium ${e.billable ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{billableLabel(e.billableOption, e.billable)}</span>
-                            {e.workType && <span className="hidden shrink-0 rounded bg-[var(--bg)] px-1.5 py-0.5 text-[11px] text-[var(--muted)] sm:inline">{e.workType}</span>}
-                            {expandedNotes.has(e.externalId) ? (
-                              // Expanded notes go through the same renderer as the conversation —
-                              // raw here, a CW note is a wall of 500-char pre-signed URLs.
-                              <div className="min-w-0 flex-1">
-                                <button type="button"
-                                  onClick={() => setExpandedNotes((p) => { const n = new Set(p); n.delete(e.externalId); return n; })}
-                                  className="text-xs font-medium text-brand hover:underline">
-                                  Collapse notes
-                                </button>
-                                <NoteBody body={e.notes ?? ''} />
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${e.billable ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{billableLabel(e.billableOption, e.billable)}</span>
+                                {e.workType && <span className="rounded bg-[var(--bg)] px-1.5 py-0.5 text-[11px] text-[var(--muted)]">{e.workType}</span>}
+                                {e.technicianName && <span className="text-xs text-[var(--muted)]">{e.technicianName}</span>}
+                                <span className="text-xs text-[var(--faint)]">·</span>
+                                <span className="text-xs text-[var(--faint)]">{fmtDay(e.entryDate)}</span>
+                                {/* Where it was logged and whether the PSA holds it — one statement
+                                    rather than two chips saying overlapping things. */}
+                                <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${e.syncStatus !== 'Synced'
+                                  ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+                                  : e.source === 'Portal' ? 'bg-brand/10 text-brand' : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'}`}
+                                  title={e.syncStatus === 'Synced' ? `${providerLabel(Number(ticket.provider))} #${e.externalId}` : undefined}>
+                                  {e.syncStatus !== 'Synced'
+                                    ? `Not in ${providerAbbrev(Number(ticket.provider))}`
+                                    : e.source === 'Portal' ? `Portal → ${providerAbbrev(Number(ticket.provider))}` : providerLabel(Number(ticket.provider))}
+                                </span>
                               </div>
-                            ) : (
-                              <button type="button"
-                                onClick={() => setExpandedNotes((p) => { const n = new Set(p); n.add(e.externalId); return n; })}
-                                title="Show full notes"
-                                className="min-w-0 flex-1 truncate text-left text-sm text-[var(--muted)] hover:text-[var(--fg)]">
-                                {e.notes ? notePreview(e.notes) : '—'}
-                              </button>
-                            )}
-                            {e.technicianName && <span className="hidden shrink-0 text-xs text-[var(--muted)] md:inline">{e.technicianName}</span>}
-                            {/* Which system logged it: a technician's own entry reads differently from
-                                one raised through the portal, and only one of them can go wrong here. */}
-                            <span className={`hidden shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium sm:inline ${e.source === 'Portal' ? 'bg-brand/10 text-brand' : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'}`}>
-                              {e.source === 'Portal' ? 'Desk Portal' : providerLabel(Number(ticket.provider))}
-                            </span>
-                            <span className="hidden w-32 shrink-0 text-right text-xs lg:inline">
-                              {e.syncStatus === 'Synced'
-                                ? <span className="text-[var(--muted)]">synced ({providerAbbrev(Number(ticket.provider))} #{e.externalId})</span>
-                                : <span className="font-medium text-red-600 dark:text-red-400">{e.syncStatus.toLowerCase()}</span>}
-                            </span>
-                            <span className="shrink-0 text-xs text-[var(--faint)]">{fmtDay(e.entryDate)}</span>
-                            {/* A rejected entry has no provider counterpart to edit. It can be sent
-                                again once the cause is fixed, or discarded — leaving it with no
-                                actions at all stranded the work on screen permanently. */}
-                            {e.syncStatus === 'Synced' ? (
-                              <>
-                                <button onClick={() => setEditEntry({ id: e.externalId, hours: e.hours.toString(), notes: e.notes ?? '' })}
-                                  aria-label="Edit" className="rounded-md p-1.5 text-[var(--muted)] hover:bg-[var(--bg)] hover:text-brand"><Pencil size={14} /></button>
-                                <button onClick={() => { if (window.confirm('Delete this time entry from the PSA?')) delEntry.mutate(e.externalId); }}
-                                  disabled={delEntry.isPending} aria-label="Delete" className="rounded-md p-1.5 text-[var(--muted)] hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"><Trash2 size={14} /></button>
-                              </>
-                            ) : (
-                              <>
-                                <button onClick={() => retryEntry.mutate(e.externalId)} disabled={retryEntry.isPending}
-                                  aria-label="Send to PSA again" title="Send to the PSA again"
-                                  className="rounded-md p-1.5 text-[var(--muted)] hover:bg-[var(--bg)] hover:text-brand disabled:opacity-50"><RefreshCw size={14} /></button>
-                                <button onClick={() => { if (window.confirm('Discard this entry? It was never recorded in the PSA.')) delEntry.mutate(e.externalId); }}
-                                  disabled={delEntry.isPending} aria-label="Discard" title="Discard"
-                                  className="rounded-md p-1.5 text-[var(--muted)] hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"><Trash2 size={14} /></button>
-                              </>
-                            )}
+
+                              {/* The note gets its own line at full width instead of being squeezed
+                                  between chips and truncated to nothing. */}
+                              {expandedNotes.has(e.externalId) ? (
+                                <div className="mt-1">
+                                  <NoteBody body={e.notes ?? ''} />
+                                  <button type="button"
+                                    onClick={() => setExpandedNotes((p) => { const n = new Set(p); n.delete(e.externalId); return n; })}
+                                    className="mt-1 text-xs font-medium text-brand hover:underline">
+                                    Collapse notes
+                                  </button>
+                                </div>
+                              ) : e.notes ? (
+                                <button type="button"
+                                  onClick={() => setExpandedNotes((p) => { const n = new Set(p); n.add(e.externalId); return n; })}
+                                  title="Show full notes"
+                                  className="mt-1 block w-full truncate text-left text-sm text-[var(--muted)] hover:text-[var(--fg)]">
+                                  {notePreview(e.notes)}
+                                </button>
+                              ) : (
+                                <span className="mt-1 block text-sm text-[var(--faint)]">No notes</span>
+                              )}
+                            </div>
+
+                            {/* Actions stay quiet until the row is hovered or focused, so a list of
+                                entries reads as data rather than a wall of buttons. */}
+                            <div className="flex shrink-0 gap-0.5 opacity-60 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                              {/* A rejected entry has no provider counterpart to edit. It can be sent
+                                  again once the cause is fixed, or discarded — leaving it with no
+                                  actions at all stranded the work on screen permanently. */}
+                              {e.syncStatus === 'Synced' ? (
+                                <>
+                                  <button onClick={() => setEditEntry({ id: e.externalId, hours: e.hours.toString(), notes: e.notes ?? '' })}
+                                    aria-label="Edit" title="Edit" className="rounded-md p-1.5 text-[var(--muted)] hover:bg-[var(--bg)] hover:text-brand"><Pencil size={14} /></button>
+                                  <button onClick={() => { if (window.confirm('Delete this time entry from the PSA?')) delEntry.mutate(e.externalId); }}
+                                    disabled={delEntry.isPending} aria-label="Delete" title="Delete" className="rounded-md p-1.5 text-[var(--muted)] hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"><Trash2 size={14} /></button>
+                                </>
+                              ) : (
+                                <>
+                                  <button onClick={() => retryEntry.mutate(e.externalId)} disabled={retryEntry.isPending}
+                                    aria-label="Send to PSA again" title="Send to the PSA again"
+                                    className="rounded-md p-1.5 text-[var(--muted)] hover:bg-[var(--bg)] hover:text-brand disabled:opacity-50"><RefreshCw size={14} /></button>
+                                  <button onClick={() => { if (window.confirm('Discard this entry? It was never recorded in the PSA.')) delEntry.mutate(e.externalId); }}
+                                    disabled={delEntry.isPending} aria-label="Discard" title="Discard"
+                                    className="rounded-md p-1.5 text-[var(--muted)] hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"><Trash2 size={14} /></button>
+                                </>
+                              )}
+                            </div>
                           </div>
+
+                          {/* A failure is a callout, not a floating red sentence nudged into place
+                              with a padding hack that broke the moment the layout changed. */}
                           {e.syncStatus !== 'Synced' && (
-                            <p className="mt-1 pl-24 text-xs text-red-600 dark:text-red-400">
-                              Not recorded in {providerLabel(Number(ticket.provider))}
-                              {e.syncError ? `: ${e.syncError}` : '.'}{' '}
-                              {/* The retry's OWN message, not a generic "still rejected": a retry
-                                  usually fails for a different reason than the original, and hiding
-                                  it left the stale reason on screen as if nothing had changed. */}
-                              {retryEntry.isError
-                                ? <span className="text-[var(--muted)]">
-                                    Retry rejected{retryEntry.error instanceof Error && retryEntry.error.message ? `: ${retryEntry.error.message}` : ''} — fix the cause, then send again.
-                                  </span>
-                                : <span className="text-[var(--muted)]">Fix the cause, then send again.</span>}
-                            </p>
+                            <div className="mt-2 flex gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/60 dark:bg-red-950/30">
+                              <AlertTriangle size={14} className="mt-0.5 shrink-0 text-red-600 dark:text-red-400" />
+                              <p className="min-w-0 text-xs leading-relaxed text-red-700 dark:text-red-300">
+                                <span className="font-medium">Not recorded in {providerLabel(Number(ticket.provider))}.</span>{' '}
+                                {e.syncError}{' '}
+                                {/* The retry's OWN message, not a generic "still rejected": a retry
+                                    usually fails for a different reason than the original, and hiding
+                                    it left the stale reason on screen as if nothing had changed. */}
+                                {retryEntry.isError
+                                  ? <span className="text-red-600/80 dark:text-red-400/80">
+                                      Retry rejected{retryEntry.error instanceof Error && retryEntry.error.message ? `: ${retryEntry.error.message}` : ''} — fix the cause, then send again.
+                                    </span>
+                                  : <span className="text-red-600/80 dark:text-red-400/80">Fix the cause, then send again.</span>}
+                              </p>
+                            </div>
                           )}
                         </div>
                       )}
