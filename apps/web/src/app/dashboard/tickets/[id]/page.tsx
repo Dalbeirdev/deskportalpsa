@@ -694,7 +694,9 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand text-xs font-semibold text-brand-fg">{initials(n.authorName)}</span>
                       <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[var(--surface)] bg-green-500" />
                     </span>
-                    <div className={`min-w-0 max-w-[85%] rounded-lg border p-3 ${tone}`}>
+                    {/* flex-1 + max-w: every card the same width, edges aligned — content-sized
+                        cards gave the thread a ragged, unprofessional left edge. */}
+                    <div className={`min-w-0 flex-1 max-w-[85%] rounded-lg border p-3 ${tone}`}>
                       <div className="flex items-center justify-between gap-4">
                         <span className="flex flex-wrap items-center gap-2 text-sm">
                           <span className="font-semibold">{n.authorName}</span>

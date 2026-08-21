@@ -93,7 +93,11 @@ public record UnifiedTicketNote(
     string AuthorName,
     string Body,
     bool IsPublic,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    // True when the provider says a customer CONTACT wrote this note (CW: contact instead of
+    // member; AT: createdByContactID). Without it every imported note renders as the MSP's own
+    // words, and the thread loses its two sides.
+    bool FromClient = false);
 
 public record UnifiedTicketNoteCreateRequest(string Body, bool IsPublic, string IdempotencyKey);
 
