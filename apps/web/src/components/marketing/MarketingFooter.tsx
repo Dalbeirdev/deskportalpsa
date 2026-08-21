@@ -113,7 +113,7 @@ export function MarketingFooter() {
               ))}
             </ul>
 
-            <div className="flex flex-wrap gap-2.5">
+            <div className="mt-7 flex flex-wrap gap-2.5">
               <Link
                 href="/book"
                 className="rounded-lg bg-brand-fg px-4 py-2.5 text-sm font-medium text-brand transition-transform hover:-translate-y-0.5"
