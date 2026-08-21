@@ -166,6 +166,25 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
         return new UpdateTicketResult(true, null);
     }
 
+    public async Task<IReadOnlyList<ExternalAgreement>> GetAgreementsAsync(string organizationId, CancellationToken ct = default)
+    {
+        var items = await QueryAsync<AtContract>("Contracts",
+            [Filter("companyID", "eq", long.Parse(organizationId))], 500, ct);
+        if (items.Count == 0) return [];
+
+        // Type and status are numeric picklists; the labels come from the tenant's own Contracts
+        // metadata — a hardcoded table would silently drift from what their Autotask actually says.
+        var types = (await PicklistAsync("Contracts", "contractType", ct)).ToDictionary(o => o.Value, o => o.Label);
+        var statuses = (await PicklistAsync("Contracts", "status", ct)).ToDictionary(o => o.Value, o => o.Label);
+
+        return items.Select(c => new ExternalAgreement(
+            c.Id.ToString(),
+            c.ContractName ?? $"Contract {c.Id}",
+            c.ContractType is { } t ? types.GetValueOrDefault(t.ToString(), $"Type {t}") : null,
+            c.Status is { } s ? statuses.GetValueOrDefault(s.ToString(), $"Status {s}") : null,
+            c.StartDate, c.EndDate)).ToList();
+    }
+
     public async Task<IReadOnlyList<UnifiedTicketNote>> GetNotesAsync(string ticketId, CancellationToken ct = default)
     {
         // ALL notes — internal ones carry IsPublic=false and the portal decides who may read them.
@@ -518,9 +537,12 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
 
     // ---- HTTP plumbing ----
 
-    private async Task<IReadOnlyList<ExternalFieldOption>> PicklistAsync(string fieldName, CancellationToken ct)
+    private Task<IReadOnlyList<ExternalFieldOption>> PicklistAsync(string fieldName, CancellationToken ct)
+        => PicklistAsync("Tickets", fieldName, ct);
+
+    private async Task<IReadOnlyList<ExternalFieldOption>> PicklistAsync(string entity, string fieldName, CancellationToken ct)
     {
-        var info = await SendAsync<AtFieldInfoResult>(HttpMethod.Get, "V1.0/Tickets/entityInformation/fields", null, ct);
+        var info = await SendAsync<AtFieldInfoResult>(HttpMethod.Get, $"V1.0/{entity}/entityInformation/fields", null, ct);
         var field = info?.Fields.FirstOrDefault(f => string.Equals(f.Name, fieldName, StringComparison.OrdinalIgnoreCase));
         return (field?.PicklistValues ?? [])
             .Select(p => new ExternalFieldOption(p.Value ?? "", p.Label ?? p.Value ?? "", p.IsActive)).ToList();

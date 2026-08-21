@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Server, Building2, Plus, Pencil, Trash2, Check, X, CheckCircle2, Info, DownloadCloud } from 'lucide-react';
+import { Server, Building2, Plus, Pencil, Trash2, Check, X, CheckCircle2, Info, DownloadCloud, FileSignature, ListTree } from 'lucide-react';
 import { api, type Device, type DeviceInput } from '@/lib/api';
 import { CpHeader, AccessError, Field } from '../_ui';
 
@@ -10,6 +10,9 @@ export default function AccountsPage() {
   const qc = useQueryClient();
   const { data: account, error } = useQuery({ queryKey: ['cp-account'], queryFn: api.cpAccount, retry: false });
   const { data: devices, isLoading } = useQuery({ queryKey: ['cp-devices'], queryFn: api.cpDevices, retry: false, enabled: !error });
+  // Live from the PSA on every visit — agreements are the provider's commercial record, not
+  // something the portal should cache a stale copy of.
+  const { data: psaView, isError: psaViewError } = useQuery({ queryKey: ['cp-psa-view'], queryFn: api.cpPsaView, retry: false, enabled: !error });
   const [draft, setDraft] = useState<DeviceInput | null>(null);
 
   const save = useMutation({
@@ -73,6 +76,61 @@ export default function AccountsPage() {
             </div>
             <p className="mt-3 flex items-center gap-1.5 text-xs text-[var(--faint)]"><Info size={12} /> Account details come from your PSA and are read-only here.</p>
           </div>
+
+          {/* Agreements & contracts — the provider's commercial record, read live, never cached. */}
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+            <div className="flex items-center gap-2 border-b border-[var(--border)] px-5 py-3.5">
+              <FileSignature size={15} className="text-brand" />
+              <h2 className="text-sm font-semibold">Agreements & contracts</h2>
+            </div>
+            {psaViewError || psaView?.agreementsUnavailable ? (
+              <p className="px-5 py-4 text-sm text-[var(--muted)]">Couldn&apos;t reach the PSA right now — try again shortly.</p>
+            ) : !psaView ? (
+              <p className="px-5 py-4 text-sm text-[var(--muted)]">Loading from the PSA…</p>
+            ) : !psaView.agreementsSupported ? (
+              <p className="px-5 py-4 text-sm text-[var(--muted)]">Your provider does not expose agreements to this portal.</p>
+            ) : psaView.agreements.length === 0 ? (
+              <p className="px-5 py-4 text-sm text-[var(--muted)]">No agreements are recorded for this account in the PSA.</p>
+            ) : (
+              <ul className="divide-y divide-[var(--border)]">
+                {psaView.agreements.map((a) => (
+                  <li key={`${a.name}-${a.startDate ?? ''}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3">
+                    <span className="min-w-0 flex-1 text-sm font-medium">{a.name}</span>
+                    {a.type && <span className="rounded bg-[var(--bg)] px-1.5 py-0.5 text-[11px] text-[var(--muted)]">{a.type}</span>}
+                    {a.status && (
+                      <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${a.status.toLowerCase() === 'active'
+                        ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300'
+                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{a.status}</span>
+                    )}
+                    <span className="text-xs text-[var(--faint)]">
+                      {a.startDate ? new Date(a.startDate).toLocaleDateString() : '—'}
+                      {' → '}
+                      {a.endDate ? new Date(a.endDate).toLocaleDateString() : 'open-ended'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="flex items-center gap-1.5 border-t border-[var(--border)] px-5 py-2.5 text-xs text-[var(--faint)]">
+              <Info size={12} /> Read live from your PSA. To change an agreement, contact your service provider.
+            </p>
+          </div>
+
+          {/* Monitored queues — where this account's work actually flows. */}
+          {psaView && psaView.monitoredQueues.length > 0 && (
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
+              <div className="mb-2.5 flex items-center gap-2">
+                <ListTree size={15} className="text-brand" />
+                <h2 className="text-sm font-semibold">Monitored queues</h2>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {psaView.monitoredQueues.map((q) => (
+                  <span key={q} className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1 text-xs font-medium">{q}</span>
+                ))}
+              </div>
+              <p className="mt-2.5 text-xs text-[var(--faint)]">The service queues and boards your tickets have flowed through.</p>
+            </div>
+          )}
 
           {/* Devices */}
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">

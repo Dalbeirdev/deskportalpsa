@@ -89,6 +89,8 @@ public sealed class StubConnector(ProviderType provider = ProviderType.AutotaskP
     /// <summary>Mirrors a provider that can answer "attachments since X"; off exercises the per-ticket path.</summary>
     public bool SupportsAttachmentSweep { get; set; } = true;
 
+    public bool SupportsContracts { get; set; }
+
     public Task<ProviderCapabilities> GetCapabilitiesAsync(CancellationToken ct = default)
         => Task.FromResult(new ProviderCapabilities
         {
@@ -96,6 +98,7 @@ public sealed class StubConnector(ProviderType provider = ProviderType.AutotaskP
             SupportsAttachments = true,
             SupportsAttachmentDownload = SupportsAttachmentDownload,
             SupportsAttachmentSweep = SupportsAttachmentSweep,
+            SupportsContracts = SupportsContracts,
         });
     public Task<ConnectionTestResult> TestConnectionAsync(CancellationToken ct = default) => No<ConnectionTestResult>();
     public Task<IReadOnlyList<ExternalOrganization>> GetOrganizationsAsync(CancellationToken ct = default) => No<IReadOnlyList<ExternalOrganization>>();
@@ -103,6 +106,11 @@ public sealed class StubConnector(ProviderType provider = ProviderType.AutotaskP
     public Task<IReadOnlyList<ExternalTechnician>> GetTechniciansAsync(CancellationToken ct = default) => No<IReadOnlyList<ExternalTechnician>>();
     public Task<IReadOnlyList<ExternalTechnicianAssignment>> GetTechnicianAssignmentsAsync(CancellationToken ct = default) => No<IReadOnlyList<ExternalTechnicianAssignment>>();
     public Task<IReadOnlyList<ExternalDevice>> GetDevicesAsync(string organizationId, CancellationToken ct = default) => No<IReadOnlyList<ExternalDevice>>();
+
+    /// <summary>Agreements the fake provider holds, keyed by organization id.</summary>
+    public Dictionary<string, List<ExternalAgreement>> Agreements { get; } = [];
+    public Task<IReadOnlyList<ExternalAgreement>> GetAgreementsAsync(string organizationId, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<ExternalAgreement>>(Agreements.GetValueOrDefault(organizationId, []));
     public Task<UnifiedTicket?> GetTicketAsync(string ticketId, CancellationToken ct = default) => No<UnifiedTicket?>();
     /// <summary>What the provider answers to the next create; default is acceptance.</summary>
     public CreateTicketResult NextCreateResult { get; set; } = new(true, "9001", null);

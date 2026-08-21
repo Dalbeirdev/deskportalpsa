@@ -168,7 +168,7 @@ export const FEATURE_DOCS: FeatureDoc[] = [
         points: [
           'Ticket instructions — global and per-account guidance technicians see on every ticket.',
           'Users — invite, deactivate and grant sectional access to their own people.',
-          'Accounts & devices — account details plus devices imported from the PSA.',
+          'Accounts & devices — account details, devices imported from the PSA, the agreements and contracts the PSA holds for the account (read live, never cached), and the service queues their tickets flow through.',
           'Approvers and escalation levels.',
           'Business hours (weekly schedule) and holiday calendar.',
           'Announcements — pinned, published client-authored notices.',

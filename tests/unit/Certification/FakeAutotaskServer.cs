@@ -22,6 +22,8 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
         [new() { ["id"] = 10L, ["companyID"] = 1L, ["emailAddress"] = "user@acme.test", ["firstName"] = "Acme", ["lastName"] = "User", ["isActive"] = true }];
     private readonly List<Dictionary<string, object?>> _resources =
         [new() { ["id"] = 20L, ["email"] = "tech@msp.test", ["firstName"] = "Tech", ["lastName"] = "One", ["isActive"] = true }];
+    private readonly List<Dictionary<string, object?>> _contracts =
+        [new() { ["id"] = 30L, ["companyID"] = 1L, ["contractName"] = "Managed Services", ["contractType"] = 7L, ["status"] = 1L, ["startDate"] = "2026-01-01T00:00:00Z", ["endDate"] = "2026-12-31T00:00:00Z" }];
     private readonly List<Dictionary<string, object?>> _tickets = [];
     private readonly List<Dictionary<string, object?>> _notes = [];
     private readonly List<Dictionary<string, object?>> _attachments = [];
@@ -41,6 +43,11 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
         // Picklist field info
         if (path.EndsWith("Tickets/entityInformation/fields", StringComparison.OrdinalIgnoreCase))
             return Json(FieldInfoJson());
+        // Contract type/status labels come from the tenant's own metadata, exactly like tickets.
+        if (path.EndsWith("Contracts/entityInformation/fields", StringComparison.OrdinalIgnoreCase))
+            return Json("{\"fields\":[" +
+                "{\"name\":\"contractType\",\"picklistValues\":[{\"value\":\"7\",\"label\":\"Recurring Service\",\"isActive\":true}]}," +
+                "{\"name\":\"status\",\"picklistValues\":[{\"value\":\"1\",\"label\":\"Active\",\"isActive\":true}]}]}");
         if (path.EndsWith("entityInformation/userDefinedFields", StringComparison.OrdinalIgnoreCase))
             return Json("{\"fields\":[{\"name\":\"cf_site\",\"picklistValues\":[]}]}");
 
@@ -48,6 +55,7 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
         if (path.EndsWith("Companies/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_companies, body));
         if (path.EndsWith("Contacts/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_contacts, body));
         if (path.EndsWith("Resources/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_resources, body));
+        if (path.EndsWith("Contracts/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_contracts, body));
         if (path.EndsWith("Tickets/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_tickets, body));
         if (path.EndsWith("TicketNotes/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_notes, body));
         if (path.EndsWith("TicketAttachments/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(StripData(_attachments), body));

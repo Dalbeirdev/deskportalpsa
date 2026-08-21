@@ -68,6 +68,11 @@ public sealed class AccountSettingsController(
     public async Task<IActionResult> ImportFromPsa(CancellationToken ct)
         => Ok(await svc.ImportFromPsaAsync(await AccessAsync(ct), ct));
 
+    /// <summary>Live PSA view: the account's agreements/contracts and its monitored queues.</summary>
+    [HttpGet("psa-view")]
+    public async Task<IActionResult> PsaView(CancellationToken ct)
+        => Ok(await svc.PsaViewAsync(await AccessAsync(ct), ct));
+
     // ---- Devices ----
     [HttpGet("devices")]
     public async Task<IActionResult> ListDevices(CancellationToken ct)

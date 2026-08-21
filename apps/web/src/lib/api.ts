@@ -379,6 +379,20 @@ export const api = {
     request('/api/control-panel/import-from-psa',
       z.object({ usersCreated: z.number(), usersUpdated: z.number(), devicesCreated: z.number(), devicesUpdated: z.number() }),
       { method: 'POST' }),
+  // The PSA's live view of this account: agreements/contracts + the queues its tickets flow through.
+  cpPsaView: () =>
+    request('/api/control-panel/psa-view', z.object({
+      agreementsSupported: z.boolean(),
+      agreements: z.array(z.object({
+        name: z.string(),
+        type: z.string().nullable(),
+        status: z.string().nullable(),
+        startDate: z.string().nullable(),
+        endDate: z.string().nullable(),
+      })),
+      monitoredQueues: z.array(z.string()),
+      agreementsUnavailable: z.boolean().default(false),
+    })),
   cpDevices: () => request('/api/control-panel/devices', z.array(DeviceSchema)) as Promise<Device[]>,
   cpSaveDevice: (body: DeviceInput) => request('/api/control-panel/devices', DeviceSchema, { method: 'PUT', body: JSON.stringify(body) }) as Promise<Device>,
   cpDeleteDevice: (id: string) => request(`/api/control-panel/devices/${id}`, z.unknown(), { method: 'DELETE' }),

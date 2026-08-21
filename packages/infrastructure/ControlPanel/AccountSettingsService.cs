@@ -19,6 +19,42 @@ public sealed class AccountSettingsService(
     IAuditWriter audit,
     Desk.Application.Connectors.IConnectorResolver connectors) : IAccountSettingsService
 {
+    public async Task<AccountPsaViewDto> PsaViewAsync(ClientAccess access, CancellationToken ct = default)
+    {
+        await EnsureSectionAsync(access, ControlPanelSection.Accounts, ct);
+
+        var company = await db.ClientCompanies.FirstOrDefaultAsync(c => c.Id == access.ClientCompanyId, ct)
+            ?? throw new NotFoundException("Account");
+
+        // Read from tickets already synced, not a live provider call: these are the queues the
+        // account's work has actually flowed through, which is the honest version of "monitored".
+        var queues = await db.Tickets
+            .Where(t => t.ClientCompanyId == company.Id && t.QueueOrBoard != null && t.QueueOrBoard != "")
+            .Select(t => t.QueueOrBoard!)
+            .Distinct()
+            .OrderBy(q => q)
+            .ToListAsync(ct);
+
+        // The provider half is best-effort: a broken connection must not take the queue list
+        // (derived from already-synced tickets) down with it.
+        try
+        {
+            var connector = await connectors.ResolveAsync(company.PsaConnectionId, ct);
+            var caps = await connector.GetCapabilitiesAsync(ct);
+            if (!caps.SupportsContracts)
+                return new AccountPsaViewDto(false, [], queues);
+
+            var agreements = await connector.GetAgreementsAsync(company.ExternalCompanyId, ct);
+            return new AccountPsaViewDto(true,
+                agreements.Select(a => new AgreementDto(a.Name, a.Type, a.Status, a.StartDate, a.EndDate)).ToList(),
+                queues);
+        }
+        catch (Exception e) when (e is Desk.PsaCore.Contracts.ConnectorException or ValidationFailedException or NotFoundException)
+        {
+            return new AccountPsaViewDto(true, [], queues, AgreementsUnavailable: true);
+        }
+    }
+
     // ---- Import from the PSA (contacts → client users, devices/configurations → devices) ----
 
     public async Task<PsaImportResult> ImportFromPsaAsync(ClientAccess access, CancellationToken ct = default)

@@ -43,7 +43,7 @@ public sealed class MockConnector : IServiceManagementConnector
         {
             SupportsTicketCreate = true, SupportsTicketUpdate = true, SupportsTicketDelete = false,
             SupportsPublicNotes = true, SupportsPrivateNotes = true, SupportsAttachments = true, SupportsAttachmentDownload = true, SupportsAttachmentSweep = true,
-            SupportsTimeEntries = true, SupportsAssets = false, SupportsContracts = false,
+            SupportsTimeEntries = true, SupportsAssets = false, SupportsContracts = true,
             SupportsSlaData = true, SupportsCustomFields = true, SupportsInboundWebhooks = true,
             SupportsOutboundWebhooks = false, SupportsIncrementalSync = true, SupportsBulkRead = true,
             SupportsBulkWrite = false, SupportsCompanies = true, SupportsContacts = true,
@@ -188,6 +188,13 @@ public sealed class MockConnector : IServiceManagementConnector
 
     public Task<IReadOnlyList<ExternalDevice>> GetDevicesAsync(string organizationId, CancellationToken ct = default)
     { Guard(); return Task.FromResult<IReadOnlyList<ExternalDevice>>([new ExternalDevice("D-1", "Mock Workstation", "Workstation", "SN-1", true)]); }
+
+    public Task<IReadOnlyList<ExternalAgreement>> GetAgreementsAsync(string organizationId, CancellationToken ct = default)
+    {
+        Guard();
+        return Task.FromResult<IReadOnlyList<ExternalAgreement>>(
+            [new ExternalAgreement("AG-1", "Managed Services", "Managed", "Active", _clock.GetUtcNow().AddMonths(-6), null)]);
+    }
 
     public Task<IReadOnlyList<UnifiedTimeEntry>> GetTimeEntriesAsync(string ticketId, CancellationToken ct = default)
     { Guard(); return Task.FromResult<IReadOnlyList<UnifiedTimeEntry>>([]); }

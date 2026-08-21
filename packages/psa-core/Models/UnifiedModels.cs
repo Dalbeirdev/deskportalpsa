@@ -122,6 +122,20 @@ public record UnifiedTimeEntry(
 /// <summary>How a time entry is charged. Maps to ConnectWise billableOption / Autotask billing flags.</summary>
 public enum BillableOption { Billable, DoNotBill, NoCharge }
 
+/// <summary>
+/// An agreement/contract the PSA holds for a client organization (ConnectWise agreement, Autotask
+/// contract). Read-only in the portal — the PSA owns the commercial relationship; the portal only
+/// shows the client what already governs their account. Type and Status carry the provider's own
+/// labels, resolved by the connector, never a hardcoded translation table.
+/// </summary>
+public record ExternalAgreement(
+    string ExternalId,
+    string Name,
+    string? Type,
+    string? Status,
+    DateTimeOffset? StartDate,
+    DateTimeOffset? EndDate);
+
 /// <summary>Request to log time against a provider ticket. WorkType/WorkRole/Member are optional in
 /// Phase 1 (wired to discovery + mapping in a later phase); Hours + Billable are the core inputs.</summary>
 public record UnifiedTimeEntryCreateRequest(

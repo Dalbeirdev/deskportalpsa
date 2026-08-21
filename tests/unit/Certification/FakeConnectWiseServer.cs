@@ -50,6 +50,8 @@ public sealed class FakeConnectWiseServer(TimeProvider clock) : HttpMessageHandl
         if (path.EndsWith("company/companies")) return Arr("[{\"id\":1,\"name\":\"Acme Corp\",\"deletedFlag\":false}]");
         if (path.EndsWith("company/contacts")) return Arr("[{\"id\":10,\"firstName\":\"Acme\",\"lastName\":\"User\",\"email\":\"user@acme.test\",\"inactiveFlag\":false}]");
         if (path.EndsWith("system/members")) return Arr("[{\"id\":20,\"firstName\":\"Tech\",\"lastName\":\"One\",\"primaryEmail\":\"tech@msp.test\",\"inactiveFlag\":false}]");
+        if (path.EndsWith("finance/agreements"))
+            return Arr("[{\"id\":40,\"name\":\"Managed Services\",\"type\":{\"id\":2,\"name\":\"Managed\"},\"agreementStatus\":\"Active\",\"startDate\":\"2026-01-01T00:00:00Z\",\"noEndingDateFlag\":true}]");
         if (path.EndsWith("service/boards")) return Arr("[{\"id\":1,\"name\":\"Service Desk\"}]");
         if (path.EndsWith("service/priorities")) return Arr("[{\"id\":3,\"name\":\"High\"}]");
         if (path.Contains("service/boards/") && path.EndsWith("/statuses"))

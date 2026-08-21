@@ -32,4 +32,7 @@ public interface IAccountSettingsService
 
     /// <summary>Pulls the account's contacts and devices from its PSA and upserts them locally.</summary>
     Task<PsaImportResult> ImportFromPsaAsync(ClientAccess access, CancellationToken ct = default);
+
+    /// <summary>Live PSA view of the account: agreements/contracts + the queues its tickets flow through.</summary>
+    Task<AccountPsaViewDto> PsaViewAsync(ClientAccess access, CancellationToken ct = default);
 }
