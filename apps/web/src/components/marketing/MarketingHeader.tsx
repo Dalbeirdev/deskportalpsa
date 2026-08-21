@@ -8,6 +8,7 @@ import { BrandMark } from '@/components/BrandMark';
 
 export const MARKETING_NAV = [
   { href: '/platform', label: 'Platform' },
+  { href: '/features', label: 'Features' },
   { href: '/integrations', label: 'Integrations' },
   { href: '/security', label: 'Security' },
   { href: '/faq', label: 'FAQ' },
