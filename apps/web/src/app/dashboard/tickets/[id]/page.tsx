@@ -657,8 +657,13 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                             <p className="mt-1 pl-24 text-xs text-red-600 dark:text-red-400">
                               Not recorded in {providerLabel(Number(ticket.provider))}
                               {e.syncError ? `: ${e.syncError}` : '.'}{' '}
+                              {/* The retry's OWN message, not a generic "still rejected": a retry
+                                  usually fails for a different reason than the original, and hiding
+                                  it left the stale reason on screen as if nothing had changed. */}
                               {retryEntry.isError
-                                ? <span className="text-[var(--muted)]">Still rejected — fix the cause, then send again.</span>
+                                ? <span className="text-[var(--muted)]">
+                                    Retry rejected{retryEntry.error instanceof Error && retryEntry.error.message ? `: ${retryEntry.error.message}` : ''} — fix the cause, then send again.
+                                  </span>
                                 : <span className="text-[var(--muted)]">Fix the cause, then send again.</span>}
                             </p>
                           )}

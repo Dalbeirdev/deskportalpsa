@@ -142,7 +142,10 @@ public sealed class StubConnector(ProviderType provider = ProviderType.AutotaskP
         TimeReads++;
         return Task.FromResult<IReadOnlyList<UnifiedTimeEntry>>(TimeEntries.GetValueOrDefault(ticketId, []));
     }
-    public Task<CreateTimeEntryResult> AddTimeEntryAsync(string ticketId, UnifiedTimeEntryCreateRequest entry, CancellationToken ct = default) => No<CreateTimeEntryResult>();
+    /// <summary>When set, pushing time throws it — how a provider REJECTS a payload it dislikes.</summary>
+    public ConnectorException? TimeEntryFailure { get; set; }
+    public Task<CreateTimeEntryResult> AddTimeEntryAsync(string ticketId, UnifiedTimeEntryCreateRequest entry, CancellationToken ct = default)
+        => TimeEntryFailure is { } ex ? throw ex : No<CreateTimeEntryResult>();
     public Task<UpdateTimeEntryResult> UpdateTimeEntryAsync(string entryId, UnifiedTimeEntryUpdate update, CancellationToken ct = default) => No<UpdateTimeEntryResult>();
     public Task<UpdateTimeEntryResult> DeleteTimeEntryAsync(string entryId, CancellationToken ct = default) => No<UpdateTimeEntryResult>();
     public Task<IReadOnlyList<ExternalFieldOption>> GetStatusesAsync(CancellationToken ct = default) => No<IReadOnlyList<ExternalFieldOption>>();

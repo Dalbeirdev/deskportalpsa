@@ -159,10 +159,22 @@ public sealed class TicketTimeController(
     /// <summary>Pushes a portal record to the PSA and stamps the outcome on it either way.</summary>
     private async Task<bool> PushAsync(TicketTimeEntry record, Ticket ticket, IServiceManagementConnector connector, CancellationToken ct)
     {
-        var result = await connector.AddTimeEntryAsync(ticket.ExternalTicketId!,
-            new UnifiedTimeEntryCreateRequest(record.Hours, record.WorkTypeId, record.WorkRoleId,
-                record.Billable ? BillableOption.Billable : BillableOption.DoNotBill,
-                record.Notes, MemberIdentifier: null), ct);
+        CreateTimeEntryResult result;
+        try
+        {
+            result = await connector.AddTimeEntryAsync(ticket.ExternalTicketId!,
+                new UnifiedTimeEntryCreateRequest(record.Hours, record.WorkTypeId, record.WorkRoleId,
+                    record.Billable ? BillableOption.Billable : BillableOption.DoNotBill,
+                    record.Notes, MemberIdentifier: null), ct);
+        }
+        catch (ConnectorException ex)
+        {
+            // A provider REJECTION is a failed push, not an unhandled fault. Letting it propagate
+            // left the row carrying whatever error it failed with last time, so a retry that failed
+            // for a NEW reason still displayed the old one — which is how an admin ends up "fixing"
+            // a setting that was already correct. Store what the provider actually said, now.
+            result = new CreateTimeEntryResult(false, null, ex.Message);
+        }
 
         if (!result.Success)
         {
