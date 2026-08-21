@@ -58,8 +58,10 @@ public sealed class DeskClaimsTransformation(DeskDbContext db, TimeProvider cloc
                 }
             }
         }
+        // Not staff — a CLIENT portal user, perhaps. Staff resolution runs first so a dual
+        // identity (an AppUser who is also a company contact) keeps its staff powers.
         if (user is null)
-            return principal;
+            return await TransformClientAsync(principal, subject);
 
         var now = clock.GetUtcNow();
         if (user.LastActiveAt is null || now - user.LastActiveAt > ActivityThrottle)
@@ -112,6 +114,60 @@ public sealed class DeskClaimsTransformation(DeskDbContext db, TimeProvider cloc
         }
 
         foreach (var perm in granted)
+            identity.AddClaim(new Claim(CurrentUser.PermissionClaim, perm));
+
+        principal.AddIdentity(identity);
+        return principal;
+    }
+
+    /// <summary>
+    /// The fixed claim set a pure client-portal login receives. Deliberately NOT role-driven:
+    /// clients are not staff, and every client-reachable endpoint either needs only these two
+    /// permissions or authorizes through <see cref="Desk.Application.Tickets.IClientAccessResolver"/>
+    /// company scoping. Growing this list is a security decision, not a convenience.
+    /// </summary>
+    private static readonly string[] ClientClaims = [Permissions.TicketsCreate, Permissions.TicketsAddPublicNote];
+
+    /// <summary>
+    /// Resolves a CLIENT portal user. Without this branch a pure client login authenticated and then
+    /// hit a wall: no org claim (so the tenant filter returned zero rows) and no permission claims
+    /// (so every gate refused) — only people who were ALSO staff could ever use the client portal.
+    ///
+    /// ClientUser is tenant-scoped and no tenant exists yet at claims time, so lookups here must
+    /// ignore query filters; resolution is by unique IdP subject (then a one-time verified-email
+    /// bind for invited users, mirroring the staff path above).
+    /// </summary>
+    private async Task<ClaimsPrincipal> TransformClientAsync(ClaimsPrincipal principal, string subject)
+    {
+        var client = await db.ClientUsers
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .SingleOrDefaultAsync(u => u.IdpSubject == subject && u.IsActive);
+
+        if (client is null)
+        {
+            var email = principal.FindFirstValue(ClaimTypes.Email) ?? principal.FindFirstValue("email");
+            if (!string.IsNullOrEmpty(email))
+            {
+                var invited = await db.ClientUsers
+                    .IgnoreQueryFilters()
+                    .SingleOrDefaultAsync(u => u.IdpSubject == null && u.IsActive && u.Email.ToLower() == email.ToLower());
+                if (invited is not null)
+                {
+                    invited.IdpSubject = subject;
+                    await db.SaveChangesAsync();
+                    client = invited;
+                }
+            }
+        }
+        if (client is null)
+            return principal;
+
+        var identity = new ClaimsIdentity();
+        // Org only — no UserIdClaim: that is the AppUser id space, and the staff fallbacks that
+        // read it must keep seeing "no staff identity" for a client caller.
+        identity.AddClaim(new Claim(CurrentUser.OrgClaim, client.MspOrganizationId.ToString()));
+        foreach (var perm in ClientClaims)
             identity.AddClaim(new Claim(CurrentUser.PermissionClaim, perm));
 
         principal.AddIdentity(identity);
