@@ -75,6 +75,17 @@ internal sealed class CwTicketNote
     [JsonPropertyName("contact")] public CwRef? Contact { get; set; }
 }
 
+internal sealed class CwAgreement
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("type")] public CwRef? Type { get; set; }
+    [JsonPropertyName("agreementStatus")] public string? AgreementStatus { get; set; }
+    [JsonPropertyName("startDate")] public DateTimeOffset? StartDate { get; set; }
+    [JsonPropertyName("endDate")] public DateTimeOffset? EndDate { get; set; }
+    [JsonPropertyName("noEndingDateFlag")] public bool NoEndingDateFlag { get; set; }
+}
+
 internal sealed class CwDocument
 {
     [JsonPropertyName("id")] public long Id { get; set; }

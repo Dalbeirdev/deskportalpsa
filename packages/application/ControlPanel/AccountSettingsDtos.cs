@@ -24,3 +24,18 @@ public sealed record BusinessHoursInput(string? TimeZone, string ScheduleJson, s
 
 /// <summary>Tally of a PSA import: how many contacts/devices were created vs updated.</summary>
 public sealed record PsaImportResult(int UsersCreated, int UsersUpdated, int DevicesCreated, int DevicesUpdated);
+
+public sealed record AgreementDto(string Name, string? Type, string? Status, DateTimeOffset? StartDate, DateTimeOffset? EndDate);
+
+/// <summary>
+/// The PSA's view of this account, read live: the agreements/contracts that govern it, and the
+/// queues its tickets actually flow through. Supported=false means the provider has no contract
+/// concept; Unavailable=true means the provider could not be reached right now — two different
+/// truths, stated separately, because the queue list (derived from already-synced tickets) is
+/// still good either way and must not vanish with the provider.
+/// </summary>
+public sealed record AccountPsaViewDto(
+    bool AgreementsSupported,
+    IReadOnlyList<AgreementDto> Agreements,
+    IReadOnlyList<string> MonitoredQueues,
+    bool AgreementsUnavailable = false);

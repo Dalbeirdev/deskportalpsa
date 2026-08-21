@@ -48,6 +48,24 @@ public abstract class ConnectorCertificationSuite
     public async Task Test_connection_succeeds()
         => (await CreateConnector().TestConnectionAsync()).Success.Should().BeTrue();
 
+    [Fact]
+    public async Task Agreements_are_read_per_organization_when_the_provider_supports_contracts()
+    {
+        var c = CreateConnector();
+        var caps = await c.GetCapabilitiesAsync();
+        var items = await c.GetAgreementsAsync(SeededOrganizationId);
+        if (!caps.SupportsContracts)
+        {
+            items.Should().BeEmpty("a provider without the concept answers empty, not with an exception");
+            return;
+        }
+        items.Should().NotBeEmpty("SupportsContracts is a promise, not decoration");
+        items.Should().OnlyContain(a => a.ExternalId.Length > 0 && a.Name.Length > 0);
+        // Type and Status must be the provider's own labels, never raw numeric ids.
+        items.Should().OnlyContain(a => a.Type == null || !a.Type.All(char.IsDigit));
+        items.Should().OnlyContain(a => a.Status == null || !a.Status.All(char.IsDigit));
+    }
+
     // ---- error mapping ----
 
     [Fact]

@@ -82,6 +82,20 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
             !string.Equals(c.Status?.Name, "Inactive", StringComparison.OrdinalIgnoreCase))).ToList();
     }
 
+    public async Task<IReadOnlyList<ExternalAgreement>> GetAgreementsAsync(string organizationId, CancellationToken ct = default)
+    {
+        var items = await GetListAsync<CwAgreement>("finance/agreements",
+            new() { ["conditions"] = $"company/id={organizationId}", ["pageSize"] = "1000" }, ct);
+        return items.Select(a => new ExternalAgreement(
+            a.Id.ToString(),
+            a.Name ?? $"Agreement {a.Id}",
+            a.Type?.Name,
+            a.AgreementStatus,
+            a.StartDate,
+            // CW models open-ended agreements with a flag, not a null date — surface them as open-ended.
+            a.NoEndingDateFlag ? null : a.EndDate)).ToList();
+    }
+
     /// <summary>
     /// Board coverage, derived from service board teams: who is on a team, and which board that team
     /// serves. The team stands in for the role — ConnectWise has no per-board role the way Autotask

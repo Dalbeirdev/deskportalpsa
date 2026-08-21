@@ -41,6 +41,39 @@ public class AccountSettingsTests
     }
 
     [Fact]
+    public async Task Psa_view_reads_agreements_live_and_derives_monitored_queues_from_real_tickets()
+    {
+        var h = AdminHarness.Create(Org);
+        h.Db.PsaConnections.Add(new PsaConnection
+        {
+            Id = Conn, MspOrganizationId = Org, Name = "CW", Provider = ProviderType.ConnectWisePsa,
+            ApiEndpoint = "https://x", CredentialSecretRef = "mem://x",
+        });
+        h.Db.ClientCompanies.Add(new ClientCompany { Id = CompanyA, MspOrganizationId = Org, PsaConnectionId = Conn, Name = "Acme Dental", ExternalCompanyId = "42" });
+        h.Db.ClientUsers.Add(new ClientUser { Id = AdminUser, MspOrganizationId = Org, ClientCompanyId = CompanyA, Email = "admin@a.test", DisplayName = "Admin A", IdpSubject = "sub-admin", IsCompanyAdministrator = true });
+        // Queues come from the account's own synced tickets — the honest version of "monitored".
+        h.Db.Tickets.Add(new Desk.Domain.Tickets.Ticket { MspOrganizationId = Org, ClientCompanyId = CompanyA, PsaConnectionId = Conn, Title = "t1", RequesterName = "r", RequesterEmail = "r@a.test", QueueOrBoard = "NOC" });
+        h.Db.Tickets.Add(new Desk.Domain.Tickets.Ticket { MspOrganizationId = Org, ClientCompanyId = CompanyA, PsaConnectionId = Conn, Title = "t2", RequesterName = "r", RequesterEmail = "r@a.test", QueueOrBoard = "Service Desk" });
+        h.Db.Tickets.Add(new Desk.Domain.Tickets.Ticket { MspOrganizationId = Org, ClientCompanyId = CompanyA, PsaConnectionId = Conn, Title = "t3", RequesterName = "r", RequesterEmail = "r@a.test", QueueOrBoard = "NOC" });
+        h.Db.SaveChanges();
+
+        var stub = new StubConnector { SupportsContracts = true };
+        stub.Agreements["42"] = [new Desk.PsaCore.Models.ExternalAgreement("A-1", "Managed Services", "Managed", "Active", null, null)];
+        var svc = new AccountSettingsService(h.Db, new AuditWriter(h.Db, h.User, h.Tenant, h.Clock), new FakeConnectorResolver(stub));
+
+        var view = await svc.PsaViewAsync(AdminAccess);
+
+        view.AgreementsSupported.Should().BeTrue();
+        view.Agreements.Should().ContainSingle().Which.Name.Should().Be("Managed Services");
+        view.MonitoredQueues.Should().Equal("NOC", "Service Desk"); // distinct + ordered
+
+        // A provider without the concept says so plainly instead of returning a suspicious empty list.
+        var without = new AccountSettingsService(h.Db, new AuditWriter(h.Db, h.User, h.Tenant, h.Clock),
+            new FakeConnectorResolver(new StubConnector()));
+        (await without.PsaViewAsync(AdminAccess)).AgreementsSupported.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Account_read_projects_the_client_company_with_connection_name()
     {
         var (svc, _) = Build();

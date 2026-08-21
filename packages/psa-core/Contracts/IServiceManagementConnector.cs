@@ -32,6 +32,13 @@ public interface IServiceManagementConnector
     /// <summary>Managed devices/assets for a company. Empty when the provider has no asset registry.</summary>
     Task<IReadOnlyList<ExternalDevice>> GetDevicesAsync(string organizationId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Agreements/contracts the provider holds for a company (CW agreements, Autotask contracts).
+    /// Only meaningful when <see cref="ProviderCapabilities.SupportsContracts"/> — callers must
+    /// check, and connectors without the concept return an empty list rather than throwing.
+    /// </summary>
+    Task<IReadOnlyList<ExternalAgreement>> GetAgreementsAsync(string organizationId, CancellationToken ct = default);
+
     // Tickets
     Task<PaginatedResult<UnifiedTicket>> GetTicketsAsync(TicketFilter filter, CancellationToken ct = default);
     Task<UnifiedTicket?> GetTicketAsync(string ticketId, CancellationToken ct = default);

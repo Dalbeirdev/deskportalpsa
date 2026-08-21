@@ -109,6 +109,16 @@ internal sealed class AtTicketNote
     [JsonPropertyName("createdByContactID")] public long? CreatedByContactId { get; set; }
 }
 
+internal sealed class AtContract
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("contractName")] public string? ContractName { get; set; }
+    [JsonPropertyName("contractType")] public long? ContractType { get; set; }
+    [JsonPropertyName("status")] public long? Status { get; set; }
+    [JsonPropertyName("startDate")] public DateTimeOffset? StartDate { get; set; }
+    [JsonPropertyName("endDate")] public DateTimeOffset? EndDate { get; set; }
+}
+
 internal sealed class AtFieldInfoResult
 {
     [JsonPropertyName("fields")] public List<AtFieldInfo> Fields { get; set; } = [];
