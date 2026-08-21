@@ -6,6 +6,7 @@ import { NotificationsBell } from '@/components/NotificationsBell';
 import { FileText, Search, HelpCircle, ChevronLeft } from 'lucide-react';
 import { SidebarNav, MobileNav, StorageUsage } from '@/components/SidebarNav';
 import { BrandMark } from '@/components/BrandMark';
+import { UpdateWatchdog } from '@/components/UpdateWatchdog';
 
 
 
@@ -13,6 +14,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <QueryProvider>
     <TimerProvider>
+    <UpdateWatchdog />
     <div className="flex min-h-screen">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-[var(--border)] bg-gradient-to-b from-[var(--surface)] via-[var(--surface)] to-brand/[0.04] p-4 md:flex">
         <div className="mb-6 flex items-center gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2.5">
