@@ -66,6 +66,8 @@ export function SyncSettings({ connectionId, provider }: { connectionId: string;
     },
   });
 
+  const check = useMutation({ mutationFn: () => api.checkTimeEntry(connectionId) });
+
   if (isLoading || !form) return <p className="text-sm text-[var(--muted)]">Loading sync settings…</p>;
   const set = <K extends keyof ConnectionSettings>(k: K, v: ConnectionSettings[K]) => setForm({ ...form, [k]: v });
 
@@ -150,7 +152,32 @@ export function SyncSettings({ connectionId, provider }: { connectionId: string;
       </div>
 
       <div>
-        <h3 className="flex items-center gap-2 text-sm font-semibold"><Clock size={15} className="text-brand" /> Time entry defaults</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="flex items-center gap-2 text-sm font-semibold"><Clock size={15} className="text-brand" /> Time entry defaults</h3>
+          {/* Answers "will time logging actually work?" without writing an entry — the question
+              that previously could only be answered by losing a technician's hour to a rejection. */}
+          <button type="button" onClick={() => check.mutate()} disabled={check.isPending}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium hover:bg-[var(--bg)] disabled:opacity-50">
+            <CheckCircle2 size={13} /> {check.isPending ? 'Checking…' : 'Check time logging'}
+          </button>
+        </div>
+        {check.data && (
+          <div className={`mt-2 rounded-lg border px-3 py-2 text-xs ${check.data.ready
+            ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-900/60 dark:bg-green-950/30 dark:text-green-300'
+            : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300'}`}>
+            <p className="font-medium">{check.data.summary}</p>
+            {(check.data.remedies?.length ?? 0) > 0 && (
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                {check.data.remedies!.map((r) => <li key={r}>{r}</li>)}
+              </ul>
+            )}
+          </div>
+        )}
+        {check.isError && (
+          <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+            {(check.error as Error)?.message ?? 'Check failed.'}
+          </p>
+        )}
         <p className="text-xs text-[var(--muted)]">
           Who portal-logged time belongs to in the PSA.{' '}
           {provider === 2 && <>Autotask requires a technician and a work role on every ticket time entry, and rejects

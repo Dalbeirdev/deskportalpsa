@@ -258,6 +258,10 @@ public sealed record StoredLogo(byte[] Content, string ContentType);
 public sealed record FieldOptionDto(string Value, string Label);
 
 /// <summary>Live field discovery for a connection: service boards/queues, statuses, priorities, categories.</summary>
+/// <summary>Whether time logging will work, and what to change when it will not.</summary>
+public sealed record TimeEntryReadinessDto(
+    bool Ready, string Summary, IReadOnlyList<string> Remedies, IReadOnlyList<string> AvailableRoles);
+
 public sealed record ConnectionFieldsDto(
     IReadOnlyList<FieldOptionDto> QueuesOrBoards,
     IReadOnlyList<FieldOptionDto> Statuses,

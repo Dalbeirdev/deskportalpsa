@@ -79,6 +79,12 @@ public sealed class AdminConnectionsController(
     public async Task<IActionResult> Test(Guid id, CancellationToken ct)
         => Ok(await svc.TestAsync(id, ct));
 
+    /// <summary>Read-only: reports whether time logging will work with the current settings.</summary>
+    [HttpPost("{id:guid}/check-time-entry")]
+    [RequirePermission(Permissions.ConnectionsManage)]
+    public async Task<IActionResult> CheckTimeEntry(Guid id, CancellationToken ct)
+        => Ok(await svc.CheckTimeEntryAsync(id, ct));
+
     /// <summary>
     /// Pull tickets from the provider into the portal. Incremental by default; pass full=true to
     /// re-pull everything (e.g. after changing field mappings, so existing tickets are re-translated).

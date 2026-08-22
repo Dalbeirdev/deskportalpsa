@@ -113,6 +113,9 @@ public sealed class StubConnector(ProviderType provider = ProviderType.AutotaskP
     public Task<IReadOnlyList<ExternalAgreement>> GetAgreementsAsync(string organizationId, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<ExternalAgreement>>(Agreements.GetValueOrDefault(organizationId, []));
 
+    public Task<TimeEntryReadiness> CheckTimeEntryReadinessAsync(CancellationToken ct = default)
+        => Task.FromResult(new TimeEntryReadiness(true, "Ready."));
+
     public bool SupportsHolidayCalendars { get; set; }
     public List<ExternalHoliday> Holidays { get; } = [];
     public Task<IReadOnlyList<ExternalHoliday>> GetHolidaysAsync(CancellationToken ct = default)

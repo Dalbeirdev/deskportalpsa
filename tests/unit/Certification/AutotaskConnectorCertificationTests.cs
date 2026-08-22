@@ -112,6 +112,36 @@ public sealed class AutotaskConnectorCertificationTests : ConnectorCertification
             .Which["roleID"].Should().Be(55L, "the role the resource actually holds, not the configured one");
     }
 
+    /// <summary>
+    /// The readiness check exists so a misconfiguration is found on the settings page instead of
+    /// when a technician's logged hour is rejected. It must name the technician, name the roles
+    /// they really hold, and never write anything.
+    /// </summary>
+    [Fact]
+    public async Task Time_entry_readiness_reports_the_real_pairing_without_writing_an_entry()
+    {
+        var server = new FakeAutotaskServer(Clock);
+
+        // Configured with a role the technician does not hold — the live situation.
+        var bad = await BuildWithTimeDefaults(server, resourceId: 20, roleId: 999).CheckTimeEntryReadinessAsync();
+        bad.Ready.Should().BeFalse();
+        bad.Summary.Should().Contain("Tech One").And.Contain("does not hold");
+        bad.Remedies.Should().NotBeEmpty();
+        bad.AvailableRoles.Should().NotBeEmpty("the admin needs the real options to choose from");
+
+        // Configured correctly.
+        var good = await BuildWithTimeDefaults(server, resourceId: 20, roleId: 55).CheckTimeEntryReadinessAsync();
+        good.Ready.Should().BeTrue();
+        good.Summary.Should().Contain("Tech One");
+
+        // Nothing configured at all.
+        var none = await BuildWithTimeDefaults(server, resourceId: 0, roleId: null).CheckTimeEntryReadinessAsync();
+        none.Ready.Should().BeFalse();
+        none.Summary.Should().Contain("No time-entry technician");
+
+        server.TimeEntries.Should().BeEmpty("a readiness CHECK must never create a time entry");
+    }
+
     /// <summary>When the resource holds no role at all, say so — that is a real Autotask setup gap.</summary>
     [Fact]
     public async Task A_technician_with_no_active_role_is_reported_as_the_setup_problem_it_is()

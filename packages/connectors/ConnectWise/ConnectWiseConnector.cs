@@ -83,6 +83,20 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
             !string.Equals(c.Status?.Name, "Inactive", StringComparison.OrdinalIgnoreCase))).ToList();
     }
 
+    /// <summary>
+    /// ConnectWise is far less strict than Autotask here: a member owns the entry and the work role
+    /// is optional, so readiness is simply whether a member is configured.
+    /// </summary>
+    public async Task<TimeEntryReadiness> CheckTimeEntryReadinessAsync(CancellationToken ct = default)
+    {
+        // Reachability is the only precondition worth asserting: unlike Autotask, ConnectWise
+        // accepts time from the API user and treats the work role as optional.
+        await GetListAsync<CwMember>("system/members", new() { ["pageSize"] = "1" }, ct);
+        return new TimeEntryReadiness(true,
+            "Ready — ConnectWise accepts time from the API user, and the work role is optional. "
+            + "Set a member below to attribute entries to a person instead.");
+    }
+
     public async Task<IReadOnlyList<ExternalHoliday>> GetHolidaysAsync(CancellationToken ct = default)
     {
         const int maxLists = 10; // an MSP keeps one or two; cap the fan-out regardless

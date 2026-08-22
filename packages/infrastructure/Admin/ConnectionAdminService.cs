@@ -116,6 +116,22 @@ public sealed class ConnectionAdminService(
             "PsaConnection", connectionId.ToString(), null, ct);
     }
 
+    public async Task<TimeEntryReadinessDto> CheckTimeEntryAsync(Guid connectionId, CancellationToken ct = default)
+    {
+        // Deliberately does not touch connection Status: a time-entry misconfiguration says nothing
+        // about whether the connection itself is healthy, and marking it Failed would hide that.
+        try
+        {
+            var connector = await connectors.ResolveAsync(connectionId, ct);
+            var r = await connector.CheckTimeEntryReadinessAsync(ct);
+            return new TimeEntryReadinessDto(r.Ready, r.Summary, r.Remedies, r.AvailableRoles);
+        }
+        catch (Exception ex) when (ex is ConnectorException or ValidationFailedException or NotFoundException)
+        {
+            return new TimeEntryReadinessDto(false, ex.Message, ["Fix the connection, then check again."], []);
+        }
+    }
+
     public async Task<ConnectionTestResultDto> TestAsync(Guid connectionId, CancellationToken ct = default)
     {
         var connection = await db.PsaConnections.FirstOrDefaultAsync(c => c.Id == connectionId, ct)
