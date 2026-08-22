@@ -166,6 +166,11 @@ export function SyncSettings({ connectionId, provider }: { connectionId: string;
             </select>
             {provider === 2 && !form.defaultTimeEntryResourceId &&
               <span className="mt-1 block text-xs text-amber-600 dark:text-amber-400">Required before time can be logged.</span>}
+            {provider === 2 &&
+              <span className="mt-1 block text-xs text-[var(--faint)]">
+                Pick a real technician, not the API user — Autotask refuses to let its own integration
+                account own time. Example: choose <em>Jane Cooper</em> (an engineer who works tickets).
+              </span>}
           </label>
           <label className="block">
             <span className="mb-1 block text-xs font-medium">Default work role</span>
@@ -174,7 +179,10 @@ export function SyncSettings({ connectionId, provider }: { connectionId: string;
               <option value="">— the technician&apos;s own role —</option>
               {(fields?.workRoles ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-            <span className="mt-1 block text-xs text-[var(--muted)]">Leave unset to use whichever role the technician holds.</span>
+            <span className="mt-1 block text-xs text-[var(--muted)]">
+              Leave unset to use whichever role the technician holds — the safest choice.
+              {provider === 2 && ' Autotask only accepts a role that technician actually holds; if you pick one they do not, we use a valid one instead so the time is never lost.'}
+            </span>
           </label>
         </div>
       </div>

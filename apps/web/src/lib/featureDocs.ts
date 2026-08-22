@@ -123,6 +123,22 @@ export const FEATURE_DOCS: FeatureDoc[] = [
         ],
       },
       {
+        heading: 'Setting it up: a worked example',
+        body:
+          'Time logging needs one piece of setup per PSA connection, because providers disagree about who may own an entry. Open Dashboard → PSA Connections → your connection → Sync settings → Time entry defaults, then:',
+        points: [
+          'Time entry technician — the person portal-logged time is filed under. Pick a real technician (for example "Jane Cooper", an engineer who works tickets), NOT the API or administrator account: Autotask refuses to let its own integration user own time, and rejects the entry outright.',
+          'Default work role — leave it on "the technician\'s own role" unless you have a reason not to. Autotask only accepts a role that technician actually holds, so a role picked from the full list can be one that pairing does not exist for.',
+          'If a configured role turns out not to belong to that technician, the portal uses a role they do hold rather than losing the entry — and if they hold none at all, it says so plainly instead of returning the provider\'s raw error.',
+          'ConnectWise is less strict: it needs a member, and the work role is optional.',
+        ],
+      },
+      {
+        heading: 'When the PSA says no',
+        body:
+          'A rejected entry is kept, flagged, and retryable — the technician\'s work is never discarded because a provider was unhappy. The row carries the provider\'s own message, refreshed on every attempt, so a retry that fails for a new reason shows the new reason rather than the one from last time.',
+      },
+      {
         heading: 'Time on the reply itself',
         body:
           'When a reply logs time, the entry is linked to that exact note and the thread shows the duration and billable status directly on the reply card. PSA-side time entries appear in the thread the same way, so the conversation and the timesheet tell one story. Clients never see any of it — hours are billing data and are stripped server-side from the client view.',
