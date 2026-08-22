@@ -172,18 +172,51 @@ export function SyncSettings({ connectionId, provider }: { connectionId: string;
                 account own time. Example: choose <em>Jane Cooper</em> (an engineer who works tickets).
               </span>}
           </label>
+          {(() => {
+            // Autotask accepts a time entry only when the technician ACTUALLY HOLDS the role.
+            // Discovery already knows every real pairing, so offer only those: an impossible
+            // combination stops being something an admin can pick, which is the only fix that
+            // holds — validating after the fact just moves the error later.
+            const held = (fields?.technicianCoverage ?? [])
+              .filter((c) => c.technicianId === form.defaultTimeEntryResourceId && c.roleId)
+              .map((c) => ({ value: c.roleId!, label: c.roleName ?? c.roleId! }));
+            const seen = new Set<string>();
+            const heldUnique = held.filter((r) => !seen.has(r.value) && seen.add(r.value));
+            // Only Autotask enforces the pairing; ConnectWise takes any work role.
+            const restrict = provider === 2 && !!form.defaultTimeEntryResourceId && heldUnique.length > 0;
+            const options = restrict ? heldUnique : (fields?.workRoles ?? []);
+            const chosenIsImpossible = provider === 2 && !!form.defaultTimeEntryRoleId
+              && heldUnique.length > 0 && !heldUnique.some((r) => r.value === form.defaultTimeEntryRoleId);
+            const technicianHasNoRoles = provider === 2 && !!form.defaultTimeEntryResourceId
+              && (fields?.technicianCoverage?.length ?? 0) > 0 && heldUnique.length === 0;
+            return (
           <label className="block">
             <span className="mb-1 block text-xs font-medium">Default work role</span>
             <select value={form.defaultTimeEntryRoleId ?? ''} onChange={(e) => set('defaultTimeEntryRoleId', e.target.value || null)}
               className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
               <option value="">— the technician&apos;s own role —</option>
-              {(fields?.workRoles ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
+            {chosenIsImpossible && (
+              <span className="mt-1 block text-xs text-amber-600 dark:text-amber-400">
+                The saved role is not one this technician holds — Autotask would reject it. Pick one from the list, or clear it.
+              </span>
+            )}
+            {technicianHasNoRoles && (
+              <span className="mt-1 block text-xs text-amber-600 dark:text-amber-400">
+                This technician holds no active work role in Autotask, so they cannot own time. Give them a role there, or choose someone else.
+              </span>
+            )}
+            {restrict && (
+              <span className="mt-1 block text-[11px] text-[var(--faint)]">Showing only roles this technician holds.</span>
+            )}
             <span className="mt-1 block text-xs text-[var(--muted)]">
               Leave unset to use whichever role the technician holds — the safest choice.
               {provider === 2 && ' Autotask only accepts a role that technician actually holds; if you pick one they do not, we use a valid one instead so the time is never lost.'}
             </span>
           </label>
+            );
+          })()}
         </div>
       </div>
 
