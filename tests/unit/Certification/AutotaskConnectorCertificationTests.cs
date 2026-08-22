@@ -85,6 +85,66 @@ public sealed class AutotaskConnectorCertificationTests : ConnectorCertification
     }
 
     /// <summary>
+    /// The live failure this pins: an admin configured time-entry technician "Autotask
+    /// Administrator" with work role "Help Desk" — a pairing that resource does not hold — and
+    /// every entry came back HTTP 500 "The specified AssignedResourceID and AssignedRoleID
+    /// combination is not currently defined". Autotask does not accept a technician and a role
+    /// independently; the PAIR must exist. The connector must use a role the resource actually
+    /// holds rather than trusting a configured one that can never work.
+    /// </summary>
+    [Fact]
+    public async Task A_configured_role_the_technician_does_not_hold_is_corrected_to_one_they_do()
+    {
+        var server = new FakeAutotaskServer(Clock);
+        // Resource 20 holds role 55 only. The connection is configured with role 999 — plausible
+        // to a human reading a role list, impossible for Autotask.
+        var c = BuildWithTimeDefaults(server, resourceId: 20, roleId: 999);
+
+        var created = await c.CreateTicketAsync(new UnifiedTicketCreateRequest
+        {
+            Title = "time", IdempotencyKey = "k", ExternalCompanyId = SeededOrganizationId,
+        });
+        var result = await c.AddTimeEntryAsync(created.ExternalId!,
+            new UnifiedTimeEntryCreateRequest(1m, null, null, BillableOption.Billable, "ok good work team", null));
+
+        result.Success.Should().BeTrue("a valid pairing exists and must be used rather than losing the entry");
+        server.TimeEntries.Should().ContainSingle()
+            .Which["roleID"].Should().Be(55L, "the role the resource actually holds, not the configured one");
+    }
+
+    /// <summary>When the resource holds no role at all, say so — that is a real Autotask setup gap.</summary>
+    [Fact]
+    public async Task A_technician_with_no_active_role_is_reported_as_the_setup_problem_it_is()
+    {
+        var server = new FakeAutotaskServer(Clock);
+        server.ResourceRoles.Clear();
+        var c = BuildWithTimeDefaults(server, resourceId: 20, roleId: null);
+
+        var created = await c.CreateTicketAsync(new UnifiedTicketCreateRequest
+        {
+            Title = "time", IdempotencyKey = "k", ExternalCompanyId = SeededOrganizationId,
+        });
+        var act = async () => await c.AddTimeEntryAsync(created.ExternalId!,
+            new UnifiedTimeEntryCreateRequest(1m, null, null, BillableOption.Billable, "n", null));
+
+        (await act.Should().ThrowAsync<ConnectorException>()).Which.Message
+            .Should().Contain("holds no active work role");
+    }
+
+    private AutotaskConnector BuildWithTimeDefaults(FakeAutotaskServer server, long resourceId, long? roleId)
+    {
+        var http = new HttpClient(server) { BaseAddress = new Uri("https://at.local/ATServicesRest/") };
+        return new AutotaskConnector(http, new AutotaskConnectorConfig
+        {
+            BaseUrl = "https://at.local/ATServicesRest/",
+            Credentials = new AutotaskCredentials("code", "user", "secret"),
+            WebhookSecret = Secret,
+            DefaultTimeEntryResourceId = resourceId,
+            DefaultTimeEntryRoleId = roleId,
+        }, Clock);
+    }
+
+    /// <summary>
     /// A portal status with no Autotask counterpart must say WHAT to do. Autotask's own answer is
     /// HTTP 500 "Could not convert string to integer", which tells the reader nothing; the connector
     /// names the tenant's real options instead, because the fix is a field mapping.

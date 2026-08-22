@@ -26,6 +26,13 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
         [new() { ["id"] = 30L, ["companyID"] = 1L, ["contractName"] = "Managed Services", ["contractType"] = 7L, ["status"] = 1L, ["startDate"] = "2026-01-01T00:00:00Z", ["endDate"] = "2026-12-31T00:00:00Z" }];
     private readonly List<Dictionary<string, object?>> _holidays =
         [new() { ["id"] = 60L, ["holidayName"] = "Christmas Day", ["holidayDate"] = "2026-12-25T00:00:00Z" }];
+    /// <summary>Which roles each resource actually holds — the pairing Autotask enforces.</summary>
+    public List<Dictionary<string, object?>> ResourceRoles { get; } =
+        [new() { ["id"] = 900L, ["resourceID"] = 20L, ["roleID"] = 55L, ["isActive"] = true }];
+
+    /// <summary>Time entries the fake accepted, so a test can assert what was actually sent.</summary>
+    public List<Dictionary<string, object?>> TimeEntries { get; } = [];
+
     private readonly List<Dictionary<string, object?>> _tickets = [];
     private readonly List<Dictionary<string, object?>> _notes = [];
     private readonly List<Dictionary<string, object?>> _attachments = [];
@@ -58,6 +65,23 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
         if (path.EndsWith("Contacts/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_contacts, body));
         if (path.EndsWith("Resources/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_resources, body));
         if (path.EndsWith("Contracts/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_contracts, body));
+        if (path.EndsWith("ResourceRoles/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(ResourceRoles, body));
+        // Autotask accepts ticket time only when the resource ACTUALLY HOLDS the role: an
+        // unpaired combination is HTTP 500, not a validation 400. Modelling that here is the
+        // difference between catching the live failure and shipping it again.
+        if (path.EndsWith("V1.0/TimeEntries", StringComparison.OrdinalIgnoreCase) && request.Method == HttpMethod.Post)
+        {
+            var input = Parse(body);
+            var res = Convert.ToInt64(input.GetValueOrDefault("resourceID") ?? 0L);
+            var role = Convert.ToInt64(input.GetValueOrDefault("roleID") ?? 0L);
+            var paired = ResourceRoles.Any(r =>
+                Convert.ToInt64(r["resourceID"]) == res && Convert.ToInt64(r["roleID"]) == role);
+            if (!paired)
+                return Resp(HttpStatusCode.InternalServerError,
+                    "{\"errors\":[\"The specified AssignedResourceID and AssignedRoleID combination is not currently defined.\"]}");
+            TimeEntries.Add(input);
+            return Json($"{{\"itemId\":{++_seq}}}");
+        }
         if (path.EndsWith("Holidays/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_holidays, body));
         if (path.EndsWith("Tickets/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_tickets, body));
         if (path.EndsWith("TicketNotes/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_notes, body));
@@ -229,7 +253,15 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
                         f.GetProperty("field").GetString()!,
                         f.GetProperty("op").GetString()!,
                         val.ValueKind == JsonValueKind.Number ? val.GetInt64() : null,
-                        val.ValueKind == JsonValueKind.String ? val.GetString() : null));
+                        // Booleans matter: Autotask filters on isActive with a real boolean, and a
+                        // fake that understood only numbers and strings silently dropped EVERY row
+                        // of such a query — which reads in a test exactly like "no data exists".
+                        val.ValueKind switch
+                        {
+                            JsonValueKind.String => val.GetString(),
+                            JsonValueKind.True or JsonValueKind.False => val.GetBoolean().ToString(),
+                            _ => null,
+                        }));
                 }
             }
         }
@@ -249,7 +281,9 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
     private static bool FieldEquals(Dictionary<string, object?> row, FilterClause c)
     {
         if (!row.TryGetValue(c.Field, out var actual) || actual is null) return false;
-        return c.Number is { } n ? Convert.ToInt64(actual) == n : actual.ToString() == c.Text;
+        return c.Number is { } n
+            ? Convert.ToInt64(actual) == n
+            : string.Equals(actual.ToString(), c.Text, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool FieldGte(Dictionary<string, object?> row, FilterClause c)

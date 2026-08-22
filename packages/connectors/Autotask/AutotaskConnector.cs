@@ -487,16 +487,37 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
     /// </summary>
     private async Task<long?> ResolveRoleIdAsync(string? requested, long resourceId, CancellationToken ct)
     {
-        if (long.TryParse(requested, out var explicitRole) && explicitRole > 0) return explicitRole;
-        if (config.DefaultTimeEntryRoleId is { } configured and > 0) return configured;
+        var preferred = long.TryParse(requested, out var explicitRole) && explicitRole > 0 ? explicitRole
+            : config.DefaultTimeEntryRoleId is { } configured and > 0 ? configured
+            : (long?)null;
+
+        // Autotask does not accept "a technician" and "a role" independently — the PAIR has to exist
+        // in ResourceRoles, or it answers HTTP 500 "The specified AssignedResourceID and
+        // AssignedRoleID combination is not currently defined". The old code trusted a configured
+        // role blindly and only looked roles up when nothing was configured, so an admin who picked
+        // a sensible-sounding role the technician does not actually hold got that 500 on every
+        // entry, with no way to tell which half was wrong.
+        List<long> held;
         try
         {
-            var roles = await QueryAsync<AtResourceRole>("ResourceRoles",
-                [Filter("resourceID", "eq", resourceId), Filter("isActive", "eq", true)], 50, ct);
-            var first = roles.Select(r => r.RoleId).FirstOrDefault(id => id > 0);
-            return first > 0 ? first : null;
+            held = (await QueryAsync<AtResourceRole>("ResourceRoles",
+                    [Filter("resourceID", "eq", resourceId), Filter("isActive", "eq", true)], 50, ct))
+                .Select(r => r.RoleId).Where(id => id > 0).Distinct().ToList();
         }
-        catch (ConnectorException) { return null; }
+        catch (ConnectorException)
+        {
+            return preferred; // lookup unavailable — send the request and let Autotask judge
+        }
+
+        if (preferred is { } want && held.Contains(want)) return want;
+        // Prefer a role this resource genuinely holds over one that is merely configured: a valid
+        // pairing logs the time, an invalid one loses it.
+        if (held.Count > 0) return held[0];
+        if (preferred is not null) return preferred;
+
+        throw new ConnectorException(ConnectorFailureKind.InvalidRequest,
+            $"Autotask resource {resourceId} holds no active work role, so it cannot own ticket time. " +
+            "Give the technician a role in Autotask, or choose a different time-entry technician on this connection.");
     }
 
     public Task<IReadOnlyList<ExternalFieldOption>> GetStatusesAsync(CancellationToken ct = default) => PicklistAsync("status", ct);
