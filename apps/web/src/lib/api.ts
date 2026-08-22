@@ -230,6 +230,15 @@ export const api = {
   }) => request(`/api/admin/connections/${id}`, ConnectionSummarySchema, { method: 'PUT', body: JSON.stringify(body) }),
   connectionFields: (id: string) =>
     request(`/api/admin/connections/${id}/fields`, ConnectionFieldsSchema) as Promise<ConnectionFields>,
+  // Read-only pre-flight so a time-entry misconfiguration is found here, not when a technician's
+  // logged hour is rejected by the PSA.
+  checkTimeEntry: (id: string) =>
+    request(`/api/admin/connections/${id}/check-time-entry`, z.object({
+      ready: z.boolean(),
+      summary: z.string(),
+      remedies: z.array(z.string()).default([]),
+      availableRoles: z.array(z.string()).default([]),
+    }), { method: 'POST' }),
   connectionSettings: (id: string) =>
     request(`/api/admin/connections/${id}/settings`, ConnectionSettingsSchema) as Promise<ConnectionSettings>,
   saveConnectionSettings: (id: string, body: ConnectionSettings) =>

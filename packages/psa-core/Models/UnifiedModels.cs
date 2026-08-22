@@ -135,6 +135,21 @@ public enum BillableOption { Billable, DoNotBill, NoCharge }
 /// </summary>
 public record ExternalHoliday(string Date, string Name);
 
+/// <summary>
+/// Whether this connection can actually log time, checked WITHOUT writing an entry. Providers
+/// impose rules a settings form cannot express — Autotask needs a technician who is not the API
+/// user and a role that technician genuinely holds — and the only alternative to checking here is
+/// discovering it when a technician's logged hour is rejected.
+/// </summary>
+public record TimeEntryReadiness(bool Ready, string Summary)
+{
+    /// <summary>What to change, when it is not ready. Empty when it is.</summary>
+    public IReadOnlyList<string> Remedies { get; init; } = [];
+
+    /// <summary>Roles the configured technician actually holds, so the admin can pick a real one.</summary>
+    public IReadOnlyList<string> AvailableRoles { get; init; } = [];
+}
+
 public record ExternalAgreement(
     string ExternalId,
     string Name,

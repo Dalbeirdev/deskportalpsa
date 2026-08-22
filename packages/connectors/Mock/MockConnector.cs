@@ -190,6 +190,9 @@ public sealed class MockConnector : IServiceManagementConnector
     public Task<IReadOnlyList<ExternalDevice>> GetDevicesAsync(string organizationId, CancellationToken ct = default)
     { Guard(); return Task.FromResult<IReadOnlyList<ExternalDevice>>([new ExternalDevice("D-1", "Mock Workstation", "Workstation", "SN-1", true)]); }
 
+    public Task<TimeEntryReadiness> CheckTimeEntryReadinessAsync(CancellationToken ct = default)
+    { Guard(); return Task.FromResult(new TimeEntryReadiness(true, "Ready — the mock provider accepts any time entry.")); }
+
     public Task<IReadOnlyList<ExternalHoliday>> GetHolidaysAsync(CancellationToken ct = default)
     {
         Guard();

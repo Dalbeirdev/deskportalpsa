@@ -184,6 +184,82 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
             .ToList();
     }
 
+    /// <summary>
+    /// Autotask's ticket-time rules, checked before anyone relies on them: an entry needs a
+    /// resource that is NOT the API user, and a role that resource actually holds. Both are
+    /// invisible in a settings form, so both are reported here by name.
+    /// </summary>
+    public async Task<TimeEntryReadiness> CheckTimeEntryReadinessAsync(CancellationToken ct = default)
+    {
+        if (config.DefaultTimeEntryResourceId is not { } resourceId || resourceId <= 0)
+            return new TimeEntryReadiness(false, "No time-entry technician is set on this connection.")
+            {
+                Remedies = ["Choose a Time entry technician below — Autotask will not accept time without one."],
+            };
+
+        var resources = await QueryAsync<AtResource>("Resources", [Filter("id", "eq", resourceId)], 1, ct);
+        var who = resources.Count > 0 ? $"{resources[0].FirstName} {resources[0].LastName}".Trim() : $"resource {resourceId}";
+        if (resources.Count == 0)
+            return new TimeEntryReadiness(false, $"Resource {resourceId} no longer exists in Autotask.")
+            {
+                Remedies = ["Pick a current technician below."],
+            };
+
+        List<AtResourceRole> links;
+        try
+        {
+            links = await QueryAsync<AtResourceRole>("ResourceRoles",
+                [Filter("resourceID", "eq", resourceId), Filter("isActive", "eq", true)], 50, ct);
+        }
+        catch (ConnectorException ex)
+        {
+            return new TimeEntryReadiness(false, $"Could not read {who}'s work roles from Autotask: {ex.Message}")
+            {
+                Remedies = ["Confirm the API user has permission to read Resources and Resource Roles."],
+            };
+        }
+
+        var roleNames = new Dictionary<long, string>();
+        try
+        {
+            foreach (var r in await QueryAsync<AtRole>("Roles", [Filter("isActive", "eq", true)], 500, ct))
+                roleNames[r.Id] = r.Name ?? r.Id.ToString();
+        }
+        catch (ConnectorException) { /* ids alone still answer the question */ }
+
+        var held = links.Select(l => l.RoleId).Where(id => id > 0).Distinct().ToList();
+        var heldNames = held.Select(id => roleNames.GetValueOrDefault(id, id.ToString())).ToList();
+
+        if (held.Count == 0)
+            return new TimeEntryReadiness(false, $"{who} holds no active work role, so Autotask will reject every entry.")
+            {
+                Remedies =
+                [
+                    $"In Autotask, give {who} an active work role (Admin → Resources → {who} → Roles).",
+                    "Or choose a different technician below — one who already works tickets.",
+                ],
+            };
+
+        var configured = config.DefaultTimeEntryRoleId;
+        if (configured is { } role && role > 0 && !held.Contains(role))
+            return new TimeEntryReadiness(false,
+                $"{who} does not hold the configured work role, which is the pairing Autotask rejects.")
+            {
+                Remedies =
+                [
+                    $"Set Default work role to one of: {string.Join(", ", heldNames)}.",
+                    "Or clear it — the portal then uses a role they hold.",
+                ],
+                AvailableRoles = heldNames,
+            };
+
+        var using_ = configured is { } c2 && c2 > 0 ? roleNames.GetValueOrDefault(c2, c2.ToString()) : heldNames[0];
+        return new TimeEntryReadiness(true, $"Ready — time will be logged as {who} with role {using_}.")
+        {
+            AvailableRoles = heldNames,
+        };
+    }
+
     public async Task<IReadOnlyList<ExternalAgreement>> GetAgreementsAsync(string organizationId, CancellationToken ct = default)
     {
         var items = await QueryAsync<AtContract>("Contracts",

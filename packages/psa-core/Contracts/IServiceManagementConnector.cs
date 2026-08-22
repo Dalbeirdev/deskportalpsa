@@ -46,6 +46,12 @@ public interface IServiceManagementConnector
     /// </summary>
     Task<IReadOnlyList<ExternalHoliday>> GetHolidaysAsync(CancellationToken ct = default);
 
+    /// <summary>
+    /// Can this connection log time right now? A read-only pre-flight, so a misconfiguration is
+    /// found on the settings page rather than when a technician's hour is rejected.
+    /// </summary>
+    Task<TimeEntryReadiness> CheckTimeEntryReadinessAsync(CancellationToken ct = default);
+
     // Tickets
     Task<PaginatedResult<UnifiedTicket>> GetTicketsAsync(TicketFilter filter, CancellationToken ct = default);
     Task<UnifiedTicket?> GetTicketAsync(string ticketId, CancellationToken ct = default);
