@@ -515,7 +515,11 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
             ["hoursWorked"] = entry.Hours,
             ["hoursToBill"] = billable ? entry.Hours : 0m,
             ["isNonBillable"] = entry.Billable == BillableOption.DoNotBill,
-            ["summaryNotes"] = entry.Notes,
+            // Autotask makes summary notes MANDATORY ("TimeEntry.summaryNotes can not be blank")
+            // while ConnectWise does not, so an entry logged without notes was accepted here and
+            // rejected there — losing the technician's time over a field they were never asked for.
+            // The placeholder states only what is true; the UI asks for real notes up front.
+            ["summaryNotes"] = string.IsNullOrWhiteSpace(entry.Notes) ? "Time logged from Desk Portal." : entry.Notes,
         };
         if (long.TryParse(entry.WorkType, out var billingCode)) body["billingCodeID"] = billingCode;
 

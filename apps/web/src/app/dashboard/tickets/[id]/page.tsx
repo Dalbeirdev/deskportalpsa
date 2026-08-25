@@ -258,6 +258,8 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   // Mirror the API's own gates: a pure CLIENT login carries neither of these, and showing the
   // control anyway just manufactures a 403. Same keys the endpoints demand, not guesses.
   const canLogTime = me?.permissions.includes('tickets.time.log') ?? false;
+  // Provider 2 = Autotask, which rejects a time entry whose summary notes are blank.
+  const notesRequired = Number(ticket?.provider) === 2;
   const canUpdate = me?.permissions.includes('tickets.update') ?? false;
   const [replyInternal, setReplyInternal] = useState(false);
   const [replyStatus, setReplyStatus] = useState('');
@@ -476,7 +478,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
             {canLogTime && (
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
               <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--faint)]"><Clock size={14} /> Log time</h2>
-              <form onSubmit={(e) => { e.preventDefault(); if (parseFloat(hours) > 0) logTime.mutate(); }} className="space-y-3">
+              <form onSubmit={(e) => { e.preventDefault(); if (parseFloat(hours) > 0 && !(notesRequired && !timeNotes.trim())) logTime.mutate(); }} className="space-y-3">
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <label className="block">
                     <span className="mb-1 block text-xs text-[var(--muted)]">Hours</span>
@@ -529,15 +531,23 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   <span className="text-[11px] text-[var(--faint)]">Fills Hours from the tracked time.</span>
                 </div>
 
+                {/* Autotask REQUIRES summary notes on ticket time; ConnectWise does not. Asking
+                    here — where the technician still remembers the work — beats a placeholder
+                    written by the connector to satisfy a field nobody was asked about. */}
                 <label className="block">
-                  <span className="mb-1 block text-xs text-[var(--muted)]">Notes</span>
+                  <span className="mb-1 block text-xs text-[var(--muted)]">
+                    Notes {notesRequired && <span className="text-red-600 dark:text-red-400">*</span>}
+                  </span>
                   <input value={timeNotes} onChange={(e) => setTimeNotes(e.target.value)} placeholder="What did you work on?"
                     className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
+                  {notesRequired && !timeNotes.trim() && (
+                    <span className="mt-1 block text-xs text-[var(--faint)]">Autotask requires notes on every time entry.</span>
+                  )}
                 </label>
 
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-3">
                   <p className="text-xs text-[var(--faint)]">Posts a time entry to the PSA against this ticket.</p>
-                  <button type="submit" disabled={logTime.isPending || !(parseFloat(hours) > 0)}
+                  <button type="submit" disabled={logTime.isPending || !(parseFloat(hours) > 0) || (notesRequired && !timeNotes.trim())}
                     className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50">
                     <Clock size={15} /> {logTime.isPending ? 'Logging…' : `Log ${parseFloat(hours) > 0 ? fmtDuration(parseFloat(hours)) : 'time'}`}
                   </button>

@@ -79,6 +79,11 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
             if (!paired)
                 return Resp(HttpStatusCode.InternalServerError,
                     "{\"errors\":[\"The specified AssignedResourceID and AssignedRoleID combination is not currently defined.\"]}");
+            // Autotask mandates summary notes on ticket time; ConnectWise does not. A fake that
+            // accepted blank notes let the portal ship an entry Autotask would always refuse.
+            if (string.IsNullOrWhiteSpace(input.GetValueOrDefault("summaryNotes")?.ToString()))
+                return Resp(HttpStatusCode.InternalServerError,
+                    "{\"errors\":[\"TimeEntry.summaryNotes can not be blank.\"]}");
             TimeEntries.Add(input);
             return Json($"{{\"itemId\":{++_seq}}}");
         }
@@ -306,7 +311,8 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
         JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(body)!
             .ToDictionary(kv => kv.Key, object? (kv) => kv.Value.ValueKind switch
             {
-                JsonValueKind.Number => kv.Value.GetInt64(),
+                // Not every number is an integer: hoursWorked is 0.25, and GetInt64 throws on it.
+                JsonValueKind.Number => kv.Value.TryGetInt64(out var i) ? i : kv.Value.GetDecimal(),
                 JsonValueKind.String => kv.Value.GetString(),
                 JsonValueKind.True => true,
                 JsonValueKind.False => false,
