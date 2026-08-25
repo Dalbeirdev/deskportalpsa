@@ -189,7 +189,25 @@ export function SyncSettings({ connectionId, provider }: { connectionId: string;
             <select value={form.defaultTimeEntryResourceId ?? ''} onChange={(e) => set('defaultTimeEntryResourceId', e.target.value || null)}
               className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
               <option value="">— none —</option>
-              {(fields?.technicians ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              {(() => {
+                // Autotask can only accept time from a technician who holds a work role, and the
+                // list gives no clue which ones do — so "Autotask Administrator" looks like a
+                // reasonable pick and rejects every entry. Say it in the option itself, and put
+                // the usable people first, so the valid choice is the obvious one.
+                const list = fields?.technicians ?? [];
+                if (provider !== 2 || !(fields?.technicianCoverage?.length)) {
+                  return list.map((o) => <option key={o.value} value={o.value}>{o.label}</option>);
+                }
+                const withRole = new Set(fields!.technicianCoverage.filter((c) => c.roleId).map((c) => c.technicianId));
+                const usable = list.filter((o) => withRole.has(o.value));
+                const unusable = list.filter((o) => !withRole.has(o.value));
+                return [
+                  ...usable.map((o) => <option key={o.value} value={o.value}>{o.label}</option>),
+                  ...unusable.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label} — no work role, cannot log time</option>
+                  )),
+                ];
+              })()}
             </select>
             {provider === 2 && !form.defaultTimeEntryResourceId &&
               <span className="mt-1 block text-xs text-amber-600 dark:text-amber-400">Required before time can be logged.</span>}
