@@ -142,6 +142,35 @@ public sealed class AutotaskConnectorCertificationTests : ConnectorCertification
         server.TimeEntries.Should().BeEmpty("a readiness CHECK must never create a time entry");
     }
 
+    /// <summary>
+    /// The live failure this pins: 15 minutes logged with no notes came back
+    /// "TimeEntry.summaryNotes can not be blank." Autotask mandates the field; ConnectWise does
+    /// not, so the portal accepted the entry and the PSA refused it. The technician's time must
+    /// survive the difference.
+    /// </summary>
+    [Fact]
+    public async Task Time_logged_without_notes_still_reaches_autotask()
+    {
+        var server = new FakeAutotaskServer(Clock);
+        var c = BuildWithTimeDefaults(server, resourceId: 20, roleId: 55);
+        var created = await c.CreateTicketAsync(new UnifiedTicketCreateRequest
+        {
+            Title = "t", IdempotencyKey = "k", ExternalCompanyId = SeededOrganizationId,
+        });
+
+        var result = await c.AddTimeEntryAsync(created.ExternalId!,
+            new UnifiedTimeEntryCreateRequest(0.25m, null, null, BillableOption.Billable, "   ", null));
+
+        result.Success.Should().BeTrue("blank notes are a portal-side gap, not a reason to lose the time");
+        server.TimeEntries.Should().ContainSingle()
+            .Which["summaryNotes"].ToString().Should().NotBeNullOrWhiteSpace();
+
+        // Real notes must still travel through untouched.
+        await c.AddTimeEntryAsync(created.ExternalId!,
+            new UnifiedTimeEntryCreateRequest(0.5m, null, null, BillableOption.Billable, "Rebuilt the mail profile.", null));
+        server.TimeEntries[1]["summaryNotes"].Should().Be("Rebuilt the mail profile.");
+    }
+
     /// <summary>When the resource holds no role at all, say so — that is a real Autotask setup gap.</summary>
     [Fact]
     public async Task A_technician_with_no_active_role_is_reported_as_the_setup_problem_it_is()
