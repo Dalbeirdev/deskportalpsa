@@ -145,6 +145,18 @@ export default function MappingsPage() {
     return [...base, ...Array.from(new Map(legacy.map((l) => [l.value, l])).values())];
   }, [mappings, tab, fields]);
 
+  /// Values the PSA currently ACCEPTS. A rule pointing outside this set still saves and still
+  /// reads "Mapped", but every write using it is rejected — which is how a status mapped to a
+  /// retired PSA value ("Waiting on Customer" when the PSA now says "Waiting Customer") goes
+  /// unnoticed until someone changes a ticket's status.
+  const liveValues = useMemo(() => {
+    const discovered = ({
+      status: fields?.statuses, priority: fields?.priorities, queue: fields?.queuesOrBoards,
+      category: fields?.categories, workType: fields?.workTypes,
+    }[tab] ?? []);
+    return new Set(discovered.flatMap((o) => [o.value, o.label]));
+  }, [fields, tab]);
+
   /// A rule may store the provider id (current) or a label (legacy) — match either so the select
   /// shows the real state instead of falsely reading "not mapped".
   const selectedValue = (external: string | null) => {
@@ -294,9 +306,14 @@ export default function MappingsPage() {
                     </div>
                   </td>
                   <td className="px-5 py-3">
-                    {r.externalValue
-                      ? <span className="inline-flex items-center gap-1.5 text-sm font-medium text-green-600 dark:text-green-400"><CheckCircle2 size={15} /> Mapped</span>
-                      : <span className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-600 dark:text-amber-400"><AlertTriangle size={15} /> Unmapped</span>}
+                    {!r.externalValue
+                      ? <span className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-600 dark:text-amber-400"><AlertTriangle size={15} /> Unmapped</span>
+                      : liveValues.size > 0 && !liveValues.has(r.externalValue)
+                        // Saved, but the PSA no longer offers it — the write will fail, so this
+                        // must not wear the same green tick as a mapping that works.
+                        ? <span title={`"${r.externalValue}" is not a value this PSA currently accepts. Pick a current one.`}
+                            className="inline-flex items-center gap-1.5 text-sm font-medium text-red-600 dark:text-red-400"><AlertTriangle size={15} /> Not accepted by PSA</span>
+                        : <span className="inline-flex items-center gap-1.5 text-sm font-medium text-green-600 dark:text-green-400"><CheckCircle2 size={15} /> Mapped</span>}
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-1">
