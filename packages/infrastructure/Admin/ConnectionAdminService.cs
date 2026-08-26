@@ -468,8 +468,14 @@ public sealed class ConnectionAdminService(
         catch { /* creds may be invalid/unreachable at configure time — refresh later */ }
     }
 
+    /// <summary>
+    /// Active options only. A RETIRED picklist value still comes back from the provider's field
+    /// metadata, so it used to sit in the mapping dropdown looking exactly like a live one — it
+    /// saved without complaint and was rejected on every write afterwards, which is how a portal
+    /// status ends up mapped to something the PSA no longer accepts.
+    /// </summary>
     private static IReadOnlyList<FieldOptionDto> Map(IReadOnlyList<Desk.PsaCore.Models.ExternalFieldOption> options)
-        => options.Select(o => new FieldOptionDto(o.Value, o.Label)).ToList();
+        => options.Where(o => o.IsActive).Select(o => new FieldOptionDto(o.Value, o.Label)).ToList();
 
     private static async Task<IReadOnlyList<Desk.PsaCore.Models.ExternalFieldOption>> SafeAsync(
         Func<Task<IReadOnlyList<Desk.PsaCore.Models.ExternalFieldOption>>> fetch)
