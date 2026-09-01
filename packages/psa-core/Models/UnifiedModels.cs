@@ -117,6 +117,14 @@ public record UnifiedTimeEntry(
 
     /// <summary>How the entry is charged — finer grained than <see cref="Billable"/>.</summary>
     public BillableOption BillableOption { get; init; } = BillableOption.Billable;
+
+    /// <summary>
+    /// The entry's INTERNAL notes, where the provider keeps them separately (Autotask shows these
+    /// under "Internal Only"). A technician who writes "See internal notes" in the summary and the
+    /// real detail here had that detail dropped entirely — the portal showed the pointer and not
+    /// the thing it pointed at. Never client-visible.
+    /// </summary>
+    public string? InternalNotes { get; init; }
 }
 
 /// <summary>How a time entry is charged. Maps to ConnectWise billableOption / Autotask billing flags.</summary>

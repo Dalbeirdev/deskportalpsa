@@ -474,6 +474,9 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
             {
                 TechnicianName = e.ResourceId is { } rid && techs.TryGetValue(rid, out var tn) ? tn : null,
                 WorkType = e.BillingCodeId is { } bid && workTypes.TryGetValue(bid, out var wt) ? wt : null,
+                // Parsed all along, and then dropped here — which is how "See Internal Notes"
+                // reached the portal with nothing behind it.
+                InternalNotes = e.InternalNotes,
                 // Autotask has no "no charge" flag on the entry itself: billable time with nothing
                 // to bill is the closest equivalent.
                 BillableOption = billable
