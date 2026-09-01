@@ -3,9 +3,9 @@ import { QueryProvider } from '@/components/QueryProvider';
 import { UserMenu } from '@/components/UserMenu';
 import { TimerProvider, TimerWidget } from '@/components/TimerProvider';
 import { NotificationsBell } from '@/components/NotificationsBell';
-import { FileText, Search, HelpCircle, ChevronLeft } from 'lucide-react';
-import { SidebarNav, MobileNav, StorageUsage } from '@/components/SidebarNav';
-import { BrandMark } from '@/components/BrandMark';
+import { FileText, Search, HelpCircle } from 'lucide-react';
+import { MobileNav } from '@/components/SidebarNav';
+import { SidebarShell } from '@/components/SidebarShell';
 import { UpdateWatchdog } from '@/components/UpdateWatchdog';
 
 
@@ -16,21 +16,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <TimerProvider>
     <UpdateWatchdog />
     <div className="flex min-h-screen">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-[var(--border)] bg-gradient-to-b from-[var(--surface)] via-[var(--surface)] to-brand/[0.04] p-4 md:flex">
-        <div className="mb-6 flex items-center gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2.5">
-          <BrandMark size={36} className="shrink-0 rounded-lg" />
-          <div className="min-w-0">
-            <div className="truncate text-[15px] font-semibold leading-tight tracking-tight">Desk Portal</div>
-            <div className="truncate text-[10px] text-[var(--muted)]">Multi-tenant PSA Portal</div>
-          </div>
-        </div>
-        <SidebarNav />
-
-        <StorageUsage />
-        <button className="mt-2 flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--fg)]">
-          <ChevronLeft size={15} /> Collapse
-        </button>
-      </aside>
+      <SidebarShell />
 
       <div className="flex flex-1 flex-col">
         <header className="flex h-14 items-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 sm:px-6">

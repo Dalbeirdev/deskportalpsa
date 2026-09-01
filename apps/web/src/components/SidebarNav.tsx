@@ -136,19 +136,23 @@ export function MobileNav() {
   );
 }
 
-export function SidebarNav() {
+export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
   const pathname = usePathname();
   const can = useVisibleNav();
 
   return (
-    <nav aria-label="Primary" className="flex-1 space-y-6">
+    <nav aria-label="Primary" className={`flex-1 ${collapsed ? 'space-y-3' : 'space-y-6'}`}>
       {NAV_GROUPS.map((g, gi) => {
         const visible = g.items.filter(can);
         if (visible.length === 0) return null; // a heading over nothing is clutter
         const t = TONE[g.tone];
         return (
           <div key={gi} className="space-y-0.5">
-            {g.label && (
+            {/* Collapsed, the group heading becomes a rule: the grouping still reads, without
+                a truncated word pretending to be a label. */}
+            {g.label && (collapsed ? (
+              <div className="mx-auto mb-2 h-px w-7 bg-[var(--border)]" aria-hidden="true" />
+            ) : (
               <div className="mb-2 flex items-center gap-2 px-3">
                 <span className={`h-1.5 w-1.5 rounded-full ${t.dot}`} aria-hidden="true" />
                 <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--faint)]">
@@ -156,7 +160,7 @@ export function SidebarNav() {
                 </span>
                 <span className="h-px flex-1 bg-[var(--border)]" aria-hidden="true" />
               </div>
-            )}
+            ))}
             {visible.map(({ href, label, icon: Icon }) => {
               const active = pathname === href;
               return (
@@ -164,7 +168,14 @@ export function SidebarNav() {
                   key={href}
                   href={href}
                   aria-current={active ? 'page' : undefined}
-                  className={`group relative flex items-center gap-3 rounded-xl px-2.5 py-2 text-sm transition-all ${
+                  // The label is the accessible name whether or not it is painted, so the icon-only
+                  // rail stays navigable by screen reader; title gives sighted users the same word
+                  // on hover.
+                  aria-label={collapsed ? label : undefined}
+                  title={collapsed ? label : undefined}
+                  className={`group relative flex items-center rounded-xl py-2 text-sm transition-all ${
+                    collapsed ? 'justify-center px-1' : 'gap-3 px-2.5'
+                  } ${
                     active
                       ? `${t.activeRow} font-medium ${t.activeText}`
                       : 'text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--fg)]'
@@ -184,7 +195,7 @@ export function SidebarNav() {
                   >
                     <Icon size={16} aria-hidden="true" />
                   </span>
-                  <span className="truncate">{label}</span>
+                  {!collapsed && <span className="truncate">{label}</span>}
                 </Link>
               );
             })}
