@@ -681,13 +681,18 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   // notes amber, internal time entries blue.
                   const incoming = n.authoredByClient;
                   const isTimeCard = !!n.timeEntryExternalId && !n.isPublic;
+                  // The fill carries the meaning, so it is a real tint rather than a wash: at 5%
+                  // opacity the staff and internal cards were nearly indistinguishable from the
+                  // client's. Coloured cards take a border the same colour as the fill — a
+                  // contrasting outline around an already-tinted card just adds noise — while the
+                  // neutral client card keeps a visible edge so it does not float.
                   const tone = isTimeCard
-                    ? 'border-blue-200 bg-blue-50/60 dark:border-blue-900/50 dark:bg-blue-950/25'
+                    ? 'border-blue-100 bg-blue-50 dark:border-blue-950 dark:bg-blue-950/40'
                     : !n.isPublic
-                      ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900/50 dark:bg-amber-950/25'
+                      ? 'border-amber-100 bg-amber-100/70 dark:border-amber-950 dark:bg-amber-950/40'
                       : incoming
                         ? 'border-[var(--border)] bg-[var(--bg)]'
-                        : 'border-brand/25 bg-brand/5';
+                        : 'border-brand-tint bg-brand-tint dark:border-brand/25 dark:bg-brand/15';
                   // The time this note's work took, from the live entry when loaded, else from the
                   // note itself (portal-logged replies carry their hours) — never fabricated.
                   const te = n.timeEntryExternalId ? entries?.find((e) => e.externalId === n.timeEntryExternalId) : undefined;
@@ -707,7 +712,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                       )}
                       <span className={`relative z-10 flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold ${incoming ? 'bg-blue-600 text-white' : 'bg-brand text-brand-fg'}`}>{initials(n.authorName)}</span>
                       <span className="max-w-full truncate text-center text-xs font-medium leading-tight">{n.authorName}</span>
-                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${incoming ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' : 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300'}`}>{incoming ? 'Client' : 'Technician'}</span>
+                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${incoming ? 'bg-slate-200/70 text-slate-600 dark:bg-slate-800 dark:text-slate-300' : 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300'}`}>{incoming ? 'Client' : 'Technician'}</span>
                     </div>
                     {/* flex-1 + max-w: every card the same width, edges aligned — content-sized
                         cards gave the thread a ragged, unprofessional left edge. The rotated square
@@ -717,11 +722,14 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                     <div className={`relative min-w-0 max-w-[min(85%,78ch)] flex-1 rounded-lg border p-3 before:absolute before:top-5 before:h-3 before:w-3 before:rotate-45 before:border-inherit before:bg-inherit ${incoming ? 'before:-left-[6.5px] before:border-b before:border-l' : 'before:-right-[6.5px] before:border-r before:border-t'} ${tone}`}>
                       <div className="flex items-center justify-between gap-4">
                         <span className="flex flex-wrap items-center gap-2 text-sm">
-                          <span className={`font-semibold ${incoming ? 'text-blue-700 dark:text-blue-400' : 'text-green-700 dark:text-green-400'}`}>{n.authorName}</span>
-                          <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${incoming ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' : 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300'}`}>{incoming ? 'Client' : 'Technician'}</span>
+                          {/* The name is the loudest thing in the header, so it stays ink: the card
+                              and the badge already say which side spoke, and colouring it too made
+                              three signals compete for the same fact. */}
+                          <span className="font-semibold">{n.authorName}</span>
+                          <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${incoming ? 'bg-slate-200/70 text-slate-600 dark:bg-slate-800 dark:text-slate-300' : 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300'}`}>{incoming ? 'Client' : 'Technician'}</span>
                           {!n.isPublic && !isTimeCard && (
                             <span title="Internal note from the PSA — never shown to the client"
-                              className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">Internal</span>
+                              className="rounded bg-slate-200/70 px-1.5 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">Internal</span>
                           )}
                           {isTimeCard && (
                             <span title={`Time entry #${n.timeEntryExternalId} — internal, never shown to the client`}
