@@ -188,12 +188,10 @@ public sealed class ConnectionSyncRunner(
                 {
                     if (string.IsNullOrEmpty(e.ExternalId)) continue;
                     if (portalOrigin.Contains(e.ExternalId)) continue;
-                    // Both halves, or the thread shows a summary that says "see internal notes"
-                    // and no internal notes. Autotask keeps them in separate fields; the reader
-                    // wants the whole entry. An entry with ONLY internal notes still counts —
-                    // requiring a summary is what made those vanish.
-                    var body = string.Join("\n\n",
-                        new[] { e.Notes, e.InternalNotes }.Where(s => !string.IsNullOrWhiteSpace(s)));
+                    // Both halves as one body — the provider splits them, the reader does not care
+                    // which field the text was filed in. An entry with ONLY internal notes still
+                    // counts; requiring a summary is what made those vanish.
+                    var body = TimeEntryNarrative.Compose(e.Notes, e.InternalNotes);
                     if (string.IsNullOrWhiteSpace(body)) continue;
                     merged.Add(new UnifiedTicketNote(
                         $"te-{e.ExternalId}", e.TechnicianName ?? "", body, IsPublic: false, e.EntryDate));

@@ -283,8 +283,8 @@ public class NoteImportTests
         await Runner(db, connector, clock).RunAsync(Conn, full: true);
 
         var both = await db.TicketNotes.SingleAsync(n => n.ExternalNoteId == "te-900");
-        both.Body.Should().Contain("See Internal Notes").And.Contain("thank basit for help",
-            "the summary points at the internal notes, so dropping them leaves the reader nowhere");
+        both.Body.Should().Be("thank basit for help",
+            "the summary was only a signpost, and the destination is now right there");
         both.IsPublic.Should().BeFalse("time-entry notes are internal — a client must never see them");
 
         var internalOnly = await db.TicketNotes.SingleAsync(n => n.ExternalNoteId == "te-901");
