@@ -343,8 +343,12 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const prev = idx > 0 ? list?.[idx - 1] : undefined;
   const next = idx >= 0 && list ? list[idx + 1] : undefined;
 
+  // Full width, like every other dashboard page. The old max-w-4xl centred the page in 896px and
+  // left the rest of a widescreen empty — a sensible cap for one narrow column, but wasted space
+  // once the properties moved into their own rail. Reading width is protected where it actually
+  // matters (the conversation bubbles) rather than by starving the whole page.
   return (
-    <div className="mx-auto max-w-4xl space-y-4">
+    <div className="space-y-4">
       {/* Header controls */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link href="/dashboard/tickets" className="inline-flex items-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--fg)]">
@@ -813,7 +817,9 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                     {/* flex-1 + max-w: every card the same width, edges aligned — content-sized
                         cards gave the thread a ragged, unprofessional left edge. The rotated square
                         is the speech-bubble tail, pointing at the author's identity column. */}
-                    <div className={`relative min-w-0 max-w-[85%] flex-1 rounded-lg border p-3 before:absolute before:top-5 before:h-3 before:w-3 before:rotate-45 before:border-inherit before:bg-inherit ${incoming ? 'before:-left-[6.5px] before:border-b before:border-l' : 'before:-right-[6.5px] before:border-r before:border-t'} ${tone}`}>
+                    {/* 85% on a narrow screen, but never wider than a comfortable measure: prose
+                        set 1500px across is a line the eye loses its place on. */}
+                    <div className={`relative min-w-0 max-w-[min(85%,78ch)] flex-1 rounded-lg border p-3 before:absolute before:top-5 before:h-3 before:w-3 before:rotate-45 before:border-inherit before:bg-inherit ${incoming ? 'before:-left-[6.5px] before:border-b before:border-l' : 'before:-right-[6.5px] before:border-r before:border-t'} ${tone}`}>
                       <div className="flex items-center justify-between gap-4">
                         <span className="flex flex-wrap items-center gap-2 text-sm">
                           <span className={`font-semibold ${incoming ? 'text-blue-700 dark:text-blue-400' : 'text-green-700 dark:text-green-400'}`}>{n.authorName}</span>
