@@ -202,20 +202,12 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const [dragOver, setDragOver] = useState(false);
   const [oldestFirst, setOldestFirst] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [hours, setHours] = useState('');
-  const [billable, setBillable] = useState('Billable');
-  const [timeNotes, setTimeNotes] = useState('');
   const [workType, setWorkType] = useState('');
   const [workRole, setWorkRole] = useState('');
   const [editEntry, setEditEntry] = useState<{ id: string; hours: string; notes: string } | null>(null);
   // Which entries' notes are expanded — a long CW note clipped to one line was unreadable with no way to open it.
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const timer = useTimer();
-  function applyTimer() {
-    const rounded = Math.max(0.25, Math.round((timer.seconds / 3600) / 0.25) * 0.25); // nearest 0.25h, min 15 min
-    setHours(rounded.toFixed(2));
-    timer.pause();
-  }
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { data: ticket, isLoading, isError } = useQuery({ queryKey: ['ticket', id], queryFn: () => api.getTicket(id) });
@@ -284,7 +276,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
       const hrs = parseFloat(replyHours);
       if (hrs > 0) {
         // noteId links the entry to this reply, so the thread shows the hours on the reply itself.
-        try { await api.logTime(id, { hours: hrs, billable: replyBillable, notes: replyTimeNotes.trim() || body, noteId: note.id }); }
+        try { await api.logTime(id, { hours: hrs, billable: replyBillable, notes: replyTimeNotes.trim() || body, workType: workType || undefined, workRole: workRole || undefined, noteId: note.id }); }
         catch (e) { sideErrors.push(`the time entry failed${e instanceof Error && e.message ? ` — ${e.message}` : ''} (use the Log time panel to retry)`); }
       }
       if (replyStatus) {
@@ -294,7 +286,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
       return { note, sideErrors };
     },
     onSuccess: ({ sideErrors }) => {
-      setComment(''); setPendingFiles([]); setReplyHours(''); setReplyStatus(''); setReplyTimeNotes('');
+      setComment(''); setPendingFiles([]); setReplyHours(''); setReplyStatus(''); setReplyTimeNotes(''); setWorkType(''); setWorkRole('');
       // Close on success only. A failed send keeps the dialog — and the text — open, because
       // dropping someone back to a closed launcher with an error elsewhere loses the reply.
       setReplyOpen(false);
@@ -310,10 +302,6 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const refreshTime = () =>
     [['time-entries', id], ['ticket', id], ['team'], ['trend']].forEach((k) => qc.invalidateQueries({ queryKey: k }));
 
-  const logTime = useMutation({
-    mutationFn: () => api.logTime(id, { hours: parseFloat(hours), billable, notes: timeNotes || undefined, workType: workType || undefined, workRole: workRole || undefined }),
-    onSuccess: () => { setHours(''); setTimeNotes(''); refreshTime(); },
-  });
   const statusMut = useMutation({
     mutationFn: (status: string) => api.updateTicketStatus(id, status),
     onSuccess: () => { [['ticket', id], ['tickets'], ['team'], ['trend']].forEach((k) => qc.invalidateQueries({ queryKey: k })); },
@@ -515,102 +503,6 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
               </button>
             )}
 
-            {/* Log time — staff only; the endpoint demands tickets.time.log and clients have no
-                business writing billable hours. */}
-            {canLogTime && (
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--faint)]"><Clock size={14} /> Log time</h2>
-              <form onSubmit={(e) => { e.preventDefault(); if (parseFloat(hours) > 0 && !(notesRequired && !timeNotes.trim())) logTime.mutate(); }} className="space-y-3">
-                {/* First, not last. Autotask REQUIRES notes on ticket time and ConnectWise does not, so
-                    the one mandatory field was sitting below the timer where it was missed — and the
-                    entry only failed later, at the provider. Describe the work, then quantify it. */}
-                <label className="block">
-                  <span className="mb-1 block text-xs text-[var(--muted)]">
-                    Notes {notesRequired && <span className="text-red-600 dark:text-red-400">*</span>}
-                  </span>
-                  <input value={timeNotes} onChange={(e) => setTimeNotes(e.target.value)} placeholder="What did you work on?"
-                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
-                  {notesRequired && !timeNotes.trim() && (
-                    <span className="mt-1 block text-xs text-[var(--faint)]">Autotask requires notes on every time entry.</span>
-                  )}
-                </label>
-
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <label className="block">
-                    <span className="mb-1 block text-xs text-[var(--muted)]">Hours</span>
-                    <input type="number" step="0.01" min="0" value={hours} onChange={(e) => setHours(e.target.value)} placeholder="0.5"
-                      className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
-                  </label>
-                  <label className="block">
-                    <span className="mb-1 block text-xs text-[var(--muted)]">Billable</span>
-                    <select value={billable} onChange={(e) => setBillable(e.target.value)}
-                      className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
-                      <option value="Billable">Billable</option>
-                      <option value="DoNotBill">Do not bill</option>
-                      <option value="NoCharge">No charge</option>
-                    </select>
-                  </label>
-                  {timeOpts && timeOpts.workTypes.length > 0 && (
-                    <label className="block">
-                      <span className="mb-1 block text-xs text-[var(--muted)]">Work type</span>
-                      <select value={workType} onChange={(e) => setWorkType(e.target.value)}
-                        className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
-                        <option value="">—</option>
-                        {timeOpts.workTypes.map((o) => <option key={o.value} value={o.label}>{o.label}</option>)}
-                      </select>
-                    </label>
-                  )}
-                  {timeOpts && timeOpts.workRoles.length > 0 && (
-                    <label className="block">
-                      <span className="mb-1 block text-xs text-[var(--muted)]">Work role</span>
-                      <select value={workRole} onChange={(e) => setWorkRole(e.target.value)}
-                        className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
-                        <option value="">—</option>
-                        {timeOpts.workRoles.map((o) => <option key={o.value} value={o.label}>{o.label}</option>)}
-                      </select>
-                    </label>
-                  )}
-                </div>
-
-                {/* The timer is an alternative way to fill Hours, so it sits in its own tinted
-                    strip rather than floating between form fields as two bare buttons. */}
-                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-[var(--bg)] px-3 py-2">
-                  <span className="text-xs font-medium text-[var(--muted)]">Global timer</span>
-                  <button type="button" onClick={startTimerHere}
-                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium ${timer.running && timer.target?.ticketId === id ? 'border-brand/40 bg-brand/5 text-brand' : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--bg)]'}`}>
-                    <Clock size={14} /> {timer.running && timer.target?.ticketId === id ? 'Timing…' : 'Start timer here'}
-                  </button>
-                  <button type="button" onClick={applyTimer} disabled={timer.seconds === 0}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium tabular-nums hover:bg-[var(--bg)] disabled:opacity-50">
-                    Use {String(Math.floor(timer.seconds / 60)).padStart(2, '0')}:{String(timer.seconds % 60).padStart(2, '0')}
-                  </button>
-                  <span className="text-[11px] text-[var(--faint)]">Fills Hours from the tracked time.</span>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-3">
-                  <p className="text-xs text-[var(--faint)]">Posts a time entry to the PSA against this ticket.</p>
-                  <button type="submit" disabled={logTime.isPending || !(parseFloat(hours) > 0) || (notesRequired && !timeNotes.trim())}
-                    className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50">
-                    <Clock size={15} /> {logTime.isPending ? 'Logging…' : `Log ${parseFloat(hours) > 0 ? fmtDuration(parseFloat(hours)) : 'time'}`}
-                  </button>
-                </div>
-
-                {logTime.isSuccess && logTime.data && (
-                  <p className="flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-2 text-xs font-medium text-green-700 dark:bg-green-950/40 dark:text-green-300">
-                    <Check size={13} /> Logged to the PSA · ticket total {logTime.data.timeWorkedHours}h ({logTime.data.billableHours}h billable).
-                  </p>
-                )}
-                {logTime.isError && (
-                  // The provider's own words, not a guess: "rejected it or unreachable" made every
-                  // failure look identical and told nobody which one they were looking at.
-                  <p className="flex gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300">
-                    <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                    <span>Couldn&apos;t log time{logTime.error instanceof Error && logTime.error.message ? `: ${logTime.error.message}` : ' — the PSA rejected it or the connection is unreachable.'}</span>
-                  </p>
-                )}
-              </form>
-            </div>
-            )}
 
             {/* Time entries (query disabled without tickets.time.log, so this stays absent for clients) */}
             {entries && entries.length > 0 && (
@@ -1014,7 +906,9 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                       <option value="NoCharge">No charge</option>
                     </select>
                   )}
-                  {timer.seconds > 0 && timer.target?.ticketId === id && (
+                  {/* Both halves of the timer live here now: starting one was only possible from the
+                      Log time panel, so removing that panel would have taken the timer with it. */}
+                  {timer.seconds > 0 && timer.target?.ticketId === id ? (
                     <button type="button"
                       onClick={() => {
                         const rounded = Math.max(0.25, Math.round((timer.seconds / 3600) / 0.25) * 0.25);
@@ -1023,6 +917,14 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                       }}
                       className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[11px] font-medium hover:bg-[var(--bg)]">
                       Use timer ({String(Math.floor(timer.seconds / 60)).padStart(2, '0')}:{String(timer.seconds % 60).padStart(2, '0')})
+                    </button>
+                  ) : (
+                    <button type="button" onClick={startTimerHere}
+                      className={`rounded-lg border px-2 py-1 text-[11px] font-medium ${
+                        timer.running && timer.target?.ticketId === id
+                          ? 'border-brand/40 bg-brand/5 text-brand'
+                          : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--bg)]'}`}>
+                      {timer.running && timer.target?.ticketId === id ? 'Timing…' : 'Start timer'}
                     </button>
                   )}
                   {!(parseFloat(replyHours) > 0) && (
@@ -1048,6 +950,34 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                         : 'Only the time entry sees this. The client sees the reply above.'}
                     </span>
                   </label>
+                )}
+                {/* Work type and role classify the entry for billing. They only existed on the Log
+                    time panel, so they move here rather than disappear with it — and only when
+                    the connection actually discovered options to choose from. */}
+                {canLogTime && parseFloat(replyHours) > 0
+                  && ((timeOpts?.workTypes.length ?? 0) > 0 || (timeOpts?.workRoles.length ?? 0) > 0) && (
+                  <div className="grid grid-cols-2 gap-3 px-4 pb-2">
+                    {(timeOpts?.workTypes.length ?? 0) > 0 && (
+                      <label className="block">
+                        <span className="mb-1 block text-xs text-[var(--muted)]">Work type</span>
+                        <select value={workType} onChange={(e) => setWorkType(e.target.value)}
+                          className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-xs outline-none focus:border-brand">
+                          <option value="">—</option>
+                          {timeOpts!.workTypes.map((o) => <option key={o.value} value={o.label}>{o.label}</option>)}
+                        </select>
+                      </label>
+                    )}
+                    {(timeOpts?.workRoles.length ?? 0) > 0 && (
+                      <label className="block">
+                        <span className="mb-1 block text-xs text-[var(--muted)]">Work role</span>
+                        <select value={workRole} onChange={(e) => setWorkRole(e.target.value)}
+                          className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-xs outline-none focus:border-brand">
+                          <option value="">—</option>
+                          {timeOpts!.workRoles.map((o) => <option key={o.value} value={o.label}>{o.label}</option>)}
+                        </select>
+                      </label>
+                    )}
+                  </div>
                 )}
                 <div className="flex items-center justify-between px-4 pb-3 pt-2">
                   <span className="text-xs text-[var(--faint)]">{comment.length} / 4000</span>
