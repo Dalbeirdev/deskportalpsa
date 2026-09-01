@@ -519,6 +519,20 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
               <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--faint)]"><Clock size={14} /> Log time</h2>
               <form onSubmit={(e) => { e.preventDefault(); if (parseFloat(hours) > 0 && !(notesRequired && !timeNotes.trim())) logTime.mutate(); }} className="space-y-3">
+                {/* First, not last. Autotask REQUIRES notes on ticket time and ConnectWise does not, so
+                    the one mandatory field was sitting below the timer where it was missed — and the
+                    entry only failed later, at the provider. Describe the work, then quantify it. */}
+                <label className="block">
+                  <span className="mb-1 block text-xs text-[var(--muted)]">
+                    Notes {notesRequired && <span className="text-red-600 dark:text-red-400">*</span>}
+                  </span>
+                  <input value={timeNotes} onChange={(e) => setTimeNotes(e.target.value)} placeholder="What did you work on?"
+                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
+                  {notesRequired && !timeNotes.trim() && (
+                    <span className="mt-1 block text-xs text-[var(--faint)]">Autotask requires notes on every time entry.</span>
+                  )}
+                </label>
+
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <label className="block">
                     <span className="mb-1 block text-xs text-[var(--muted)]">Hours</span>
@@ -570,20 +584,6 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   </button>
                   <span className="text-[11px] text-[var(--faint)]">Fills Hours from the tracked time.</span>
                 </div>
-
-                {/* Autotask REQUIRES summary notes on ticket time; ConnectWise does not. Asking
-                    here — where the technician still remembers the work — beats a placeholder
-                    written by the connector to satisfy a field nobody was asked about. */}
-                <label className="block">
-                  <span className="mb-1 block text-xs text-[var(--muted)]">
-                    Notes {notesRequired && <span className="text-red-600 dark:text-red-400">*</span>}
-                  </span>
-                  <input value={timeNotes} onChange={(e) => setTimeNotes(e.target.value)} placeholder="What did you work on?"
-                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand" />
-                  {notesRequired && !timeNotes.trim() && (
-                    <span className="mt-1 block text-xs text-[var(--faint)]">Autotask requires notes on every time entry.</span>
-                  )}
-                </label>
 
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-3">
                   <p className="text-xs text-[var(--faint)]">Posts a time entry to the PSA against this ticket.</p>
