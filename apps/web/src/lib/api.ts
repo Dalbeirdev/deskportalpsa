@@ -171,6 +171,21 @@ export const api = {
     request(`/api/admin/connections/${connectionId}/logo`, z.void(), { method: 'DELETE' }),
   attachmentDownloadUrl: (ticketId: string, attachmentId: string) =>
     request(`/api/tickets/${ticketId}/attachments/${attachmentId}/download`, z.object({ url: z.string() })),
+  // Assistant. Availability is asked first so the rail can explain itself rather than fail on click.
+  assistantAvailability: () =>
+    request('/api/assistant/availability', z.object({ enabled: z.boolean(), reason: z.string().nullable() })),
+  assistantAsk: (ticketId: string, action: string, draft?: string) =>
+    request(`/api/assistant/tickets/${ticketId}`, z.object({ text: z.string(), isDraft: z.boolean() }),
+      { method: 'POST', body: JSON.stringify({ action, draft }) }),
+  assistantSettings: () =>
+    request('/api/assistant/settings', z.object({
+      isEnabled: z.boolean(), model: z.string(), includeInternalNotes: z.boolean(), hasKey: z.boolean(),
+    })),
+  saveAssistantSettings: (body: { isEnabled: boolean; includeInternalNotes: boolean; model?: string; apiKey?: string }) =>
+    request('/api/assistant/settings', z.object({
+      isEnabled: z.boolean(), model: z.string(), includeInternalNotes: z.boolean(), hasKey: z.boolean(),
+    }), { method: 'PUT', body: JSON.stringify(body) }),
+
   notifications: () => request('/api/notifications', z.array(NotificationSchema)) as Promise<Notification[]>,
   notificationHistory: () =>
     request('/api/notifications/history', z.array(z.object({

@@ -152,6 +152,19 @@ public sealed class TicketConfig : IEntityTypeConfiguration<Ticket>
     }
 }
 
+public sealed class AssistantSettingsConfig : IEntityTypeConfiguration<Desk.Domain.Assistant.AssistantSettings>
+{
+    public void Configure(EntityTypeBuilder<Desk.Domain.Assistant.AssistantSettings> b)
+    {
+        b.ToTable("assistant_settings");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.CredentialSecretRef).HasMaxLength(200);
+        b.Property(x => x.Model).HasMaxLength(100).IsRequired();
+        // One row per tenant: the settings ARE the organization's, not a list to choose from.
+        b.HasIndex(x => x.MspOrganizationId).IsUnique();
+    }
+}
+
 public sealed class TicketNoteConfig : IEntityTypeConfiguration<TicketNote>
 {
     public void Configure(EntityTypeBuilder<TicketNote> b)
