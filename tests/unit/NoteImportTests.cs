@@ -262,6 +262,37 @@ public class NoteImportTests
     }
 
     [Fact]
+    public async Task A_time_entrys_internal_notes_reach_the_thread_with_its_summary()
+    {
+        // The live finding this pins: a technician wrote "See Internal Notes" as the summary and
+        // the actual detail in Autotask's separate internal-notes field. The portal imported the
+        // summary alone, so the thread showed a pointer to something it never displayed.
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString());
+        var connector = new StubConnector { SupportsTimeEntries = true };
+        connector.Tickets.Add(Incoming("7814"));
+        connector.TimeEntries["7814"] =
+        [
+            new UnifiedTimeEntry("900", "tech-1", 0.25m, true, clock.GetUtcNow(), "See Internal Notes")
+                { TechnicianName = "Sudanshu Aggarwal", InternalNotes = "thank basit for help" },
+            // Summary blank, detail internal-only — this one used to be skipped altogether.
+            new UnifiedTimeEntry("901", "tech-1", 0.5m, true, clock.GetUtcNow().AddMinutes(1), null)
+                { TechnicianName = "Sudanshu Aggarwal", InternalNotes = "internal-only detail" },
+        ];
+
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        var both = await db.TicketNotes.SingleAsync(n => n.ExternalNoteId == "te-900");
+        both.Body.Should().Contain("See Internal Notes").And.Contain("thank basit for help",
+            "the summary points at the internal notes, so dropping them leaves the reader nowhere");
+        both.IsPublic.Should().BeFalse("time-entry notes are internal — a client must never see them");
+
+        var internalOnly = await db.TicketNotes.SingleAsync(n => n.ExternalNoteId == "te-901");
+        internalOnly.Body.Should().Contain("internal-only detail",
+            "an entry whose only text is internal still has something to show");
+    }
+
+    [Fact]
     public async Task Provider_notes_are_imported_once_and_keep_their_author()
     {
         var dbName = Guid.NewGuid().ToString();

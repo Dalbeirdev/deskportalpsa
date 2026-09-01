@@ -186,10 +186,17 @@ public sealed class ConnectionSyncRunner(
                 var merged = new List<UnifiedTicketNote>(incoming);
                 foreach (var e in entries)
                 {
-                    if (string.IsNullOrWhiteSpace(e.Notes) || string.IsNullOrEmpty(e.ExternalId)) continue;
+                    if (string.IsNullOrEmpty(e.ExternalId)) continue;
                     if (portalOrigin.Contains(e.ExternalId)) continue;
+                    // Both halves, or the thread shows a summary that says "see internal notes"
+                    // and no internal notes. Autotask keeps them in separate fields; the reader
+                    // wants the whole entry. An entry with ONLY internal notes still counts —
+                    // requiring a summary is what made those vanish.
+                    var body = string.Join("\n\n",
+                        new[] { e.Notes, e.InternalNotes }.Where(s => !string.IsNullOrWhiteSpace(s)));
+                    if (string.IsNullOrWhiteSpace(body)) continue;
                     merged.Add(new UnifiedTicketNote(
-                        $"te-{e.ExternalId}", e.TechnicianName ?? "", e.Notes, IsPublic: false, e.EntryDate));
+                        $"te-{e.ExternalId}", e.TechnicianName ?? "", body, IsPublic: false, e.EntryDate));
                 }
                 incoming = merged;
                 timeNotesFetched = true;
