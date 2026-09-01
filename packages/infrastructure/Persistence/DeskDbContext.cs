@@ -37,6 +37,7 @@ public class DeskDbContext(DbContextOptions<DeskDbContext> options, ITenantConte
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<Ticket> Tickets => Set<Ticket>();
     public DbSet<TicketNote> TicketNotes => Set<TicketNote>();
+    public DbSet<Desk.Domain.Assistant.AssistantSettings> AssistantSettings => Set<Desk.Domain.Assistant.AssistantSettings>();
     public DbSet<TicketAttachment> TicketAttachments => Set<TicketAttachment>();
     public DbSet<TicketTimeEntry> TicketTimeEntries => Set<TicketTimeEntry>();
     public DbSet<FieldMapping> FieldMappings => Set<FieldMapping>();

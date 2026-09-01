@@ -92,6 +92,15 @@ public static class DependencyInjection
             services.AddHttpClient("connectwise").AddHttpMessageHandler(sp => sp.GetRequiredService<EgressGuard>());
         }
 
+        // Assistant. The HttpClient is named and its base address fixed here, so the service can
+        // never be pointed at some other host by configuration.
+        services.AddHttpClient<Desk.Application.Assistant.IAssistantModel, Desk.Infrastructure.Assistant.GeminiModel>(c =>
+        {
+            c.BaseAddress = new Uri("https://generativelanguage.googleapis.com/");
+            c.Timeout = TimeSpan.FromSeconds(45);
+        });
+        services.AddScoped<Desk.Application.Assistant.IAssistantService, Desk.Infrastructure.Assistant.AssistantService>();
+
         // Client portal (Phase 6)
         services.AddScoped<IClientAccessResolver, ClientAccessResolver>();
         services.AddScoped<IProfileService, ProfileService>();

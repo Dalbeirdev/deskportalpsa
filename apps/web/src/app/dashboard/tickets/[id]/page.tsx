@@ -10,6 +10,7 @@ import {
   Copy, RefreshCw, Download, Clock, Trash2, Check, X, ClipboardList, UserCog, ExternalLink, AlertTriangle} from 'lucide-react';
 import { useTimer } from '@/components/TimerProvider';
 import { NoteBody, notePreview } from '@/components/NoteBody';
+import { AssistantRail } from '@/components/AssistantRail';
 import { api, type AssigneeOptions } from '@/lib/api';
 import type { TicketDetail } from '@/lib/types';
 
@@ -410,7 +411,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
             {/* Properties left, work centre. The eight-field grid used to sit full-width above
                 everything, pushing the conversation — the thing being worked — below the fold. As a
                 rail it is glanceable and stops competing with the thread. */}
-            <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
+            <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)_320px] lg:items-start">
             <aside className="space-y-4 lg:sticky lg:top-4">
             {/* Ticket card */}
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
@@ -859,6 +860,18 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 })}
 
               </div>
+
+            {/* Assistant. Renders nothing unless the organization has switched it on, so a tenant
+                that has not opted in never sees a panel it cannot use. */}
+            {isStaff && (
+              <div className="lg:sticky lg:top-4">
+                <AssistantRail
+                  ticketId={id}
+                  draft={comment}
+                  onUseDraft={(text) => { setComment(text); setReplyOpen(true); }}
+                />
+              </div>
+            )}
             </div>
 
             {/* Attachments */}
