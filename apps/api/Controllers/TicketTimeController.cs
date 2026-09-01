@@ -75,10 +75,11 @@ public sealed class TicketTimeController(
         {
             portalByExternalId.TryGetValue(e.ExternalId, out var origin);
             return new TimeRow(
-                // Summary and internal notes joined, for the same reason the thread joins them:
-                // "See internal notes" on its own tells the reader nothing. Staff-only endpoint.
+                // Composed exactly as the thread composes it, through the same helper — two
+                // renderings of one entry that disagreed would be a bug waiting to happen.
+                // Staff-only endpoint; internal text never leaves it.
                 e.ExternalId, e.Hours, e.Billable, e.BillableOption.ToString(), e.EntryDate,
-                string.Join("\n\n", new[] { e.Notes, e.InternalNotes }.Where(s => !string.IsNullOrWhiteSpace(s))) is { Length: > 0 } joined ? joined : null,
+                TimeEntryNarrative.Compose(e.Notes, e.InternalNotes),
                 e.TechnicianExternalId, e.TechnicianName, e.WorkType,
                 origin is null ? nameof(TimeEntrySource.Provider) : nameof(TimeEntrySource.Portal),
                 nameof(TimeEntrySyncStatus.Synced), null);
