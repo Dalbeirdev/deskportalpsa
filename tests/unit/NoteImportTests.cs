@@ -293,6 +293,69 @@ public class NoteImportTests
     }
 
     [Fact]
+    public async Task A_note_already_imported_with_a_narrower_body_is_healed_not_left_stale()
+    {
+        // Ticket 7814 in production: the entry was imported as "See Internal Notes" BEFORE the
+        // import learned to read the internal half. Re-syncing alone cannot fix it — the insert
+        // loop skips IDs it already holds — so without a heal the pointer-to-nothing is permanent.
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString());
+        var connector = new StubConnector { SupportsTimeEntries = true };
+        connector.Tickets.Add(Incoming("7814"));
+        connector.TimeEntries["7814"] =
+            [new UnifiedTimeEntry("900", "tech-1", 0.25m, true, clock.GetUtcNow(), "See Internal Notes")
+                { TechnicianName = "Sudanshu Aggarwal" }];
+
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+        (await db.TicketNotes.SingleAsync(n => n.ExternalNoteId == "te-900"))
+            .Body.Should().NotContain("thank basit for help", "the old import could not see it");
+
+        // Now the reader knows about internal notes, and the same entry comes back whole.
+        connector.TimeEntries["7814"] =
+            [new UnifiedTimeEntry("900", "tech-1", 0.25m, true, clock.GetUtcNow(), "See Internal Notes")
+                { TechnicianName = "Sudanshu Aggarwal", InternalNotes = "thank basit for help" }];
+
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        var notes = await db.TicketNotes.Where(n => n.ExternalNoteId == "te-900").ToListAsync();
+        notes.Should().ContainSingle("healing rewrites the row — it must not add a second copy");
+        notes[0].Body.Should().Contain("thank basit for help");
+    }
+
+    [Fact]
+    public async Task A_portal_reply_is_never_rewritten_by_the_heal()
+    {
+        // The heal touches provider-owned rows only. A reply written in the portal is the portal's
+        // own record; letting a provider echo overwrite its text would rewrite what a human sent.
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString());
+        var connector = new StubConnector();
+        connector.Tickets.Add(Incoming("7809"));
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        var ticket = await db.Tickets.SingleAsync();
+        db.TicketNotes.Add(new TicketNote
+        {
+            MspOrganizationId = ticket.MspOrganizationId,
+            TicketId = ticket.Id,
+            ExternalNoteId = "29683530",
+            AuthorName = "Demo Admin",
+            ImportedFromProvider = false, // written here, pushed out
+            Body = "What we actually sent.",
+            IsPublic = true,
+            NoteCreatedAt = clock.GetUtcNow(),
+        });
+        await db.SaveChangesAsync();
+
+        connector.Notes["7809"] =
+            [Note("29683530", "Demo Admin", "Provider's mangled echo.", clock.GetUtcNow())];
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        (await db.TicketNotes.SingleAsync(n => n.ExternalNoteId == "29683530"))
+            .Body.Should().Be("What we actually sent.");
+    }
+
+    [Fact]
     public async Task Provider_notes_are_imported_once_and_keep_their_author()
     {
         var dbName = Guid.NewGuid().ToString();
