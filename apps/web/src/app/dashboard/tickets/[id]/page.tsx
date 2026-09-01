@@ -261,7 +261,12 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   // Provider 2 = Autotask, which rejects a time entry whose summary notes are blank.
   const notesRequired = Number(ticket?.provider) === 2;
   const canUpdate = me?.permissions.includes('tickets.update') ?? false;
+  // Clients reply too — this is the one composer capability they keep, so it is gated on the
+  // note permission rather than on being staff.
+  const canReply = me?.permissions.includes('tickets.note.public.add') ?? false;
   const [replyInternal, setReplyInternal] = useState(false);
+  // The composer lives in a dialog now; this only controls visibility, never the draft.
+  const [replyOpen, setReplyOpen] = useState(false);
   const [replyStatus, setReplyStatus] = useState('');
 
   const addComment = useMutation({
@@ -287,6 +292,9 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
     },
     onSuccess: ({ sideErrors }) => {
       setComment(''); setPendingFiles([]); setReplyHours(''); setReplyStatus('');
+      // Close on success only. A failed send keeps the dialog — and the text — open, because
+      // dropping someone back to a closed launcher with an error elsewhere loses the reply.
+      setReplyOpen(false);
       setReplySideError(sideErrors.length > 0 ? `Reply sent, but ${sideErrors.join('; ')}.` : null);
       qc.invalidateQueries({ queryKey: ['ticket', id] });
       if (parseFloat(replyHours) > 0) refreshTime();
@@ -395,13 +403,18 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
           (oldestFirst ? 1 : -1) * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()));
         return (
           <>
+            {/* Properties left, work centre. The eight-field grid used to sit full-width above
+                everything, pushing the conversation — the thing being worked — below the fold. As a
+                rail it is glanceable and stops competing with the thread. */}
+            <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
+            <aside className="space-y-4 lg:sticky lg:top-4">
             {/* Ticket card */}
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
-                  <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--bg)] text-[var(--muted)]"><Icon size={22} /></span>
-                  <div>
-                    <h1 className="text-xl font-semibold">{ticket.title}</h1>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--bg)] text-[var(--muted)]"><Icon size={19} /></span>
+                  <div className="min-w-0">
+                    <h1 className="text-base font-semibold leading-snug">{ticket.title}</h1>
                     <p className="whitespace-pre-line text-sm text-[var(--muted)]">{ticket.description ?? 'No description provided.'}</p>
                   </div>
                 </div>
@@ -429,7 +442,9 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   Couldn&apos;t change status: {statusMut.error instanceof Error ? statusMut.error.message : 'the connection is unreachable.'}
                 </p>
               )}
-              <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-[var(--border)] pt-4 text-sm sm:grid-cols-3 lg:grid-cols-6">
+              {/* One per row in the rail; still a responsive grid on narrow screens where the rail
+                  collapses above the content. */}
+              <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-[var(--border)] pt-4 text-sm sm:grid-cols-3 lg:grid-cols-1 lg:gap-y-0 lg:divide-y lg:divide-[var(--border)]">
                 <Meta label="Reference" value={ticket.externalTicketId ?? '—'} href={ticket.externalTicketUrl} />
                 <Meta label="Source" value={ticket.connectionName ?? '—'} />
                 <Meta label="Queue / Board" value={ticket.queueOrBoard ?? '—'} />
@@ -471,6 +486,26 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 <p className="whitespace-pre-wrap font-mono text-sm leading-relaxed text-amber-900 dark:text-amber-100">{ticket.serviceInstructions}</p>
                 <p className="mt-2 text-xs text-amber-700/70 dark:text-amber-300/60">Set by the customer in their Control Panel — follow these when working this ticket.</p>
               </div>
+            )}
+
+            </aside>
+
+            <div className="space-y-4">
+            {/* Reply launcher — closed by default, above Time entries. A composer pinned to the
+                bottom of a long thread is half off-screen exactly when it is needed. */}
+            {canReply && (
+              <button type="button" onClick={() => setReplyOpen(true)}
+                className="flex w-full items-center gap-3 rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-left text-sm text-[var(--muted)] hover:border-brand hover:bg-brand/5 hover:text-[var(--fg)]">
+                <Pencil size={15} className="shrink-0" />
+                <span className="min-w-0 flex-1 truncate">
+                  {comment.trim() || pendingFiles.length > 0
+                    ? `Draft in progress — ${comment.trim() ? `“${comment.trim().slice(0, 48)}${comment.trim().length > 48 ? "…" : ""}”` : `${pendingFiles.length} file${pendingFiles.length > 1 ? "s" : ""} attached`}`
+                    : isStaff ? "Add a reply, internal note, time or status change…" : "Add a reply…"}
+                </span>
+                {(comment.trim() || pendingFiles.length > 0) && (
+                  <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-300">Draft</span>
+                )}
+              </button>
             )}
 
             {/* Log time — staff only; the endpoint demands tickets.time.log and clients have no
@@ -817,116 +852,6 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   );
                 })}
 
-                {/* Composer */}
-                {/* No formatting toolbar: the Bold/emoji/link buttons it used to show were wired to
-                    nothing — decoration presented as function. Attach lives on the real button below. */}
-                <form onSubmit={(e) => { e.preventDefault(); if (comment.trim()) addComment.mutate(comment.trim()); }} className="rounded-xl border border-[var(--border)] bg-[var(--bg)]">
-                  <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} maxLength={4000}
-                    onKeyDown={(e) => {
-                      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && comment.trim() && !addComment.isPending) {
-                        e.preventDefault();
-                        addComment.mutate(comment.trim());
-                      }
-                    }}
-                    placeholder={replyInternal ? 'Add an internal note — the client will not see this…' : 'Add a reply…'}
-                    className="w-full resize-y bg-transparent px-4 py-3 text-sm outline-none" />
-                  {pendingFiles.length > 0 && (
-                    <ul className="flex flex-wrap gap-2 px-4 pb-2">
-                      {pendingFiles.map((f, i) => (
-                        <li key={`${f.name}-${i}`} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs">
-                          <Paperclip size={12} className="text-[var(--muted)]" />
-                          <span className="max-w-40 truncate">{f.name}</span>
-                          <span className="text-[var(--faint)]">{fmtSize(f.size)}</span>
-                          <button type="button" aria-label={`Remove ${f.name}`}
-                            onClick={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
-                            className="text-[var(--muted)] hover:text-red-600"><X size={12} /></button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {isStaff && (
-                    <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] px-4 py-2">
-                      <div className="flex overflow-hidden rounded-lg border border-[var(--border)] text-xs font-medium">
-                        <button type="button" onClick={() => setReplyInternal(false)}
-                          className={`px-2.5 py-1 ${!replyInternal ? 'bg-brand text-brand-fg' : 'bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--fg)]'}`}>
-                          Public reply
-                        </button>
-                        <button type="button" onClick={() => setReplyInternal(true)}
-                          title="Visible to your team and pushed to the PSA as an internal note — never shown to the client"
-                          className={`px-2.5 py-1 ${replyInternal ? 'bg-amber-500 text-white' : 'bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--fg)]'}`}>
-                          Internal note
-                        </button>
-                      </div>
-                      <span className="min-w-0 flex-1" />
-                      <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-                        Set status
-                        <select value={replyStatus} onChange={(e) => setReplyStatus(e.target.value)} aria-label="Set status with this reply"
-                          className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs outline-none focus:border-brand">
-                          <option value="">Keep {ticket.portalStatus.replace(/_/g, ' ')}</option>
-                          {STATUSES.filter((st) => st !== ticket.portalStatus).map((st) => (
-                            <option key={st} value={st}>{st.replace(/_/g, ' ')}</option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                  )}
-                  {canLogTime && (
-                  <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] px-4 py-2">
-                    <Clock size={13} className="text-[var(--faint)]" />
-                    <span className="text-xs text-[var(--muted)]">Log time with this reply</span>
-                    <input type="number" step="0.01" min="0" value={replyHours} onChange={(e) => setReplyHours(e.target.value)}
-                      placeholder="0.00" aria-label="Hours to log with this reply"
-                      className="w-20 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs outline-none focus:border-brand" />
-                    {parseFloat(replyHours) > 0 && (
-                      <select value={replyBillable} onChange={(e) => setReplyBillable(e.target.value)} aria-label="Billable"
-                        className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs outline-none focus:border-brand">
-                        <option value="Billable">Billable</option>
-                        <option value="DoNotBill">Do not bill</option>
-                        <option value="NoCharge">No charge</option>
-                      </select>
-                    )}
-                    {timer.seconds > 0 && timer.target?.ticketId === id && (
-                      <button type="button"
-                        onClick={() => {
-                          const rounded = Math.max(0.25, Math.round((timer.seconds / 3600) / 0.25) * 0.25);
-                          setReplyHours(rounded.toFixed(2));
-                          timer.pause();
-                        }}
-                        className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[11px] font-medium hover:bg-[var(--bg)]">
-                        Use timer ({String(Math.floor(timer.seconds / 60)).padStart(2, '0')}:{String(timer.seconds % 60).padStart(2, '0')})
-                      </button>
-                    )}
-                    <span className="text-[11px] text-[var(--faint)]">optional — the reply text becomes the entry&apos;s notes</span>
-                  </div>
-                  )}
-                  <div className="flex items-center justify-between px-4 pb-3 pt-2">
-                    <span className="text-xs text-[var(--faint)]">{comment.length} / 4000</span>
-                    <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium hover:bg-[var(--bg)] disabled:opacity-50">
-                        <Paperclip size={15} /> Attach file
-                      </button>
-                      <button type="submit" disabled={addComment.isPending || !comment.trim()} title="Ctrl+Enter"
-                        className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50">
-                        <Send size={15} /> {addComment.isPending ? 'Sending…'
-                          : [
-                              replyInternal ? 'Post internal note' : 'Send reply',
-                              pendingFiles.length > 0 ? `${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''}` : null,
-                              parseFloat(replyHours) > 0 ? `${replyHours}h` : null,
-                              replyStatus ? replyStatus.replace(/_/g, ' ') : null,
-                            ].filter(Boolean).join(' + ')}
-                      </button>
-                    </div>
-                  </div>
-                  {addComment.isError && (
-                    <p className="px-4 pb-3 text-xs text-red-600 dark:text-red-400">
-                      Couldn&apos;t send{addComment.error instanceof Error && addComment.error.message ? ` — ${addComment.error.message}` : ' — is the API reachable?'}
-                    </p>
-                  )}
-                  {replySideError && !addComment.isPending && (
-                    <p className="px-4 pb-3 text-xs text-amber-700 dark:text-amber-300">{replySideError}</p>
-                  )}
-                </form>
               </div>
             </div>
 
@@ -981,6 +906,139 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 if (chosen.length) setPendingFiles((prev) => [...prev, ...chosen]);
                 e.target.value = '';
               }} />
+            </div>
+            </div>
+            {/* Reply dialog. The composer keeps every capability it had inline — public/internal,
+                hours, status, attachments — but a dialog gives it the focus a long thread denied it.
+                Closing NEVER discards: the draft stays and the launcher advertises it. */}
+            {canReply && replyOpen && (
+              <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-[1px]"
+                role="dialog" aria-modal="true" aria-label="Reply to ticket"
+                onClick={(e) => { if (e.target === e.currentTarget) setReplyOpen(false); }}>
+                <div className="mt-8 w-full max-w-2xl rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-xl">
+                  <div className="flex items-center gap-3 border-b border-[var(--border)] px-5 py-3">
+                    <h2 className="text-sm font-semibold">
+                      {replyInternal ? 'Internal note' : 'Reply'} · {ticket.title}
+                    </h2>
+                    <span className="ml-auto text-xs text-[var(--faint)]">{ticket.externalTicketId ? `#${ticket.externalTicketId}` : ''}</span>
+                    <button type="button" onClick={() => setReplyOpen(false)} aria-label="Close"
+                      className="rounded-md p-1 text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--fg)]"><X size={16} /></button>
+                  </div>
+                  <div className="p-4">
+                {/* Composer */}
+                {/* No formatting toolbar: the Bold/emoji/link buttons it used to show were wired to
+                  nothing — decoration presented as function. Attach lives on the real button below. */}
+                <form onSubmit={(e) => { e.preventDefault(); if (comment.trim()) addComment.mutate(comment.trim()); }} className="rounded-xl border border-[var(--border)] bg-[var(--bg)]">
+                <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} maxLength={4000}
+                  onKeyDown={(e) => {
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && comment.trim() && !addComment.isPending) {
+                      e.preventDefault();
+                      addComment.mutate(comment.trim());
+                    }
+                  }}
+                  placeholder={replyInternal ? 'Add an internal note — the client will not see this…' : 'Add a reply…'}
+                  className="w-full resize-y bg-transparent px-4 py-3 text-sm outline-none" />
+                {pendingFiles.length > 0 && (
+                  <ul className="flex flex-wrap gap-2 px-4 pb-2">
+                    {pendingFiles.map((f, i) => (
+                      <li key={`${f.name}-${i}`} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs">
+                        <Paperclip size={12} className="text-[var(--muted)]" />
+                        <span className="max-w-40 truncate">{f.name}</span>
+                        <span className="text-[var(--faint)]">{fmtSize(f.size)}</span>
+                        <button type="button" aria-label={`Remove ${f.name}`}
+                          onClick={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
+                          className="text-[var(--muted)] hover:text-red-600"><X size={12} /></button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {isStaff && (
+                  <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] px-4 py-2">
+                    <div className="flex overflow-hidden rounded-lg border border-[var(--border)] text-xs font-medium">
+                      <button type="button" onClick={() => setReplyInternal(false)}
+                        className={`px-2.5 py-1 ${!replyInternal ? 'bg-brand text-brand-fg' : 'bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--fg)]'}`}>
+                        Public reply
+                      </button>
+                      <button type="button" onClick={() => setReplyInternal(true)}
+                        title="Visible to your team and pushed to the PSA as an internal note — never shown to the client"
+                        className={`px-2.5 py-1 ${replyInternal ? 'bg-amber-500 text-white' : 'bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--fg)]'}`}>
+                        Internal note
+                      </button>
+                    </div>
+                    <span className="min-w-0 flex-1" />
+                    <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+                      Set status
+                      <select value={replyStatus} onChange={(e) => setReplyStatus(e.target.value)} aria-label="Set status with this reply"
+                        className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs outline-none focus:border-brand">
+                        <option value="">Keep {ticket.portalStatus.replace(/_/g, ' ')}</option>
+                        {STATUSES.filter((st) => st !== ticket.portalStatus).map((st) => (
+                          <option key={st} value={st}>{st.replace(/_/g, ' ')}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                )}
+                {canLogTime && (
+                <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] px-4 py-2">
+                  <Clock size={13} className="text-[var(--faint)]" />
+                  <span className="text-xs text-[var(--muted)]">Log time with this reply</span>
+                  <input type="number" step="0.01" min="0" value={replyHours} onChange={(e) => setReplyHours(e.target.value)}
+                    placeholder="0.00" aria-label="Hours to log with this reply"
+                    className="w-20 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs outline-none focus:border-brand" />
+                  {parseFloat(replyHours) > 0 && (
+                    <select value={replyBillable} onChange={(e) => setReplyBillable(e.target.value)} aria-label="Billable"
+                      className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs outline-none focus:border-brand">
+                      <option value="Billable">Billable</option>
+                      <option value="DoNotBill">Do not bill</option>
+                      <option value="NoCharge">No charge</option>
+                    </select>
+                  )}
+                  {timer.seconds > 0 && timer.target?.ticketId === id && (
+                    <button type="button"
+                      onClick={() => {
+                        const rounded = Math.max(0.25, Math.round((timer.seconds / 3600) / 0.25) * 0.25);
+                        setReplyHours(rounded.toFixed(2));
+                        timer.pause();
+                      }}
+                      className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[11px] font-medium hover:bg-[var(--bg)]">
+                      Use timer ({String(Math.floor(timer.seconds / 60)).padStart(2, '0')}:{String(timer.seconds % 60).padStart(2, '0')})
+                    </button>
+                  )}
+                  <span className="text-[11px] text-[var(--faint)]">optional — the reply text becomes the entry&apos;s notes</span>
+                </div>
+                )}
+                <div className="flex items-center justify-between px-4 pb-3 pt-2">
+                  <span className="text-xs text-[var(--faint)]">{comment.length} / 4000</span>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium hover:bg-[var(--bg)] disabled:opacity-50">
+                      <Paperclip size={15} /> Attach file
+                    </button>
+                    <button type="submit" disabled={addComment.isPending || !comment.trim()} title="Ctrl+Enter"
+                      className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-fg hover:opacity-90 disabled:opacity-50">
+                      <Send size={15} /> {addComment.isPending ? 'Sending…'
+                        : [
+                            replyInternal ? 'Post internal note' : 'Send reply',
+                            pendingFiles.length > 0 ? `${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''}` : null,
+                            parseFloat(replyHours) > 0 ? `${replyHours}h` : null,
+                            replyStatus ? replyStatus.replace(/_/g, ' ') : null,
+                          ].filter(Boolean).join(' + ')}
+                    </button>
+                  </div>
+                </div>
+                {addComment.isError && (
+                  <p className="px-4 pb-3 text-xs text-red-600 dark:text-red-400">
+                    Couldn&apos;t send{addComment.error instanceof Error && addComment.error.message ? ` — ${addComment.error.message}` : ' — is the API reachable?'}
+                  </p>
+                )}
+                {replySideError && !addComment.isPending && (
+                  <p className="px-4 pb-3 text-xs text-amber-700 dark:text-amber-300">{replySideError}</p>
+                )}
+                </form>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         );
       })()}
@@ -990,7 +1048,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
 
 function Meta({ label, value, href }: { label: string; value: string; href?: string | null }) {
   return (
-    <div>
+    <div className="lg:py-2">
       <dt className="text-[10px] uppercase tracking-wide text-[var(--faint)]">{label}</dt>
       <dd className="mt-0.5 truncate font-medium" title={value}>
         {href ? (
