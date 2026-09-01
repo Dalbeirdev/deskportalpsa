@@ -251,6 +251,8 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   // and resending would duplicate the note. A failed side-step is reported specifically instead.
   const [replyHours, setReplyHours] = useState('');
   const [replyBillable, setReplyBillable] = useState('Billable');
+  // Separate from the reply body: the timesheet and the client are different audiences.
+  const [replyTimeNotes, setReplyTimeNotes] = useState('');
   const [replySideError, setReplySideError] = useState<string | null>(null);
   // Staff-only composer powers (mirrors the old help desk: note + time + status in ONE post).
   // Gated on view-all — the same signal the API's staff branch keys on.
@@ -282,7 +284,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
       const hrs = parseFloat(replyHours);
       if (hrs > 0) {
         // noteId links the entry to this reply, so the thread shows the hours on the reply itself.
-        try { await api.logTime(id, { hours: hrs, billable: replyBillable, notes: body, noteId: note.id }); }
+        try { await api.logTime(id, { hours: hrs, billable: replyBillable, notes: replyTimeNotes.trim() || body, noteId: note.id }); }
         catch (e) { sideErrors.push(`the time entry failed${e instanceof Error && e.message ? ` — ${e.message}` : ''} (use the Log time panel to retry)`); }
       }
       if (replyStatus) {
@@ -292,7 +294,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
       return { note, sideErrors };
     },
     onSuccess: ({ sideErrors }) => {
-      setComment(''); setPendingFiles([]); setReplyHours(''); setReplyStatus('');
+      setComment(''); setPendingFiles([]); setReplyHours(''); setReplyStatus(''); setReplyTimeNotes('');
       // Close on success only. A failed send keeps the dialog — and the text — open, because
       // dropping someone back to a closed launcher with an error elsewhere loses the reply.
       setReplyOpen(false);
@@ -1023,8 +1025,29 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                       Use timer ({String(Math.floor(timer.seconds / 60)).padStart(2, '0')}:{String(timer.seconds % 60).padStart(2, '0')})
                     </button>
                   )}
-                  <span className="text-[11px] text-[var(--faint)]">optional — the reply text becomes the entry&apos;s notes</span>
+                  {!(parseFloat(replyHours) > 0) && (
+                    <span className="text-[11px] text-[var(--faint)]">optional</span>
+                  )}
                 </div>
+                )}
+                {/* Only once there is time to describe. What the client reads and what the timesheet
+                    records are not the same sentence — "your mailbox is working again" is the reply,
+                    "rebuilt the OST and re-ran autodiscover" is the entry. Left blank the reply text
+                    is used, which is what happened implicitly before. */}
+                {canLogTime && parseFloat(replyHours) > 0 && (
+                  <label className="block px-4 pb-2">
+                    <span className="mb-1 block text-xs text-[var(--muted)]">
+                      Time entry notes {notesRequired && <span className="text-red-600 dark:text-red-400">*</span>}
+                    </span>
+                    <input value={replyTimeNotes} onChange={(e) => setReplyTimeNotes(e.target.value)}
+                      placeholder={comment.trim() ? 'Leave blank to use the reply text' : 'What did you work on?'}
+                      className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm outline-none focus:border-brand" />
+                    <span className="mt-1 block text-[11px] text-[var(--faint)]">
+                      {notesRequired
+                        ? 'Autotask requires notes on every time entry — the reply text is used if you leave this blank.'
+                        : 'Only the time entry sees this. The client sees the reply above.'}
+                    </span>
+                  </label>
                 )}
                 <div className="flex items-center justify-between px-4 pb-3 pt-2">
                   <span className="text-xs text-[var(--faint)]">{comment.length} / 4000</span>
