@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useRef, useState } from 'react';
+import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -13,6 +13,10 @@ import { NoteBody, notePreview } from '@/components/NoteBody';
 import { AssistantRail } from '@/components/AssistantRail';
 import { api, type AssigneeOptions } from '@/lib/api';
 import type { TicketDetail } from '@/lib/types';
+
+/// Whether the time-entry list is open. Shared across tickets on purpose: a technician who wants
+/// the list expanded wants it expanded on every ticket, not once per ticket id.
+const TIME_PANEL_KEY = 'desk.ticket.timeEntries.open';
 
 const STATUS_TONE: Record<string, string> = {
   NEW: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
@@ -207,6 +211,24 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const [editEntry, setEditEntry] = useState<{ id: string; hours: string; notes: string } | null>(null);
   // Which entries' notes are expanded — a long CW note clipped to one line was unreadable with no way to open it.
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
+  // Time entries start collapsed: the header already carries the count and both totals, so the
+  // list is detail rather than headline, and six rows of it pushed the conversation off-screen.
+  // The stored preference is read AFTER mount — reading localStorage during render makes server
+  // and client disagree about the first paint, which React resolves by discarding the markup.
+  const [timeOpen, setTimeOpen] = useState(false);
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(TIME_PANEL_KEY);
+      if (saved !== null) setTimeOpen(saved === '1');
+    } catch {
+      // Private windows and blocked site data throw on access; the default stands.
+    }
+  }, []);
+  const toggleTime = () => setTimeOpen((prev) => {
+    const next = !prev;
+    try { window.localStorage.setItem(TIME_PANEL_KEY, next ? '1' : '0'); } catch { /* the preference is a nicety */ }
+    return next;
+  });
   const timer = useTimer();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -507,8 +529,16 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
             {/* Time entries (query disabled without tickets.time.log, so this stays absent for clients) */}
             {entries && entries.length > 0 && (
               <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-3">
+                {/* The whole header is the disclosure control. A chevron alone is a small target,
+                    and the totals beside it are read-only text, so there is nothing here that a
+                    click could mean other than "open this". */}
+                <button type="button" onClick={toggleTime}
+                  aria-expanded={timeOpen} aria-controls="time-entry-list"
+                  title={timeOpen ? 'Hide time entries' : `Show ${entries.length} time ${entries.length === 1 ? 'entry' : 'entries'}`}
+                  className="flex w-full flex-wrap items-center justify-between gap-3 rounded-t-xl px-5 py-3 text-left hover:bg-[var(--bg)]">
                   <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--faint)]">
+                    <ChevronDown size={14} aria-hidden
+                      className={`shrink-0 transition-transform duration-150 ${timeOpen ? '' : '-rotate-90'}`} />
                     <Clock size={14} /> Time entries <span className="rounded-full bg-[var(--bg)] px-2 py-0.5 text-xs text-[var(--muted)]">{entries.length}</span>
                   </h2>
                   {(() => {
@@ -540,8 +570,9 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                       </div>
                     );
                   })()}
-                </div>
-                <ul className="divide-y divide-[var(--border)]">
+                </button>
+                <ul id="time-entry-list" hidden={!timeOpen}
+                  className="divide-y divide-[var(--border)] border-t border-[var(--border)]">
                   {entries.map((e) => (
                     <li key={e.externalId} className="px-5 py-3">
                       {editEntry?.id === e.externalId ? (
