@@ -221,9 +221,20 @@ public sealed class ConnectionSyncRunner(
         {
             if (string.IsNullOrEmpty(n.ExternalId)) continue;
             var row = existing.FirstOrDefault(e => e.ExternalNoteId == n.ExternalId && e.ImportedFromProvider);
-            if (row is not null && row.AuthoredByClient != n.FromClient)
+            if (row is null) continue;
+            if (row.AuthoredByClient != n.FromClient)
             {
                 row.AuthoredByClient = n.FromClient;
+                healed++;
+            }
+            // The body too. The insert loop below skips IDs it already holds, so a note imported
+            // by an earlier, narrower reader keeps that reading forever — a time entry stored as
+            // "See Internal Notes" stays a pointer to nothing even after the import learned to
+            // fetch the internal half. The provider owns the text of rows it authored; a portal
+            // reply is never touched here because those are not ImportedFromProvider.
+            if (row.Body != n.Body)
+            {
+                row.Body = n.Body;
                 healed++;
             }
         }
