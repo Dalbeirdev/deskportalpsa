@@ -30,7 +30,8 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         Task.FromResult(new ProviderCapabilities
         {
             SupportsTicketCreate = true, SupportsTicketUpdate = true, SupportsTicketDelete = false,
-            SupportsPublicNotes = true, SupportsPrivateNotes = true, SupportsAttachments = true, SupportsAttachmentDownload = true, SupportsAttachmentSweep = false,
+            SupportsPublicNotes = true, SupportsPrivateNotes = true, SupportsNoteEmailRecipients = true,
+            SupportsAttachments = true, SupportsAttachmentDownload = true, SupportsAttachmentSweep = false,
             SupportsTimeEntries = true, SupportsAssets = true, SupportsContracts = true,
             SupportsHolidayCalendars = true,
             SupportsSlaData = true, SupportsCustomFields = true, SupportsInboundWebhooks = true,
@@ -263,12 +264,27 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
 
     public async Task<CreateNoteResult> AddPublicNoteAsync(string ticketId, UnifiedTicketNoteCreateRequest note, CancellationToken ct = default)
     {
+        // Recipients only ride on a PUBLIC note. Copying anyone on an internal note would be the
+        // one mistake this system must never make, so the flags are pinned off rather than merely
+        // left unset by the caller.
+        var cc = note.IsPublic
+            ? note.EmailCc.Where(a => !string.IsNullOrWhiteSpace(a)).Select(a => a.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
+            : [];
+        var emailContact = note.IsPublic && note.EmailContact;
+
         var body = new
         {
             text = note.Body,
             detailDescriptionFlag = true,
             internalAnalysisFlag = !note.IsPublic, // public notes are not flagged internal
             customerUpdatedFlag = note.IsPublic,
+            // ConnectWise sends the mail, not the portal. processNotifications gates the whole
+            // thing: without it CW stores the addresses and emails nobody, which looks identical to
+            // success from here.
+            processNotifications = emailContact || cc.Count > 0,
+            emailContactFlag = emailContact,
+            emailCcFlag = cc.Count > 0,
+            emailCc = cc.Count > 0 ? string.Join(",", cc) : null,
         };
         var created = await SendAsync<CwTicketNote>(HttpMethod.Post, $"service/tickets/{ticketId}/notes", body, ct);
         return new CreateNoteResult(true, created!.Id.ToString(), null);

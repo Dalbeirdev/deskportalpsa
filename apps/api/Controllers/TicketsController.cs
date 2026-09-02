@@ -74,7 +74,21 @@ public sealed class TicketsController(
             throw new ForbiddenException("This endpoint is for client portal users.");
         // isPublic reaches only this STAFF path — the client branch above never passes it, so a
         // client cannot post (or request) an internal note.
-        return Ok(await commands.AddStaffCommentAsync(uid, user.DisplayName ?? user.Email ?? "Staff", id, req.Body, req.IsPublic ?? true, ct));
+        return Ok(await commands.AddStaffCommentAsync(
+            uid, user.DisplayName ?? user.Email ?? "Staff", id, req.Body, req.IsPublic ?? true,
+            req.EmailContact ?? false, req.EmailCc ?? [], ct));
+    }
+
+    /// <summary>
+    /// Who a public reply on this ticket can be sent to. Staff only: the list is the customer's
+    /// contacts, and a client has no business enumerating their colleagues' addresses here.
+    /// </summary>
+    [HttpGet("{id:guid}/recipients")]
+    [RequirePermission(Permissions.TicketsViewAll)]
+    public async Task<IActionResult> Recipients(Guid id, CancellationToken ct)
+    {
+        if (user.UserId is not { } uid) throw new ForbiddenException("Staff only.");
+        return Ok(await commands.ListReplyRecipientsAsync(uid, id, ct));
     }
 
     // Resolves the client identity or refuses the request — staff use the dashboard endpoints instead.
@@ -92,5 +106,9 @@ public sealed class TicketsController(
     public sealed record AddCommentRequest(
         [Required, StringLength(10000, MinimumLength = 1)] string Body,
         // Staff only; the client path ignores it. Null means public.
-        bool? IsPublic = null);
+        bool? IsPublic = null,
+        // Staff only, public notes only. Recipients are re-validated server-side against the
+        // ticket's own company — a request naming someone else's contact is refused, not filtered.
+        bool? EmailContact = null,
+        [MaxLength(25)] IReadOnlyList<string>? EmailCc = null);
 }

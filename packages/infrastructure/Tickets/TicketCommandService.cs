@@ -30,6 +30,54 @@ public sealed class TicketCommandService(
     /// <summary>Portal-neutral status a newly raised ticket starts in.</summary>
     private const string NewStatus = "NEW";
 
+    /// <summary>
+    /// Who a public reply on this ticket can be sent to: the contacts of the ticket's OWN client
+    /// company, read live from the provider, plus whether that provider lets the caller choose at
+    /// all. Deliberately lives beside the write it feeds — the picker the technician sees and the
+    /// allow-list the write enforces resolve through the same call, so they cannot drift into a
+    /// state where the UI offers an address the API then refuses (or worse, accepts).
+    /// </summary>
+    public async Task<ReplyRecipientsDto> ListReplyRecipientsAsync(Guid appUserId, Guid ticketId, CancellationToken ct = default)
+    {
+        var ticket = await scopeQuery.FindAsync(db.Tickets, ticketId, appUserId, Permissions.TicketsAddPublicNote, ct)
+            ?? throw new NotFoundException("Ticket");
+        var company = await db.ClientCompanies.AsNoTracking().FirstOrDefaultAsync(c => c.Id == ticket.ClientCompanyId, ct)
+            ?? throw new NotFoundException("Client company");
+        var connector = await connectors.ResolveAsync(ticket.PsaConnectionId, ct);
+        var caps = await connector.GetCapabilitiesAsync(ct);
+
+        var contacts = await CompanyContactsAsync(ticket, ct);
+        return new ReplyRecipientsDto(
+            company.Name,
+            caps.SupportsNoteEmailRecipients,
+            contacts.Select(c => new ReplyRecipientDto(c.ExternalId, c.DisplayName, c.Email)).ToList());
+    }
+
+    /// <summary>
+    /// The ticket's client company's contacts, from the provider. Scoped by the company's OWN
+    /// external id — never a company id from the request — and filtered to active contacts that
+    /// actually have an address, because an entry with no email is not a recipient.
+    /// A provider that cannot answer yields an empty list rather than an exception: a reply must
+    /// still be postable when the contact lookup is unavailable.
+    /// </summary>
+    private async Task<IReadOnlyList<ExternalContact>> CompanyContactsAsync(Ticket ticket, CancellationToken ct)
+    {
+        var company = await db.ClientCompanies.AsNoTracking().FirstOrDefaultAsync(c => c.Id == ticket.ClientCompanyId, ct);
+        if (company is null || string.IsNullOrWhiteSpace(company.ExternalCompanyId)) return [];
+        var connector = await connectors.ResolveAsync(ticket.PsaConnectionId, ct);
+        try
+        {
+            var contacts = await connector.GetContactsAsync(company.ExternalCompanyId, ct);
+            return contacts.Where(c => c.IsActive && !string.IsNullOrWhiteSpace(c.Email)).ToList();
+        }
+        catch (ConnectorException) { return []; }
+    }
+
+    private async Task<HashSet<string>> CompanyContactEmailsAsync(Ticket ticket, CancellationToken ct)
+        => (await CompanyContactsAsync(ticket, ct))
+            .Select(c => c.Email.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
     public async Task<CreateTicketResultDto> CreateAsync(ClientAccess access, CreateTicketInput input, CancellationToken ct = default)
     {
         var company = await db.ClientCompanies.FirstOrDefaultAsync(c => c.Id == access.ClientCompanyId, ct)
@@ -167,16 +215,47 @@ public sealed class TicketCommandService(
     /// client read path never returns it. Only the staff endpoint can reach this parameter.
     /// </summary>
     public async Task<TicketNoteDto> AddStaffCommentAsync(Guid appUserId, string authorName, Guid ticketId, string body, bool isPublic = true, CancellationToken ct = default)
+        => await AddStaffCommentAsync(appUserId, authorName, ticketId, body, isPublic, emailContact: false, emailCc: [], ct);
+
+    /// <inheritdoc cref="AddStaffCommentAsync(Guid, string, Guid, string, bool, CancellationToken)"/>
+    /// <param name="emailContact">Ask the PSA to email the ticket's own contact.</param>
+    /// <param name="emailCc">Extra addresses to copy — validated against THIS ticket's company.</param>
+    public async Task<TicketNoteDto> AddStaffCommentAsync(
+        Guid appUserId, string authorName, Guid ticketId, string body, bool isPublic,
+        bool emailContact, IReadOnlyList<string> emailCc, CancellationToken ct = default)
     {
         var ticket = await scopeQuery.FindAsync(db.Tickets, ticketId, appUserId, Permissions.TicketsAddPublicNote, ct)
             ?? throw new NotFoundException("Ticket");
         if (string.IsNullOrEmpty(ticket.ExternalTicketId))
             throw new ValidationFailedException("This ticket is not yet synced to the PSA, so a reply cannot be posted.");
 
+        // An internal note is never mailed to anyone, whatever the caller asked for. The composer
+        // already hides the recipients when internal is selected; this is the gate that matters,
+        // because a request can be made without the composer.
+        if (!isPublic) { emailContact = false; emailCc = []; }
+
+        // Every copied address must belong to THIS ticket's client company. Trusting the request
+        // would turn one customer's reply into a way to mail another's contacts — the isolation
+        // the portal exists to guarantee. Checked against the provider's own contact list, not a
+        // list the browser sent back to us.
+        if (emailCc.Count > 0)
+        {
+            var allowed = await CompanyContactEmailsAsync(ticket, ct);
+            var rejected = emailCc.Where(a => !allowed.Contains(a.Trim())).ToList();
+            if (rejected.Count > 0)
+                throw new ValidationFailedException(
+                    $"These addresses are not contacts of this ticket's customer: {string.Join(", ", rejected)}.");
+        }
+
         var idempotencyKey = Guid.NewGuid().ToString("N");
         var connector = await connectors.ResolveAsync(ticket.PsaConnectionId, ct);
         var result = await connector.AddPublicNoteAsync(
-            ticket.ExternalTicketId, new UnifiedTicketNoteCreateRequest(body, IsPublic: isPublic, idempotencyKey), ct);
+            ticket.ExternalTicketId,
+            new UnifiedTicketNoteCreateRequest(body, IsPublic: isPublic, idempotencyKey)
+            {
+                EmailContact = emailContact,
+                EmailCc = emailCc,
+            }, ct);
         if (!result.Success)
             throw new ValidationFailedException(result.Error ?? "The PSA rejected the comment.");
 

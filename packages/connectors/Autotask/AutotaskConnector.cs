@@ -31,7 +31,11 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
         Task.FromResult(new ProviderCapabilities
         {
             SupportsTicketCreate = true, SupportsTicketUpdate = true, SupportsTicketDelete = false,
-            SupportsPublicNotes = true, SupportsPrivateNotes = true, SupportsAttachments = true, SupportsAttachmentDownload = true, SupportsAttachmentSweep = true,
+            // No note email recipients: Autotask's TicketNote entity has no To/Cc fields. A public
+            // note is published (publish=1) and Autotask's own workflow rules decide who is mailed,
+            // from the ticket's contact. Claiming otherwise would offer a control nothing honours.
+            SupportsPublicNotes = true, SupportsPrivateNotes = true, SupportsNoteEmailRecipients = false,
+            SupportsAttachments = true, SupportsAttachmentDownload = true, SupportsAttachmentSweep = true,
             SupportsTimeEntries = true, SupportsAssets = true, SupportsContracts = true,
             SupportsHolidayCalendars = true,
             SupportsSlaData = true, SupportsCustomFields = true, SupportsInboundWebhooks = true,
