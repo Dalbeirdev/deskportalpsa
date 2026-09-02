@@ -225,5 +225,52 @@ public sealed class AutotaskConnectorCertificationTests : ConnectorCertification
         ex.Message.Should().Contain("New").And.Contain("Complete", "the reader needs the real options to map onto");
         ex.Message.Should().NotContain("convert string to integer", "that is the message this replaces");
     }
+    /// <summary>
+    /// Autotask prints a note's title above its description, so a title taken as 250 characters of
+    /// the body made one note read as two — the opening paragraph in bold, then again below.
+    /// Reported from production. The title must be a heading, not a copy of the paragraph under it.
+    /// </summary>
+    [Fact]
+    public async Task A_long_note_gets_a_short_heading_not_a_second_copy_of_itself()
+    {
+        var server = new FakeAutotaskServer(Clock);
+        var c = Build(server);
+        var ticket = await c.CreateTicketAsync(new UnifiedTicketCreateRequest
+        {
+            Title = "t", IdempotencyKey = "k", ExternalCompanyId = SeededOrganizationId,
+        });
+        const string body =
+            "we already testing every task from my side didn't surface the dead-letter count in the UI. "
+            + "The state exists and is countable, but nothing displays it yet, so an operator cannot "
+            + "currently see that OCR has given up on N screenshots without querying.";
+
+        await c.AddPublicNoteAsync(ticket.ExternalId!, new UnifiedTicketNoteCreateRequest(body, IsPublic: true, "k2"));
+
+        var title = server.LastNoteTitle!;
+        title.Length.Should().BeLessThanOrEqualTo(81, "a heading, not a paragraph (80 chars plus the ellipsis)");
+        title.Should().EndWith("…");
+        title.Should().NotEndWith(" …", "the boundary trim should not leave a dangling space");
+        // Cut on a word boundary: the last word before the ellipsis must be whole.
+        body.Should().Contain(title.TrimEnd('…'), "the heading is an excerpt, not a re-wording");
+        title.TrimEnd('…').Should().NotEndWith("didn'", "a mid-word cut is what made it look like broken duplicate text");
+    }
+
+    [Fact]
+    public async Task A_short_note_is_its_own_title_unchanged()
+    {
+        var server = new FakeAutotaskServer(Clock);
+        var c = Build(server);
+        var ticket = await c.CreateTicketAsync(new UnifiedTicketCreateRequest
+        {
+            Title = "t", IdempotencyKey = "k", ExternalCompanyId = SeededOrganizationId,
+        });
+
+        await c.AddPublicNoteAsync(ticket.ExternalId!,
+            new UnifiedTicketNoteCreateRequest("Rebooted the switch, link is up.", IsPublic: true, "k2"));
+
+        server.LastNoteTitle.Should().Be("Rebooted the switch, link is up.",
+            "nothing to shorten, so nothing should be altered");
+    }
+
     protected override string WebhookSecret => Secret;
 }

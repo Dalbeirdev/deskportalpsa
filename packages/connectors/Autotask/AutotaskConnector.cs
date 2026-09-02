@@ -739,13 +739,32 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
             .Select(p => new ExternalFieldOption(p.Value ?? "", p.Label ?? p.Value ?? "", p.IsActive)).ToList();
     }
 
-    /// <summary>Autotask note titles are mandatory and capped; use the first meaningful line.</summary>
+    /// <summary>
+    /// Autotask note titles are mandatory, and its UI prints the title ABOVE the description —
+    /// so a title that is 250 characters of the body renders the note as though it were posted
+    /// twice, the opening paragraph in bold and again below. Reported as "we sent one note but
+    /// Autotask shows two".
+    ///
+    /// A short heading instead: the first line, cut at a word boundary and elided, so it reads as
+    /// a subject line rather than a chopped copy of the paragraph under it. Kept as an excerpt
+    /// rather than a constant like "Portal reply" because Autotask's note LIST shows titles, and
+    /// the same words on every row would make that list unscannable.
+    /// </summary>
+    private const int NoteTitleMax = 80;
+
     private static string NoteTitle(string body)
     {
         var line = (body ?? string.Empty)
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .FirstOrDefault(l => l.Length > 0) ?? "Portal reply";
-        return line.Length <= 250 ? line : line[..250];
+        if (line.Length <= NoteTitleMax) return line;
+
+        var cut = line[..NoteTitleMax];
+        var lastSpace = cut.LastIndexOf(' ');
+        // Only honour the word boundary if it leaves a usable heading; a first "word" longer than
+        // that (a pasted URL, say) is better hard-cut than reduced to nothing.
+        if (lastSpace >= 40) cut = cut[..lastSpace];
+        return cut.TrimEnd(' ', ',', ';', ':', '.', '-', '—') + "…";
     }
 
     private static object Filter(string field, string op, object value) => new { op, field, value };
