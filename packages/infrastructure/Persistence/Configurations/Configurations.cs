@@ -125,6 +125,22 @@ public sealed class UserRoleConfig : IEntityTypeConfiguration<UserRole>
     }
 }
 
+public sealed class UserPsaIdentityConfig : IEntityTypeConfiguration<Desk.Domain.Identity.UserPsaIdentity>
+{
+    public void Configure(EntityTypeBuilder<Desk.Domain.Identity.UserPsaIdentity> b)
+    {
+        b.ToTable("user_psa_identities");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.ExternalTechnicianId).HasMaxLength(100).IsRequired();
+        b.Property(x => x.ExternalTechnicianName).HasMaxLength(200);
+        // One identity per person per connection — a second row would make "who is this user in
+        // Autotask" ambiguous exactly where the answer decides whose timesheet an hour lands on.
+        b.HasIndex(x => new { x.AppUserId, x.PsaConnectionId }).IsUnique();
+        b.HasOne(x => x.AppUser).WithMany().HasForeignKey(x => x.AppUserId).OnDelete(DeleteBehavior.Cascade);
+        b.HasOne(x => x.PsaConnection).WithMany().HasForeignKey(x => x.PsaConnectionId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 public sealed class TicketConfig : IEntityTypeConfiguration<Ticket>
 {
     public void Configure(EntityTypeBuilder<Ticket> b)

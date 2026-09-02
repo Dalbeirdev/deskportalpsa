@@ -35,6 +35,7 @@ public class DeskDbContext(DbContextOptions<DeskDbContext> options, ITenantConte
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
+    public DbSet<Desk.Domain.Identity.UserPsaIdentity> UserPsaIdentities => Set<Desk.Domain.Identity.UserPsaIdentity>();
     public DbSet<Ticket> Tickets => Set<Ticket>();
     public DbSet<TicketNote> TicketNotes => Set<TicketNote>();
     public DbSet<Desk.Domain.Assistant.AssistantSettings> AssistantSettings => Set<Desk.Domain.Assistant.AssistantSettings>();

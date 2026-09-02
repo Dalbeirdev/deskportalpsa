@@ -129,6 +129,11 @@ public sealed class TicketTimeController(
             Source = TimeEntrySource.Portal,
             SyncStatus = TimeEntrySyncStatus.Pending,
             EntryDate = DateTimeOffset.UtcNow,
+            // Stamped at CREATION, not read again at push time: a retry can happen days later and
+            // by a different person, and the hour belongs to whoever did the work. Null when this
+            // user has no identity on this connection — the connector then falls back to the
+            // connection's default resource, which is the behaviour every entry had before.
+            TechnicianExternalId = await MyTechnicianIdAsync(ticket.PsaConnectionId, ct),
         };
         db.TicketTimeEntries.Add(record);
         await db.SaveChangesAsync(ct);
@@ -160,6 +165,17 @@ public sealed class TicketTimeController(
         return Ok(await RecomputeAsync(ticket, connector, ct));
     }
 
+    /// <summary>
+    /// This user's identity in the given PSA, or null when they have none. Null is the ordinary
+    /// case for an unmapped user and means "fall back to the connection default" — not an error.
+    /// </summary>
+    private async Task<string?> MyTechnicianIdAsync(Guid psaConnectionId, CancellationToken ct)
+        => user.UserId is not { } uid ? null
+            : await db.UserPsaIdentities.AsNoTracking()
+                .Where(i => i.AppUserId == uid && i.PsaConnectionId == psaConnectionId)
+                .Select(i => i.ExternalTechnicianId)
+                .FirstOrDefaultAsync(ct);
+
     /// <summary>Pushes a portal record to the PSA and stamps the outcome on it either way.</summary>
     private async Task<bool> PushAsync(TicketTimeEntry record, Ticket ticket, IServiceManagementConnector connector, CancellationToken ct)
     {
@@ -169,7 +185,7 @@ public sealed class TicketTimeController(
             result = await connector.AddTimeEntryAsync(ticket.ExternalTicketId!,
                 new UnifiedTimeEntryCreateRequest(record.Hours, record.WorkTypeId, record.WorkRoleId,
                     record.Billable ? BillableOption.Billable : BillableOption.DoNotBill,
-                    record.Notes, MemberIdentifier: null), ct);
+                    record.Notes, MemberIdentifier: record.TechnicianExternalId), ct);
         }
         catch (ConnectorException ex)
         {
