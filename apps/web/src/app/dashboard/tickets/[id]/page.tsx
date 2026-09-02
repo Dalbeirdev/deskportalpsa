@@ -817,17 +817,19 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                             <span title={`Time entry #${n.timeEntryExternalId} — internal, never shown to the client`}
                               className="rounded bg-blue-100 px-1.5 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">Time entry</span>
                           )}
+                          {/* Duration sits WITH the badge that introduces it, not on a line of its
+                              own below. "Time entry" and "23m · Billable" are one statement about
+                              this note; splitting them spent a whole row restating in prose what the
+                              header had already begun, and pushed the note itself further down. */}
+                          {n.timeEntryExternalId && (
+                            <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-blue-700 dark:text-blue-300">
+                              <Clock size={13} />
+                              {teHours != null ? fmtDuration(teHours) : 'Time logged'}{teBillable ? ` · ${teBillable}` : ''}
+                            </span>
+                          )}
                         </span>
                         <span className="shrink-0 text-xs text-[var(--faint)]">{fmt(n.createdAt, true)}</span>
                       </div>
-                      {n.timeEntryExternalId && (
-                        // The one question a time-and-materials reader always has, answered in the
-                        // note itself: how long did this take, and does it bill.
-                        <div className="mt-1.5 flex items-center gap-1.5 text-sm font-semibold text-blue-700 dark:text-blue-300">
-                          <Clock size={14} />
-                          {teHours != null ? fmtDuration(teHours) : 'Time logged'}{teBillable ? ` · ${teBillable}` : ''}
-                        </div>
-                      )}
                       <NoteBody body={n.body} />
                       {filesByNote.get(n.id)?.length ? (
                         <ul className="mt-2 flex flex-wrap gap-2">
