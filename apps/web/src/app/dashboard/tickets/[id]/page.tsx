@@ -546,18 +546,30 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
 
             <div className="space-y-4">
             {/* Reply launcher — closed by default, above Time entries. A composer pinned to the
-                bottom of a long thread is half off-screen exactly when it is needed. */}
+                bottom of a long thread is half off-screen exactly when it is needed.
+                Styled as the primary action it is: a dashed grey outline with muted text is the
+                vocabulary of an empty slot or a disabled control, so the one button a technician
+                opens the ticket to press was the quietest thing on the page. Solid brand border,
+                brand tint, full-strength label — and a Reply cue on the right so the target of the
+                click is named rather than merely implied by a placeholder.
+                The icon square and that cue switch to brand-mid on dark: the deep forest green is
+                nearly the value of a dark surface, so the marks carrying the emphasis would lose
+                it exactly where they are needed. */}
             {canReply && (
               <button type="button" onClick={() => setReplyOpen(true)}
-                className="flex w-full items-center gap-3 rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-left text-sm text-[var(--muted)] hover:border-brand hover:bg-brand/5 hover:text-[var(--fg)]">
-                <Pencil size={15} className="shrink-0" />
+                className="flex w-full items-center gap-3 rounded-xl border-2 border-brand/40 bg-brand-tint px-4 py-3.5 text-left text-sm font-medium text-[var(--fg)] shadow-sm transition-colors hover:border-brand hover:bg-brand/10 dark:border-brand/35 dark:bg-brand/10 dark:hover:bg-brand/20">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand text-white dark:bg-brand-mid">
+                  <Pencil size={14} />
+                </span>
                 <span className="min-w-0 flex-1 truncate">
                   {comment.trim() || pendingFiles.length > 0
                     ? `Draft in progress — ${comment.trim() ? `“${comment.trim().slice(0, 48)}${comment.trim().length > 48 ? "…" : ""}”` : `${pendingFiles.length} file${pendingFiles.length > 1 ? "s" : ""} attached`}`
                     : isStaff ? "Add a reply, internal note, time or status change…" : "Add a reply…"}
                 </span>
-                {(comment.trim() || pendingFiles.length > 0) && (
+                {(comment.trim() || pendingFiles.length > 0) ? (
                   <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-300">Draft</span>
+                ) : (
+                  <span className="hidden shrink-0 rounded-lg bg-brand px-2.5 py-1 text-xs font-semibold text-white dark:bg-brand-mid sm:inline">Reply</span>
                 )}
               </button>
             )}
