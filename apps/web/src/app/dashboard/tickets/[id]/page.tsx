@@ -452,14 +452,17 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 Windows default 125% scaling reports ~1090 CSS pixels and never reached it, so the
                 assistant dropped below the thread on the machines it is actually used on. The
                 side rails give up width at `lg` so the thread keeps a workable measure. */}
-            <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)_270px] xl:grid-cols-[300px_minmax(0,1fr)_330px] lg:items-start">
+            <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)_260px] xl:grid-cols-[320px_minmax(0,1fr)_320px] lg:items-start">
             {/* Both rails are given the SAME height — one screen, less the top offset — so the two
                 sides of the ticket line up instead of one ending halfway up the other. Each scrolls
                 inside itself rather than stretching to the thread's height, which on a sixteen
                 message ticket would be several screens of empty rail. */}
-            <aside className="space-y-4 lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:overflow-y-auto">
-            {/* Ticket card */}
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <aside className="flex flex-col gap-4 lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)]">
+            {/* Ticket card. It STRETCHES to the rail's height rather than stopping at its content:
+                giving the two asides equal heights was not enough, because what a reader sees is
+                the bordered card inside, and a card that ends halfway up its column still reads as
+                two mismatched sides. Scrolls internally on a short screen. */}
+            <div className="min-h-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 lg:flex-1 lg:overflow-y-auto">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--bg)] text-[var(--muted)]"><Icon size={19} /></span>
