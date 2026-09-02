@@ -35,6 +35,13 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
 
     private readonly List<Dictionary<string, object?>> _tickets = [];
     private readonly List<Dictionary<string, object?>> _notes = [];
+
+    /// <summary>
+    /// The title Autotask stored for the last note. Autotask prints this ABOVE the description, so
+    /// it is part of what a reader sees — but the connector's read path only returns the body, so a
+    /// test cannot reach it any other way.
+    /// </summary>
+    public string? LastNoteTitle => _notes.LastOrDefault()?.GetValueOrDefault("title")?.ToString();
     private readonly List<Dictionary<string, object?>> _attachments = [];
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
