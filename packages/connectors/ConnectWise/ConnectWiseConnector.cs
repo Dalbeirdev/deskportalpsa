@@ -569,6 +569,14 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
 
     private static bool _shapeLogged;
 
+    /// <summary>TEMPORARY. Serilog owns stdout here and the connector has no ILogger, so the probe
+    /// writes to a file instead. Names only — never values.</summary>
+    private static void Probe(string line)
+    {
+        try { File.AppendAllLines("/tmp/cw-shape.txt", [$"{DateTimeOffset.UtcNow:O} {line}"]); }
+        catch { /* a diagnostic must never break a sync */ }
+    }
+
     /// <summary>TEMPORARY. Names of the fields ConnectWise actually returns on a ticket. Delete with
     /// its call site once the date fields are mapped.</summary>
     private async Task LogTicketShapeOnceAsync(Dictionary<string, string> query, CancellationToken ct)
@@ -584,18 +592,18 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
 
             var t = raw[0];
             var names = t.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal);
-            Console.WriteLine($"[CW-SHAPE] ticket fields: {string.Join(", ", names)}");
+            Probe($"ticket fields: {string.Join(", ", names)}");
 
             if (t.TryGetProperty("_info", out var info) && info.ValueKind == System.Text.Json.JsonValueKind.Object)
             {
                 var infoNames = info.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal);
-                Console.WriteLine($"[CW-SHAPE] _info fields: {string.Join(", ", infoNames)}");
+                Probe($"_info fields: {string.Join(", ", infoNames)}");
             }
         }
         catch (Exception ex)
         {
             // A diagnostic must never break a sync.
-            Console.WriteLine($"[CW-SHAPE] probe failed: {ex.GetType().Name}");
+            Probe($"probe failed: {ex.GetType().Name}: {ex.Message}");
         }
     }
 
