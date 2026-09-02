@@ -99,7 +99,23 @@ public record UnifiedTicketNote(
     // words, and the thread loses its two sides.
     bool FromClient = false);
 
-public record UnifiedTicketNoteCreateRequest(string Body, bool IsPublic, string IdempotencyKey);
+public record UnifiedTicketNoteCreateRequest(string Body, bool IsPublic, string IdempotencyKey)
+{
+    /// <summary>
+    /// Email the ticket's own contact, where the provider lets the caller decide. ConnectWise does
+    /// (emailContactFlag); Autotask does not expose recipients on a note at all and decides from
+    /// its own workflow rules, so this is ignored there rather than quietly half-honoured.
+    /// Check <see cref="ProviderCapabilities.SupportsNoteEmailRecipients"/> before offering it.
+    /// </summary>
+    public bool EmailContact { get; init; }
+
+    /// <summary>
+    /// Additional addresses to copy. Only ever addresses belonging to the ticket's own client
+    /// company — the portal resolves them from that company's contacts, so one customer's reply can
+    /// never be copied to another's.
+    /// </summary>
+    public IReadOnlyList<string> EmailCc { get; init; } = [];
+}
 
 public record UnifiedTimeEntry(
     string ExternalId,

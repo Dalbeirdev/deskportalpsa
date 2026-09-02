@@ -112,3 +112,17 @@ public sealed record ActivityEventDto(
     string Kind,
     string? Actor,
     DateTimeOffset At);
+
+/// <summary>One person a public reply can be sent to — a contact of the ticket's own client company.</summary>
+public sealed record ReplyRecipientDto(string ExternalId, string Name, string Email);
+
+/// <summary>
+/// Who a public reply on this ticket reaches. <paramref name="CanChooseRecipients"/> is the
+/// provider's answer, not a preference: ConnectWise takes recipients on the note, Autotask decides
+/// from its own workflow rules. The portal itself sends no mail in either case, so where this is
+/// false the UI states what will happen rather than offering a control nothing honours.
+/// </summary>
+public sealed record ReplyRecipientsDto(
+    string CompanyName,
+    bool CanChooseRecipients,
+    IReadOnlyList<ReplyRecipientDto> Contacts);

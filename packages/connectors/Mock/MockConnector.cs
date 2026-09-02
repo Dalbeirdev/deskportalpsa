@@ -42,7 +42,8 @@ public sealed class MockConnector : IServiceManagementConnector
         Task.FromResult(new ProviderCapabilities
         {
             SupportsTicketCreate = true, SupportsTicketUpdate = true, SupportsTicketDelete = false,
-            SupportsPublicNotes = true, SupportsPrivateNotes = true, SupportsAttachments = true, SupportsAttachmentDownload = true, SupportsAttachmentSweep = true,
+            SupportsPublicNotes = true, SupportsPrivateNotes = true, SupportsNoteEmailRecipients = true,
+            SupportsAttachments = true, SupportsAttachmentDownload = true, SupportsAttachmentSweep = true,
             SupportsTimeEntries = true, SupportsAssets = false, SupportsContracts = true,
             SupportsHolidayCalendars = true,
             SupportsSlaData = true, SupportsCustomFields = true, SupportsInboundWebhooks = true,
@@ -135,9 +136,18 @@ public sealed class MockConnector : IServiceManagementConnector
         return Task.FromResult<IReadOnlyList<UnifiedTicketNote>>(list);
     }
 
+    /// <summary>The last note request received, so a test can assert what actually reached the
+    /// provider — recipients included, which is the part that must never be wrong.</summary>
+    public UnifiedTicketNoteCreateRequest? LastNoteRequest { get; private set; }
+
+    /// <summary>Seed a contact for the company-scoped recipient tests.</summary>
+    public void AddContact(string externalId, string email, string name, bool isActive = true)
+        => _contacts.Add(new ExternalContact(externalId, email, name, isActive));
+
     public Task<CreateNoteResult> AddPublicNoteAsync(string ticketId, UnifiedTicketNoteCreateRequest note, CancellationToken ct = default)
     {
         Guard();
+        LastNoteRequest = note;
         if (!_tickets.ContainsKey(ticketId))
             throw new ConnectorException(ConnectorFailureKind.NotFound, $"Ticket {ticketId} not found.");
         var id = $"N-{Interlocked.Increment(ref _seq)}";

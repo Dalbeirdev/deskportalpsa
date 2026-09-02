@@ -298,9 +298,25 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyStatus, setReplyStatus] = useState('');
 
+  // Who a public reply reaches. Loaded only for staff writing a public reply — a client has no
+  // business enumerating their colleagues' addresses, and an internal note reaches nobody.
+  const { data: recipients } = useQuery({
+    queryKey: ['ticket-recipients', id],
+    queryFn: () => api.ticketRecipients(id),
+    enabled: isStaff && replyOpen && !replyInternal,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const [emailContact, setEmailContact] = useState(true);
+  const [ccEmails, setCcEmails] = useState<string[]>([]);
+
   const addComment = useMutation({
     mutationFn: async (body: string) => {
-      const note = await api.addComment(id, body, isStaff ? !replyInternal : undefined);
+      const note = await api.addComment(id, body, isStaff ? !replyInternal : undefined,
+        // Recipients ride ONLY on a public reply from staff on a provider that honours them.
+        isStaff && !replyInternal && recipients?.canChooseRecipients
+          ? { emailContact, emailCc: ccEmails }
+          : undefined);
       const sideErrors: string[] = [];
       // Upload after the reply exists, so each file carries its note id all the way to the PSA.
       for (const file of pendingFiles) {
@@ -321,6 +337,9 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
     },
     onSuccess: ({ sideErrors }) => {
       setComment(''); setPendingFiles([]); setReplyHours(''); setReplyStatus(''); setReplyTimeNotes(''); setWorkType(''); setWorkRole('');
+      // Cc is per-reply: carrying a copy list into the NEXT reply is how someone gets mailed
+      // something they were never meant to see. Emailing the contact stays on, as the default.
+      setCcEmails([]); setEmailContact(true);
       // Close on success only. A failed send keeps the dialog — and the text — open, because
       // dropping someone back to a closed launcher with an error elsewhere loses the reply.
       setReplyOpen(false);
@@ -951,6 +970,65 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 {/* No formatting toolbar: the Bold/emoji/link buttons it used to show were wired to
                   nothing — decoration presented as function. Attach lives on the real button below. */}
                 <form onSubmit={(e) => { e.preventDefault(); if (comment.trim()) addComment.mutate(comment.trim()); }} className="rounded-xl border border-[var(--border)] bg-[var(--bg)]">
+                {/* Recipients, above the body as every mail client puts them. Public replies only:
+                    an internal note reaches nobody, so showing addresses there would invite exactly
+                    the mistake this portal must never make. Every name here is a contact of THIS
+                    ticket's customer, read from the PSA — the API re-checks that on send, so a
+                    tampered request is refused rather than filtered. */}
+                {isStaff && !replyInternal && recipients && (
+                  <div className="space-y-1.5 border-b border-[var(--border)] px-4 py-2.5 text-sm">
+                    {!recipients.canChooseRecipients ? (
+                      // The provider owns the decision. Say what it will do rather than offer a
+                      // control that quietly does nothing.
+                      <p className="flex items-start gap-2 text-xs leading-relaxed text-[var(--muted)]">
+                        <Mail size={14} className="mt-0.5 shrink-0" />
+                        <span>
+                          {providerLabel(Number(ticket.provider))} sends this reply to the ticket
+                          contact at <strong className="font-medium text-[var(--fg)]">{recipients.companyName}</strong>,
+                          following its own notification rules. Recipients cannot be chosen here.
+                        </span>
+                      </p>
+                    ) : (
+                      <>
+                        <div className="flex items-baseline gap-3">
+                          <span className="w-8 shrink-0 text-xs font-medium text-[var(--faint)]">To</span>
+                          <label className="inline-flex cursor-pointer items-center gap-2 text-[13px]">
+                            <input type="checkbox" checked={emailContact} onChange={(e) => setEmailContact(e.target.checked)}
+                              className="h-3.5 w-3.5 accent-[color:var(--brand,#14532D)]" />
+                            <span>Ticket contact at <strong className="font-medium">{recipients.companyName}</strong></span>
+                          </label>
+                        </div>
+                        <div className="flex items-baseline gap-3">
+                          <span className="w-8 shrink-0 text-xs font-medium text-[var(--faint)]">Cc</span>
+                          <div className="flex min-w-0 flex-wrap gap-1.5">
+                            {recipients.contacts.length === 0 && (
+                              <span className="text-xs text-[var(--faint)]">No other contacts on this customer.</span>
+                            )}
+                            {recipients.contacts.map((c) => {
+                              const on = ccEmails.includes(c.email);
+                              return (
+                                <button key={c.externalId} type="button"
+                                  aria-pressed={on}
+                                  title={c.email}
+                                  onClick={() => setCcEmails((prev) => on ? prev.filter((e) => e !== c.email) : [...prev, c.email])}
+                                  className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${on
+                                    ? 'border-brand bg-brand-tint text-[var(--fg)] dark:bg-brand/20'
+                                    : 'border-[var(--border)] text-[var(--muted)] hover:border-brand hover:text-[var(--fg)]'}`}>
+                                  {c.name || c.email}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        {!emailContact && ccEmails.length === 0 && (
+                          <p className="pl-11 text-xs text-amber-700 dark:text-amber-300">
+                            Nobody is being emailed — the reply is still posted to the ticket.
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
                 <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} maxLength={4000}
                   onKeyDown={(e) => {
                     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && comment.trim() && !addComment.isPending) {

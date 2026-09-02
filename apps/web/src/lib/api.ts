@@ -109,8 +109,18 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  addComment: (id: string, body: string, isPublic?: boolean) =>
-    request(`/api/tickets/${id}/comments`, TicketNoteResponse, { method: 'POST', body: JSON.stringify({ body, isPublic }) }),
+  addComment: (id: string, body: string, isPublic?: boolean,
+               recipients?: { emailContact: boolean; emailCc: string[] }) =>
+    request(`/api/tickets/${id}/comments`, TicketNoteResponse, {
+      method: 'POST',
+      body: JSON.stringify({ body, isPublic, emailContact: recipients?.emailContact, emailCc: recipients?.emailCc }),
+    }),
+  ticketRecipients: (id: string) =>
+    request(`/api/tickets/${id}/recipients`, z.object({
+      companyName: z.string(),
+      canChooseRecipients: z.boolean(),
+      contacts: z.array(z.object({ externalId: z.string(), name: z.string(), email: z.string() })),
+    })),
   ticketAssignees: (id: string) =>
     request(`/api/tickets/${id}/assignees`, AssigneeOptionsSchema),
   assignTicket: (id: string, body: { technicianExternalId?: string; queueOrBoardId?: string; roleId?: string }) =>
