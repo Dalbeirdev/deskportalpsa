@@ -878,6 +878,10 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
         CreatedAt = t.CreateDate,
         ModifiedAt = t.LastActivityDate,
         ResolvedAt = t.ResolvedDateTime,
+        ClosedAt = t.CompletedDate,
+        // The SLA target where one applies, else the ticket's own due date. Null when Autotask
+        // supplies neither — an absent target is not a met one, so nothing is invented here.
+        SlaDueAt = t.ResolvedDueDateTime ?? t.DueDateTime,
     };
 
     private static string Hmac(string body, string secret)

@@ -94,6 +94,14 @@ internal sealed class AtTicket
     [JsonPropertyName("createDate")] public DateTimeOffset? CreateDate { get; set; }
     [JsonPropertyName("lastActivityDate")] public DateTimeOffset? LastActivityDate { get; set; }
     [JsonPropertyName("resolvedDateTime")] public DateTimeOffset? ResolvedDateTime { get; set; }
+    // Autotask separates "resolved" from "completed": a ticket can be resolved and stay open for
+    // review. completedDate is the closure a throughput metric means.
+    [JsonPropertyName("completedDate")] public DateTimeOffset? CompletedDate { get; set; }
+    // The SLA resolution target. Autotask also exposes firstResponseDueDateTime and
+    // resolutionPlanDueDateTime; this is the one "was it resolved in time" is measured against.
+    [JsonPropertyName("resolvedDueDateTime")] public DateTimeOffset? ResolvedDueDateTime { get; set; }
+    // Falls back to the ticket's own due date where no SLA applies to it.
+    [JsonPropertyName("dueDateTime")] public DateTimeOffset? DueDateTime { get; set; }
 }
 
 internal sealed class AtTicketNote

@@ -121,11 +121,11 @@ public class TicketSyncTests
         var ticket = await db.Tickets.SingleAsync();
 
         // Simulate the portal having just pushed the *next* state (status -> "1"), recording its hash.
-        var portalHash = UpdateHasher.Compute(new Dictionary<string, string?>
-        {
-            ["status"] = "1", ["priority"] = "1", ["category"] = null,
-            ["title"] = "Printer", ["description"] = null,
-        });
+        // Through the SAME canonical function production uses on both sides: a hand-rolled copy here
+        // would pass while echo suppression was broken, which is exactly what it did.
+        var portalHash = UpdateHasher.ForTicketState(
+            status: "1", priority: "1", category: null, title: "Printer", description: null,
+            resolvedAt: null, closedAt: null, slaDueAt: null);
         await events.TryRegisterAsync(new SyncEventRegistration
         {
             MspOrganizationId = Org, PsaConnectionId = Conn, TicketId = ticket.Id,

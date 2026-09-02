@@ -44,14 +44,9 @@ public sealed class TicketSyncService(
         var portalCategory = Map(rules, ctx, "category", incoming.Category) ?? incoming.Category;
         var portalQueue = Map(rules, ctx, "queue", incoming.QueueOrBoard) ?? incoming.QueueOrBoard;
 
-        var hash = UpdateHasher.Compute(new Dictionary<string, string?>
-        {
-            ["status"] = portalStatus,
-            ["priority"] = portalPriority,
-            ["category"] = portalCategory,
-            ["title"] = incoming.Title,
-            ["description"] = incoming.Description,
-        });
+        var hash = UpdateHasher.ForTicketState(
+            portalStatus, portalPriority, portalCategory, incoming.Title, incoming.Description,
+            incoming.ResolvedAt, incoming.ClosedAt, incoming.SlaDueAt);
 
         var existing = await db.Tickets.FirstOrDefaultAsync(
             t => t.PsaConnectionId == psaConnectionId && t.ExternalTicketId == incoming.ExternalId, ct);
@@ -89,6 +84,11 @@ public sealed class TicketSyncService(
         ticket.QueueOrBoard = portalQueue;
         ticket.AssignedTechnicianExternalId = incoming.AssignedTechnicianExternalId;
         ticket.ResolvedAt = incoming.ResolvedAt;
+        ticket.ClosedAt = incoming.ClosedAt;
+        ticket.SlaDueAt = incoming.SlaDueAt;
+        // Only ever set from the provider — never defaulted to "now" when absent, because a
+        // fabricated raise date would make an unknown-age ticket look brand new.
+        ticket.PsaCreatedAt = incoming.CreatedAt;
         ticket.UpdateHash = hash;
         ticket.SyncStatus = TicketSyncStatus.Synced;
         ticket.LastSyncedAt = clock.GetUtcNow();
