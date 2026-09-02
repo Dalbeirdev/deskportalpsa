@@ -156,6 +156,13 @@ public interface IUserAdminService
     /// team/board membership, permission overrides). Blocked on self, exactly like role changes.</summary>
     Task DeleteAsync(Guid userId, CancellationToken ct = default);
 
+    /// <summary>Who this user is in each PSA, with each connection's technician list to choose from.</summary>
+    Task<IReadOnlyList<UserPsaIdentityDto>> PsaIdentitiesAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>Sets who this user is in one PSA so their logged time is attributed to them.
+    /// A null id clears the mapping and returns their time to the connection's default resource.</summary>
+    Task SetPsaIdentityAsync(Guid userId, Guid psaConnectionId, string? externalTechnicianId, string? externalTechnicianName, CancellationToken ct = default);
+
     Task AssignRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default);
     Task RemoveRoleAsync(Guid userId, Guid roleId, CancellationToken ct = default);
 

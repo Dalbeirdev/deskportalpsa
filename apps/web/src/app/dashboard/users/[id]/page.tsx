@@ -53,6 +53,7 @@ const TABS = [
   { key: 'departments', label: 'Departments' },
   { key: 'teams', label: 'Teams' },
   { key: 'boards', label: 'Boards' },
+  { key: 'psa', label: 'PSA identity' },
   { key: 'activity', label: 'Activity' },
   { key: 'security', label: 'Security' },
 ] as const;
@@ -188,6 +189,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
         {tab === 'departments' && <DepartmentsTab userId={id} user={user} departments={departments ?? []} onChanged={refresh} />}
         {tab === 'teams' && <TeamsTab userId={id} user={user} departments={departments ?? []} onChanged={refresh} />}
         {tab === 'boards' && <BoardsTab userId={id} user={user} boards={boards ?? []} onChanged={refresh} />}
+        {tab === 'psa' && <PsaIdentityTab userId={id} />}
         {tab === 'activity' && <ActivityTab entries={activity} loading={activityLoading} error={activityError} />}
         {tab === 'security' && <SecurityTab user={user} />}
       </div>
@@ -496,6 +498,75 @@ function TeamsTab({ userId, user, departments, onChanged }: {
       </div>
       <p className="text-xs text-[var(--muted)]">Teams span every department — pick any of them, not just the primary one.</p>
     </section>
+  );
+}
+
+/**
+ * Who this person is inside each PSA — what their logged time is attributed to.
+ *
+ * One row per connection, because the same technician has a different identifier in every PSA and
+ * the identifiers are not the same kind of value: Autotask takes a numeric resource id, ConnectWise
+ * a member identifier. Unmapped is a legitimate state, and says what it means rather than looking
+ * like something failed: their time goes to the connection's default resource.
+ */
+function PsaIdentityTab({ userId }: { userId: string }) {
+  const qc = useQueryClient();
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['user-psa-identities', userId],
+    queryFn: () => api.userPsaIdentities(userId),
+    retry: false,
+  });
+  const save = useMutation({
+    mutationFn: ({ connectionId, techId }: { connectionId: string; techId: string | null }) =>
+      api.setUserPsaIdentity(userId, connectionId, techId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['user-psa-identities', userId] }),
+  });
+
+  if (isLoading) return <p className="text-sm text-[var(--muted)]">Loading…</p>;
+  if (error) return <p className="text-sm text-red-600 dark:text-red-400">{(error as Error).message}</p>;
+  if (!data?.length) return <p className="text-sm text-[var(--muted)]">No enabled PSA connections.</p>;
+
+  return (
+    <div className="space-y-4">
+      <p className="max-w-prose text-sm text-[var(--muted)]">
+        Time this person logs from the portal is recorded against the resource chosen here. Leave a
+        connection unset and their time is attributed to that connection&rsquo;s default resource instead.
+      </p>
+      <ul className="space-y-3">
+        {data.map((row) => (
+          <li key={row.psaConnectionId}
+            className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+            <span className="w-28 shrink-0 text-sm font-medium">{row.connectionName}</span>
+            {row.technicians.length === 0 ? (
+              <span className="text-xs text-[var(--faint)]">
+                {row.externalTechnicianId
+                  ? `Mapped to ${row.externalTechnicianName ?? row.externalTechnicianId} — technician list unavailable, so it cannot be changed here right now.`
+                  : 'Technician list unavailable from this PSA right now.'}
+              </span>
+            ) : (
+              <select
+                value={row.externalTechnicianId ?? ''}
+                disabled={save.isPending}
+                onChange={(e) => save.mutate({ connectionId: row.psaConnectionId, techId: e.target.value || null })}
+                className="min-w-56 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5 text-sm outline-none focus:border-brand disabled:opacity-50">
+                <option value="">Not mapped — use the connection default</option>
+                {row.technicians.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            )}
+            {row.externalTechnicianId && (
+              <span className="rounded-full bg-brand-tint px-2 py-0.5 text-[11px] font-medium text-brand dark:bg-brand/20">
+                id {row.externalTechnicianId}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+      {save.isError && (
+        <p className="text-sm text-red-600 dark:text-red-400">{(save.error as Error).message}</p>
+      )}
+    </div>
   );
 }
 

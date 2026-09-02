@@ -217,7 +217,8 @@ public sealed class AdminReadController(
     IIntegrationHealthService health,
     IAuditQueryService auditQuery,
     ITicketResyncService resync,
-    IUserAdminService users) : ControllerBase
+    IUserAdminService users,
+    IConnectionAdminService connections) : ControllerBase
 {
     /// <summary>Tickets the portal holds that never reached the PSA — the count and which they are.</summary>
     [HttpGet("tickets/unsynced")]
@@ -388,6 +389,48 @@ public sealed class AdminReadController(
     public async Task<IActionResult> DeleteUser(Guid id, CancellationToken ct)
     { await users.DeleteAsync(id, ct); return NoContent(); }
 
+    /// <summary>
+    /// Who this user is in each PSA — what their logged time is attributed to — with each
+    /// connection's technicians to choose from. Discovery is joined HERE rather than inside the
+    /// user service so that service stays a pure reader of its own tables. A connection whose
+    /// technicians cannot be discovered still appears, with an empty list: the mapping it already
+    /// holds is worth showing even when the picker cannot be filled.
+    /// </summary>
+    [HttpGet("users/{id:guid}/psa-identities")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> PsaIdentities(Guid id, CancellationToken ct)
+    {
+        var rows = await users.PsaIdentitiesAsync(id, ct);
+        var result = new List<object>(rows.Count);
+        foreach (var r in rows)
+            result.Add(new
+            {
+                r.PsaConnectionId, r.ConnectionName, r.ExternalTechnicianId, r.ExternalTechnicianName,
+                technicians = await TechniciansAsync(r.PsaConnectionId, ct),
+            });
+        return Ok(result);
+    }
+
+    [HttpPut("users/{id:guid}/psa-identities/{psaConnectionId:guid}")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> SetPsaIdentity(
+        Guid id, Guid psaConnectionId, [FromBody] SetPsaIdentityRequest input, CancellationToken ct)
+    {
+        // The label is resolved from the provider's OWN list, never taken from the request: the
+        // browser could send a name that does not belong to the id, and the id is what is written.
+        var name = string.IsNullOrWhiteSpace(input.ExternalTechnicianId) ? null
+            : (await TechniciansAsync(psaConnectionId, ct))
+                .FirstOrDefault(t => t.Value == input.ExternalTechnicianId!.Trim())?.Label;
+        await users.SetPsaIdentityAsync(id, psaConnectionId, input.ExternalTechnicianId, name, ct);
+        return NoContent();
+    }
+
+    private async Task<IReadOnlyList<FieldOptionDto>> TechniciansAsync(Guid connectionId, CancellationToken ct)
+    {
+        try { return (await connections.GetFieldsAsync(connectionId, ct)).Technicians; }
+        catch (Exception) { return []; } // discovery down: no picker, but the page still works
+    }
+
     [HttpPost("users/{id:guid}/roles/{roleId:guid}")]
     [RequirePermission(Permissions.UsersManage)]
     public async Task<IActionResult> AssignRole(Guid id, Guid roleId, CancellationToken ct)
@@ -417,6 +460,10 @@ public sealed class AdminReadController(
     [RequirePermission(Permissions.UsersManage)]
     public async Task<IActionResult> RemoveTeam(Guid id, Guid teamId, CancellationToken ct)
     { await users.RemoveTeamAsync(id, teamId, ct); return NoContent(); }
+
+    /// <summary>Null or blank clears the mapping — the user's time returns to the connection default.</summary>
+    public sealed record SetPsaIdentityRequest(
+        [System.ComponentModel.DataAnnotations.StringLength(100)] string? ExternalTechnicianId);
 
     public sealed record SetBoardAccessModeRequest(Desk.Domain.Authorization.BoardAccessMode Mode);
 

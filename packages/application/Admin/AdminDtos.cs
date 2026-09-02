@@ -282,3 +282,14 @@ public sealed record ConnectionSettingsDto(
     string? FilterCompanyIds, string? FilterQueueIds, string? FilterResourceIds, int? FilterActiveWithinDays,
     string? DefaultQueueOrBoardId, string? DefaultTicketType, string? DefaultIssueType, string? DefaultSubIssueType,
     string? DefaultTimeEntryResourceId, string? DefaultTimeEntryRoleId);
+
+/// <summary>
+/// Who a staff user is inside one PSA connection, plus that connection's technicians to pick from.
+/// Per connection because the identifier differs per provider in both value and KIND — Autotask
+/// takes a numeric resourceID, ConnectWise a member identifier string.
+/// </summary>
+public sealed record UserPsaIdentityDto(
+    Guid PsaConnectionId,
+    string ConnectionName,
+    string? ExternalTechnicianId,
+    string? ExternalTechnicianName);

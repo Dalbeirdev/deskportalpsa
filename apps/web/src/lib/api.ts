@@ -350,6 +350,17 @@ export const api = {
     request(`/api/admin/users/${id}/teams/${teamId}`, z.void(), { method: 'DELETE' }),
   setUserBoardAccessMode: (id: string, mode: number) =>
     request(`/api/admin/users/${id}/board-access`, z.void(), { method: 'PUT', body: JSON.stringify({ mode }) }),
+  userPsaIdentities: (id: string) =>
+    request(`/api/admin/users/${id}/psa-identities`, z.array(z.object({
+      psaConnectionId: z.string(),
+      connectionName: z.string(),
+      externalTechnicianId: z.string().nullable(),
+      externalTechnicianName: z.string().nullable(),
+      technicians: z.array(z.object({ value: z.string(), label: z.string() })),
+    }))),
+  setUserPsaIdentity: (id: string, psaConnectionId: string, externalTechnicianId: string | null) =>
+    request(`/api/admin/users/${id}/psa-identities/${psaConnectionId}`, z.void(),
+      { method: 'PUT', body: JSON.stringify({ externalTechnicianId }) }),
   setUserBoardGrant: (id: string, body: { psaConnectionId: string; boardName: string; actions: number }) =>
     request(`/api/admin/users/${id}/board-grants`, z.void(), { method: 'PUT', body: JSON.stringify(body) }),
   removeUserBoardGrant: (id: string, psaConnectionId: string, boardName: string) =>

@@ -79,6 +79,76 @@ public sealed class UserAdminService(
     DeskDbContext db, IAuditWriter audit, ITenantContext tenant, ICurrentUser currentUser,
     IObjectStorage storage, IEffectivePermissionService permissions, TimeProvider clock) : IUserAdminService
 {
+    /// <summary>
+    /// This user's identity in each PSA, one row per connection, with that connection's technician
+    /// list so the caller can offer a choice instead of asking for a raw provider id.
+    /// A connection whose technicians cannot be discovered still appears, with an empty list — the
+    /// mapping it already holds is worth showing even when the picker cannot be filled.
+    /// </summary>
+    public async Task<IReadOnlyList<UserPsaIdentityDto>> PsaIdentitiesAsync(Guid userId, CancellationToken ct = default)
+    {
+        _ = await db.AppUsers.AsNoTracking().FirstOrDefaultAsync(
+            u => u.Id == userId && u.MspOrganizationId == tenant.OrganizationId, ct)
+            ?? throw new NotFoundException("User");
+
+        var conns = await db.PsaConnections.AsNoTracking()
+            .Where(c => c.IsEnabled).OrderBy(c => c.Name)
+            .Select(c => new { c.Id, c.Name }).ToListAsync(ct);
+        var held = await db.UserPsaIdentities.AsNoTracking()
+            .Where(i => i.AppUserId == userId).ToListAsync(ct);
+
+        return conns.Select(c =>
+        {
+            var mine = held.FirstOrDefault(i => i.PsaConnectionId == c.Id);
+            return new UserPsaIdentityDto(c.Id, c.Name, mine?.ExternalTechnicianId, mine?.ExternalTechnicianName);
+        }).ToList();
+    }
+
+    public async Task SetPsaIdentityAsync(Guid userId, Guid psaConnectionId, string? externalTechnicianId, string? externalTechnicianName, CancellationToken ct = default)
+    {
+        var user = await db.AppUsers.FirstOrDefaultAsync(
+            u => u.Id == userId && u.MspOrganizationId == tenant.OrganizationId, ct)
+            ?? throw new NotFoundException("User");
+        var connection = await db.PsaConnections.FirstOrDefaultAsync(c => c.Id == psaConnectionId, ct)
+            ?? throw new NotFoundException("PSA connection");
+
+        var row = await db.UserPsaIdentities
+            .FirstOrDefaultAsync(i => i.AppUserId == userId && i.PsaConnectionId == psaConnectionId, ct);
+        var id = string.IsNullOrWhiteSpace(externalTechnicianId) ? null : externalTechnicianId.Trim();
+
+        if (id is null)
+        {
+            if (row is not null) db.UserPsaIdentities.Remove(row);
+        }
+        else
+        {
+            // The caller resolves the label from the provider's own discovery; only the ID is
+            // ever written to the PSA, so a missing or stale label is cosmetic.
+            var name = string.IsNullOrWhiteSpace(externalTechnicianName) ? null : externalTechnicianName.Trim();
+
+            if (row is null)
+            {
+                db.UserPsaIdentities.Add(new Desk.Domain.Identity.UserPsaIdentity
+                {
+                    MspOrganizationId = user.MspOrganizationId ?? tenant.OrganizationId ?? Guid.Empty,
+                    AppUserId = userId,
+                    PsaConnectionId = psaConnectionId,
+                    ExternalTechnicianId = id,
+                    ExternalTechnicianName = name,
+                });
+            }
+            else
+            {
+                row.ExternalTechnicianId = id;
+                row.ExternalTechnicianName = name;
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+        await audit.WriteAsync("user.psa-identity.set", "AppUser", userId.ToString(),
+            new { connection = connection.Name, psaConnectionId, externalTechnicianId = id }, ct);
+    }
+
     // Only roles this page may hand out. Client roles belong to client-user management; the
     // platform role is cross-tenant and must never be assignable from inside a tenant.
     private static readonly RoleType[] StaffRoleTypes =
