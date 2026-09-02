@@ -140,6 +140,10 @@ public sealed class MockConnector : IServiceManagementConnector
     /// provider — recipients included, which is the part that must never be wrong.</summary>
     public UnifiedTicketNoteCreateRequest? LastNoteRequest { get; private set; }
 
+    /// <summary>Seed a technician, for the PSA-provisioning tests.</summary>
+    public void AddTechnician(string externalId, string email, string name, bool isActive = true)
+        => _techs.Add(new ExternalTechnician(externalId, email, name, isActive));
+
     /// <summary>Seed a contact for the company-scoped recipient tests.</summary>
     public void AddContact(string externalId, string email, string name, bool isActive = true)
         => _contacts.Add(new ExternalContact(externalId, email, name, isActive));

@@ -185,6 +185,14 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
             query["conditions"] = string.Join(" and ", conditions);
 
         var items = await GetListAsync<CwTicket>("service/tickets", query, ct);
+
+        // TEMPORARY DIAGNOSTIC — remove once the date field names are known.
+        // Ticket raise/closure dates come back null however they are read, and a null is
+        // indistinguishable from a ticket that genuinely has no date, so the shape has to be
+        // observed rather than guessed at a third time. Logs FIELD NAMES ONLY, never values, so no
+        // customer data reaches the log. Once per process, so it cannot flood.
+        await LogTicketShapeOnceAsync(query, ct);
+
         return new PaginatedResult<UnifiedTicket>(items.Select(ToUnified).ToList(), null, false);
     }
 
@@ -558,6 +566,46 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
     }
 
     private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max];
+
+    private static bool _shapeLogged;
+
+    /// <summary>TEMPORARY. Serilog owns stdout here and the connector has no ILogger, so the probe
+    /// writes to a file instead. Names only — never values.</summary>
+    private static void Probe(string line)
+    {
+        try { File.AppendAllLines("/tmp/cw-shape.txt", [$"{DateTimeOffset.UtcNow:O} {line}"]); }
+        catch { /* a diagnostic must never break a sync */ }
+    }
+
+    /// <summary>TEMPORARY. Names of the fields ConnectWise actually returns on a ticket. Delete with
+    /// its call site once the date fields are mapped.</summary>
+    private async Task LogTicketShapeOnceAsync(Dictionary<string, string> query, CancellationToken ct)
+    {
+        if (_shapeLogged) return;
+        _shapeLogged = true;
+        try
+        {
+            var probe = new Dictionary<string, string>(query) { ["pageSize"] = "1" };
+            var raw = await SendAsync<System.Text.Json.JsonElement>(
+                HttpMethod.Get, BuildPath("service/tickets", probe), null, ct);
+            if (raw.ValueKind != System.Text.Json.JsonValueKind.Array || raw.GetArrayLength() == 0) return;
+
+            var t = raw[0];
+            var names = t.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal);
+            Probe($"ticket fields: {string.Join(", ", names)}");
+
+            if (t.TryGetProperty("_info", out var info) && info.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                var infoNames = info.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal);
+                Probe($"_info fields: {string.Join(", ", infoNames)}");
+            }
+        }
+        catch (Exception ex)
+        {
+            // A diagnostic must never break a sync.
+            Probe($"probe failed: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
 
     private async Task<List<T>> GetListAsync<T>(string path, Dictionary<string, string> query, CancellationToken ct)
         => await SendAsync<List<T>>(HttpMethod.Get, BuildPath(path, query), null, ct) ?? [];
