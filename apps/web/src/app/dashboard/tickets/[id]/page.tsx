@@ -448,7 +448,11 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
             {/* Properties left, work centre. The eight-field grid used to sit full-width above
                 everything, pushing the conversation — the thing being worked — below the fold. As a
                 rail it is glanceable and stops competing with the thread. */}
-            <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)_320px] lg:items-start">
+            {/* Three columns from `lg`, not `xl`. Waiting for 1280px meant a 1366 laptop at the
+                Windows default 125% scaling reports ~1090 CSS pixels and never reached it, so the
+                assistant dropped below the thread on the machines it is actually used on. The
+                side rails give up width at `lg` so the thread keeps a workable measure. */}
+            <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)_270px] xl:grid-cols-[300px_minmax(0,1fr)_330px] lg:items-start">
             <aside className="space-y-4 lg:sticky lg:top-4">
             {/* Ticket card */}
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
@@ -833,19 +837,6 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   </button>
                 )}
               </div>
-
-            {/* Assistant. Renders nothing unless the organization has switched it on, so a tenant
-                that has not opted in never sees a panel it cannot use. */}
-            {isStaff && (
-              <div className="lg:sticky lg:top-4">
-                <AssistantRail
-                  ticketId={id}
-                  draft={comment}
-                  onUseDraft={(text) => { setComment(text); setReplyOpen(true); }}
-                  canConfigure={canManageConnections}
-                />
-              </div>
-            )}
             </div>
 
             {/* Attachments */}
@@ -900,6 +891,22 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 e.target.value = '';
               }} />
             </div>
+
+            {/* Assistant — the grid's THIRD column, a sibling of the properties rail and the work
+                centre. It used to sit INSIDE the conversation card, which is why it rendered under
+                the thread and could never reach the right-hand rail however wide the window got:
+                an element nested two levels down cannot become a column of the grid above it.
+                Renders nothing unless the organization has switched it on. */}
+            {isStaff && (
+              <div className="lg:sticky lg:top-4">
+                <AssistantRail
+                  ticketId={id}
+                  draft={comment}
+                  onUseDraft={(text) => { setComment(text); setReplyOpen(true); }}
+                  canConfigure={canManageConnections}
+                />
+              </div>
+            )}
             </div>
             {/* Reply dialog. The composer keeps every capability it had inline — public/internal,
                 hours, status, attachments — but a dialog gives it the focus a long thread denied it.
