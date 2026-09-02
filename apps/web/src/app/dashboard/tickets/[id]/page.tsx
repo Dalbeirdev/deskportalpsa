@@ -453,7 +453,11 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 assistant dropped below the thread on the machines it is actually used on. The
                 side rails give up width at `lg` so the thread keeps a workable measure. */}
             <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)_270px] xl:grid-cols-[300px_minmax(0,1fr)_330px] lg:items-start">
-            <aside className="space-y-4 lg:sticky lg:top-4">
+            {/* Both rails are given the SAME height — one screen, less the top offset — so the two
+                sides of the ticket line up instead of one ending halfway up the other. Each scrolls
+                inside itself rather than stretching to the thread's height, which on a sixteen
+                message ticket would be several screens of empty rail. */}
+            <aside className="space-y-4 lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:overflow-y-auto">
             {/* Ticket card */}
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -898,7 +902,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 an element nested two levels down cannot become a column of the grid above it.
                 Renders nothing unless the organization has switched it on. */}
             {isStaff && (
-              <div className="lg:sticky lg:top-4">
+              <div className="lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)]">
                 <AssistantRail
                   ticketId={id}
                   draft={comment}
