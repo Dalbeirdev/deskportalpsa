@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Sparkles, AlignLeft, PenLine, Wand2, Target, AlertCircle, Search, Copy, Check } from 'lucide-react';
+import Link from 'next/link';
+import { Sparkles, AlignLeft, PenLine, Wand2, Target, AlertCircle, Search, Copy, Check, ArrowRight } from 'lucide-react';
 import { api } from '@/lib/api';
 
 /**
@@ -24,12 +25,14 @@ const ACTIONS: Action[] = [
   { key: 'SimilarTickets', icon: Search, label: 'Find similar tickets' },
 ];
 
-export function AssistantRail({ ticketId, draft, onUseDraft }: {
+export function AssistantRail({ ticketId, draft, onUseDraft, canConfigure = false }: {
   ticketId: string;
   /** The technician's current composer text — what "Improve this draft" works on. */
   draft: string;
   /** Puts drafted text into the composer. The person still sends it. */
   onUseDraft: (text: string) => void;
+  /** Whether this person can actually switch the assistant on (connections.manage). */
+  canConfigure?: boolean;
 }) {
   const [active, setActive] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -45,9 +48,31 @@ export function AssistantRail({ ticketId, draft, onUseDraft }: {
     mutationFn: (action: string) => api.assistantAsk(ticketId, action, action === 'ImproveDraft' ? draft : undefined),
   });
 
-  // Absent rather than broken: an organization that has not switched this on should not be shown a
-  // panel it cannot use.
-  if (!availability?.enabled) return null;
+  // Not switched on. For a technician the panel stays absent — a dead control they cannot fix is
+  // worse than nothing. For someone who CAN switch it on, silence was the problem: a feature that
+  // renders nothing is indistinguishable from a feature that failed to deploy, and the API already
+  // says exactly what is missing, so say it and link to the page that fixes it.
+  if (!availability?.enabled) {
+    if (!canConfigure) return null;
+    return (
+      <aside className="rounded-xl border border-dashed border-indigo-200 bg-[var(--surface)] p-4 dark:border-indigo-900/60">
+        <div className="flex items-center gap-2">
+          <Sparkles size={15} className="text-indigo-600 dark:text-indigo-300" />
+          <h2 className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">Assistant</h2>
+          <span className="ml-auto rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--faint)]">
+            Not set up
+          </span>
+        </div>
+        <p className="mt-2 text-[13px] leading-relaxed text-[var(--muted)]">
+          {availability?.reason ?? 'The assistant is switched off for this organization.'}
+        </p>
+        <Link href="/dashboard/assistant"
+          className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50 dark:border-indigo-900/60 dark:text-indigo-300 dark:hover:bg-indigo-950/40">
+          Set up the assistant <ArrowRight size={13} />
+        </Link>
+      </aside>
+    );
+  }
 
   const answer = ask.data;
 

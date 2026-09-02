@@ -287,6 +287,9 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   // Provider 2 = Autotask, which rejects a time entry whose summary notes are blank.
   const notesRequired = Number(ticket?.provider) === 2;
   const canUpdate = me?.permissions.includes('tickets.update') ?? false;
+  // Same key the Assistant settings page and its nav entry demand — only someone holding it can
+  // act on a "not set up" prompt, so only they are shown one.
+  const canManageConnections = me?.permissions.includes('connections.manage') ?? false;
   // Clients reply too — this is the one composer capability they keep, so it is gated on the
   // note permission rather than on being staff.
   const canReply = me?.permissions.includes('tickets.note.public.add') ?? false;
@@ -839,6 +842,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   ticketId={id}
                   draft={comment}
                   onUseDraft={(text) => { setComment(text); setReplyOpen(true); }}
+                  canConfigure={canManageConnections}
                 />
               </div>
             )}
