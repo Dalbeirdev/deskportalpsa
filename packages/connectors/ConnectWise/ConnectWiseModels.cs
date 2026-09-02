@@ -67,6 +67,21 @@ internal sealed class CwTicket
     // ConnectWise keeps SLA targets on the SLA entity, not the ticket; requiredDate is the dated
     // commitment the ticket itself carries, so it is what "was this late" can be judged against.
     [JsonPropertyName("requiredDate")] public DateTimeOffset? RequiredDate { get; set; }
+    // ConnectWise returns housekeeping timestamps in an "_info" sub-object on several entities, and
+    // inconsistently also at the top level. Read both and take whichever is present rather than
+    // betting on one: a null here is indistinguishable from a ticket with no date, so guessing wrong
+    // would look exactly like working correctly.
+    [JsonPropertyName("_info")] public CwTicketInfo? Info { get; set; }
+
+    public DateTimeOffset? RaisedAt => DateEntered ?? Info?.DateEntered;
+    public DateTimeOffset? ClosedAtAny => ClosedDate ?? Info?.ClosedDate;
+}
+
+internal sealed class CwTicketInfo
+{
+    [JsonPropertyName("dateEntered")] public DateTimeOffset? DateEntered { get; set; }
+    [JsonPropertyName("closedDate")] public DateTimeOffset? ClosedDate { get; set; }
+    [JsonPropertyName("lastUpdated")] public DateTimeOffset? LastUpdated { get; set; }
 }
 
 internal sealed class CwTicketNote
