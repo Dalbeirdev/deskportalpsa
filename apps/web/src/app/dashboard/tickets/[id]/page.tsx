@@ -207,7 +207,10 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [assignOpen, setAssignOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [oldestFirst, setOldestFirst] = useState(true);
+  // Newest at the top. A ticket is opened to find out where it stands now, and the current state
+  // was the last thing on screen. It also puts the older history below the "show earlier" button
+  // rather than above it, so the thread reads outward from the present in one direction.
+  const [oldestFirst, setOldestFirst] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [workType, setWorkType] = useState('');
   const [workRole, setWorkRole] = useState('');
