@@ -15,16 +15,20 @@ public sealed class TechnicianMetricsService(DeskDbContext db, IProductivityScor
 
     private async Task<List<Row>> LoadAsync(MetricsFilter f, CancellationToken ct)
     {
+        // Date filters and ticket age both run off the PSA's raise date, falling back to the row's
+        // own timestamp only where the provider gave none. Using the row timestamp as the primary
+        // measured from the day the portal IMPORTED the ticket — so a two-month-old ticket looked
+        // hours old, and "average resolution time" quietly reported the rollout, not the service.
         var q = db.Tickets.AsNoTracking().AsQueryable();
-        if (f.From is { } from) q = q.Where(t => t.CreatedAt >= from);
-        if (f.To is { } to) q = q.Where(t => t.CreatedAt <= to);
+        if (f.From is { } from) q = q.Where(t => (t.PsaCreatedAt ?? t.CreatedAt) >= from);
+        if (f.To is { } to) q = q.Where(t => (t.PsaCreatedAt ?? t.CreatedAt) <= to);
         if (f.TechnicianExternalId is { } tech) q = q.Where(t => t.AssignedTechnicianExternalId == tech);
         if (f.ClientCompanyId is { } company) q = q.Where(t => t.ClientCompanyId == company);
         if (f.PsaConnectionId is { } conn) q = q.Where(t => t.PsaConnectionId == conn);
         if (f.Priority is { } prio) q = q.Where(t => t.PortalPriority == prio);
 
         return await q.Select(t => new Row(
-            t.Id, t.AssignedTechnicianExternalId, t.CreatedAt, t.ResolvedAt, t.ClosedAt, t.SlaDueAt,
+            t.Id, t.AssignedTechnicianExternalId, t.PsaCreatedAt ?? t.CreatedAt, t.ResolvedAt, t.ClosedAt, t.SlaDueAt,
             t.TimeWorkedHours, t.BillableHours, t.NonBillableHours,
             t.Notes.Any(n => n.IsPublic))).ToListAsync(ct);
     }

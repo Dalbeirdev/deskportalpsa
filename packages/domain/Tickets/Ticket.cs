@@ -41,6 +41,15 @@ public class Ticket : TenantEntity
     /// <summary>Display name for the assignee, resolved on sync so reads never call the provider.</summary>
     public string? AssignedTechnicianName { get; set; }
 
+    /// <summary>
+    /// When the PSA says the ticket was RAISED — distinct from <see cref="BaseEntity.CreatedAt"/>,
+    /// which is when this row was first written and therefore when the portal happened to import it.
+    /// Every metric about ticket age or resolution time must use this one: measuring from the import
+    /// date silently reports the portal's own rollout as the customer's wait.
+    /// Null for a ticket whose provider did not supply a creation date.
+    /// </summary>
+    public DateTimeOffset? PsaCreatedAt { get; set; }
+
     // SLA & time
     public DateTimeOffset? SlaDueAt { get; set; }
     public DateTimeOffset? ResolvedAt { get; set; }

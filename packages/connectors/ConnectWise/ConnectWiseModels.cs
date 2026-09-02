@@ -60,6 +60,13 @@ internal sealed class CwTicket
     [JsonPropertyName("owner")] public CwRef? Owner { get; set; }
     [JsonPropertyName("lastUpdated")] public DateTimeOffset? LastUpdated { get; set; }
     [JsonPropertyName("dateResolved")] public DateTimeOffset? DateResolved { get; set; }
+    // When the ticket was raised. Distinct from the portal's own row-creation timestamp, which is
+    // only ever the date this ticket happened to be imported.
+    [JsonPropertyName("dateEntered")] public DateTimeOffset? DateEntered { get; set; }
+    [JsonPropertyName("closedDate")] public DateTimeOffset? ClosedDate { get; set; }
+    // ConnectWise keeps SLA targets on the SLA entity, not the ticket; requiredDate is the dated
+    // commitment the ticket itself carries, so it is what "was this late" can be judged against.
+    [JsonPropertyName("requiredDate")] public DateTimeOffset? RequiredDate { get; set; }
 }
 
 internal sealed class CwTicketNote

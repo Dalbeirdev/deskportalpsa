@@ -290,11 +290,9 @@ public sealed class TicketCommandService(
         return r.Resolved ? r.Value : value; // passthrough when unmapped
     }
 
-    private static string HashOf(Ticket t) => UpdateHasher.Compute(new Dictionary<string, string?>
-    {
-        ["status"] = t.PortalStatus, ["priority"] = t.PortalPriority, ["category"] = t.PortalCategory,
-        ["title"] = t.Title, ["description"] = t.Description,
-    });
+    private static string HashOf(Ticket t) => UpdateHasher.ForTicketState(
+        t.PortalStatus, t.PortalPriority, t.PortalCategory, t.Title, t.Description,
+        t.ResolvedAt, t.ClosedAt, t.SlaDueAt);
 
     private Task RecordPortalEventAsync(Guid org, Guid connId, Ticket ticket, string idemKey, string eventType, CancellationToken ct)
         => syncEvents.TryRegisterAsync(new SyncEventRegistration

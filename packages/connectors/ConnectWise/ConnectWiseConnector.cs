@@ -738,7 +738,11 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         RequesterExternalId = t.Company?.Id.ToString(),
         CompanyName = t.Company?.Name,
         ModifiedAt = t.LastUpdated,
+        // Was never mapped: without it the portal recorded its own import date as the ticket's age.
+        CreatedAt = t.DateEntered,
         ResolvedAt = t.DateResolved,
+        ClosedAt = t.ClosedDate,
+        SlaDueAt = t.RequiredDate,
     };
 
     private static string Hmac(string body, string secret)
