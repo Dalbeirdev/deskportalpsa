@@ -737,11 +737,11 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         AssignedTechnicianExternalId = t.Owner?.Id.ToString(),
         RequesterExternalId = t.Company?.Id.ToString(),
         CompanyName = t.Company?.Name,
-        ModifiedAt = t.LastUpdated,
+        ModifiedAt = t.LastUpdated ?? t.Info?.LastUpdated,
         // Was never mapped: without it the portal recorded its own import date as the ticket's age.
-        CreatedAt = t.DateEntered,
+        CreatedAt = t.RaisedAt,
         ResolvedAt = t.DateResolved,
-        ClosedAt = t.ClosedDate,
+        ClosedAt = t.ClosedAtAny,
         SlaDueAt = t.RequiredDate,
     };
 
