@@ -174,9 +174,9 @@ export const api = {
   // Assistant. Availability is asked first so the rail can explain itself rather than fail on click.
   assistantAvailability: () =>
     request('/api/assistant/availability', z.object({ enabled: z.boolean(), reason: z.string().nullable() })),
-  assistantAsk: (ticketId: string, action: string, draft?: string) =>
+  assistantAsk: (ticketId: string, action: string, draft?: string, question?: string) =>
     request(`/api/assistant/tickets/${ticketId}`, z.object({ text: z.string(), isDraft: z.boolean() }),
-      { method: 'POST', body: JSON.stringify({ action, draft }) }),
+      { method: 'POST', body: JSON.stringify({ action, draft, question }) }),
   assistantSettings: () =>
     request('/api/assistant/settings', z.object({
       isEnabled: z.boolean(), model: z.string(), includeInternalNotes: z.boolean(), hasKey: z.boolean(),

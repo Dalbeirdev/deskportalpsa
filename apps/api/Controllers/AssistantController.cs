@@ -49,7 +49,7 @@ public sealed class AssistantController(
         _ = await scopeQuery.FindAsync(db.Tickets, id, uid, Permissions.TicketsViewAll, ct)
             ?? throw new NotFoundException("Ticket");
 
-        var answer = await assistant.AskAsync(id, action, req.Draft, ct);
+        var answer = await assistant.AskAsync(id, action, req.Draft, req.Question, ct);
         return Ok(answer);
     }
 
@@ -103,7 +103,10 @@ public sealed class AssistantController(
 
     public sealed record AskRequest(
         [Required] string Action,
-        [StringLength(6000)] string? Draft);
+        [StringLength(6000)] string? Draft,
+        // Capped well below the draft: this is one question about one ticket, not a channel for
+        // pushing arbitrary text through the model on the tenant's key.
+        [StringLength(2000)] string? Question = null);
 
     public sealed record SettingsRequest(
         bool IsEnabled,

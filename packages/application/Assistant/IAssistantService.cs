@@ -9,6 +9,12 @@ public enum AssistantAction
     NextSteps,
     ExplainError,
     SimilarTickets,
+    /// <summary>
+    /// The technician's own question about this ticket. The six fixed actions cover the common
+    /// asks; this covers the rest without a code change every time someone wants something new.
+    /// Still scoped to the one ticket — the question rides on the same context, never replaces it.
+    /// </summary>
+    Ask,
 }
 
 /// <summary>
@@ -27,9 +33,10 @@ public interface IAssistantService
 
     /// <summary>
     /// Answers one question about one ticket. <paramref name="draft"/> carries the technician's own
-    /// text for <see cref="AssistantAction.ImproveDraft"/> and is ignored otherwise.
+    /// text for <see cref="AssistantAction.ImproveDraft"/> and is ignored otherwise;
+    /// <paramref name="question"/> carries it for <see cref="AssistantAction.Ask"/>.
     /// </summary>
-    Task<AssistantAnswer> AskAsync(Guid ticketId, AssistantAction action, string? draft, CancellationToken ct = default);
+    Task<AssistantAnswer> AskAsync(Guid ticketId, AssistantAction action, string? draft, string? question = null, CancellationToken ct = default);
 }
 
 /// <summary>The model call itself, kept behind an interface so the provider can change.</summary>
