@@ -18,6 +18,9 @@ import type { TicketDetail } from '@/lib/types';
 /// the list expanded wants it expanded on every ticket, not once per ticket id.
 const TIME_PANEL_KEY = 'desk.ticket.timeEntries.open';
 
+/// How many of the most recent messages a long thread opens on.
+const RECENT_NOTE_COUNT = 4;
+
 const STATUS_TONE: Record<string, string> = {
   NEW: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
   IN_PROGRESS: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
@@ -216,6 +219,9 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   // The stored preference is read AFTER mount — reading localStorage during render makes server
   // and client disagree about the first paint, which React resolves by discarding the markup.
   const [timeOpen, setTimeOpen] = useState(false);
+  // Reset per ticket rather than remembered: opening a ticket is when you want the current state,
+  // and a preference to see all sixteen on one ticket says nothing about the next one.
+  const [showAllNotes, setShowAllNotes] = useState(false);
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(TIME_PANEL_KEY);
@@ -418,6 +424,19 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
 
         const convo = [...ticket.conversation].sort((a, b) =>
           (oldestFirst ? 1 : -1) * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()));
+
+        // Long threads open on the latest few; the rest are one click away. A sixteen-message
+        // history is reference material, and scrolling past all of it to reach the current state
+        // is the wrong default.
+        //
+        // "Latest" means most RECENT, which is not a fixed end of the list: sorted oldest-first the
+        // newest messages are at the BOTTOM, newest-first they are at the TOP. Slicing the same end
+        // in both would quietly show the four OLDEST in one of them.
+        const hiddenNotes = Math.max(0, convo.length - RECENT_NOTE_COUNT);
+        const notesCollapsed = !showAllNotes && hiddenNotes > 0;
+        const visibleConvo = notesCollapsed
+          ? (oldestFirst ? convo.slice(-RECENT_NOTE_COUNT) : convo.slice(0, RECENT_NOTE_COUNT))
+          : convo;
         return (
           <>
             {/* Properties left, work centre. The eight-field grid used to sit full-width above
@@ -705,7 +724,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
 
               <div className="space-y-4 px-5 py-4">
                 {convo.length === 0 && <p className="rounded-lg border border-dashed border-[var(--border)] p-4 text-sm text-[var(--muted)]">No public replies yet.</p>}
-                {convo.map((n, i) => {
+                {visibleConvo.map((n, i) => {
                   // Chat layout: the client's messages sit LEFT, everything from the MSP side sits
                   // RIGHT — direction is readable before a single word is. Coloring stays semantic,
                   // not per-author rainbow: client neutral, staff replies brand-tinted, internal
@@ -732,7 +751,9 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                     : n.timeEntryBillable == null ? null : n.timeEntryBillable ? 'Billable' : 'Do not bill';
                   // The rail only bridges to the NEXT message when it is from the same side, so
                   // each burst of consecutive messages reads as one connected thread segment.
-                  const nextSameSide = convo[i + 1] !== undefined && convo[i + 1].authoredByClient === n.authoredByClient;
+                  // Looks ahead in what is RENDERED, not the full thread: keyed off `convo` the last
+                  // visible message would grow a rail bridging to something that is not on screen.
+                  const nextSameSide = visibleConvo[i + 1] !== undefined && visibleConvo[i + 1].authoredByClient === n.authoredByClient;
                   return (
                   <div key={n.id} className={`flex gap-3 ${incoming ? '' : 'flex-row-reverse'}`}>
                     {/* Identity column: who spoke, stated once beside the bubble — avatar, name,
@@ -792,6 +813,19 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   );
                 })}
 
+                {/* At the foot of the thread in both sort orders. What is hidden is always the
+                    OLDEST part of the history, so "earlier" is accurate either way — and it says
+                    what you get rather than making you count. */}
+                {hiddenNotes > 0 && (
+                  <button type="button" onClick={() => setShowAllNotes((v) => !v)}
+                    aria-expanded={showAllNotes}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border)] px-4 py-2.5 text-sm font-medium text-[var(--muted)] hover:border-brand hover:bg-brand/5 hover:text-brand">
+                    <ChevronDown size={14} aria-hidden className={showAllNotes ? 'rotate-180' : ''} />
+                    {showAllNotes
+                      ? `Show latest ${RECENT_NOTE_COUNT} only`
+                      : `Show ${hiddenNotes} earlier ${hiddenNotes === 1 ? 'note' : 'notes'}`}
+                  </button>
+                )}
               </div>
 
             {/* Assistant. Renders nothing unless the organization has switched it on, so a tenant
