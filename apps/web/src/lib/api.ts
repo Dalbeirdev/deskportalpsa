@@ -350,6 +350,21 @@ export const api = {
     request(`/api/admin/users/${id}/teams/${teamId}`, z.void(), { method: 'DELETE' }),
   setUserBoardAccessMode: (id: string, mode: number) =>
     request(`/api/admin/users/${id}/board-access`, z.void(), { method: 'PUT', body: JSON.stringify({ mode }) }),
+  psaTechnicians: (psaConnectionId: string) =>
+    request(`/api/admin/psa-technicians/${psaConnectionId}`, z.array(z.object({
+      externalId: z.string(),
+      name: z.string(),
+      email: z.string(),
+      isActive: z.boolean(),
+      link: z.number(),            // 0 not in portal, 1 matched by email, 2 linked
+      portalUserId: z.string().nullable(),
+      canProvision: z.boolean(),
+      blocker: z.string().nullable(),
+    }))),
+  provisionTechnician: (psaConnectionId: string, externalTechnicianId: string) =>
+    request(`/api/admin/psa-technicians/${psaConnectionId}/${encodeURIComponent(externalTechnicianId)}`,
+      z.object({ id: z.string(), email: z.string(), displayName: z.string() }).passthrough(),
+      { method: 'POST' }),
   userPsaIdentities: (id: string) =>
     request(`/api/admin/users/${id}/psa-identities`, z.array(z.object({
       psaConnectionId: z.string(),

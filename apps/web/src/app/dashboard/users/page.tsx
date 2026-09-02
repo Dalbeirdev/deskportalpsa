@@ -125,6 +125,94 @@ const BOARD_MODES: { value: number; label: string }[] = [
   { value: BAM.None, label: 'None' },
 ];
 
+/**
+ * Bringing PSA technicians into the portal.
+ *
+ * Deliberately one confirmed decision at a time. A PSA's resource list carries API users, service
+ * accounts and people who have left, and anything created here becomes a real login — so this
+ * screen shows suggestions and their current state, and an administrator picks.
+ */
+function ImportFromPsaDrawer({ open, onClose, onChanged }: { open: boolean; onClose: () => void; onChanged: () => void }) {
+  const [connectionId, setConnectionId] = useState('');
+  const { data: connections } = useQuery({
+    queryKey: ['connections'], queryFn: api.connections, enabled: open, retry: false,
+  });
+  const chosen = connectionId || connections?.[0]?.id || '';
+  const { data: techs, isLoading, error, refetch } = useQuery({
+    queryKey: ['psa-technicians', chosen],
+    queryFn: () => api.psaTechnicians(chosen),
+    enabled: open && !!chosen,
+    retry: false,
+  });
+  const provision = useMutation({
+    mutationFn: (externalId: string) => api.provisionTechnician(chosen, externalId),
+    onSuccess: () => { refetch(); onChanged(); },
+  });
+
+  if (!open) return null;
+
+  return (
+    <DrawerShell title="Import from PSA" onClose={onClose}>
+      <p className="text-sm text-[var(--muted)]">
+        Technicians as your PSA lists them. Adding someone creates their portal account and maps it
+        to their PSA identity, so time they log is attributed to them rather than the connection default.
+      </p>
+      <p className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs leading-relaxed text-[var(--muted)]">
+        They will also need a sign-in account in your identity provider. The portal binds the two by
+        verified email the first time they log in.
+      </p>
+
+      {(connections?.length ?? 0) > 1 && (
+        <label className="block text-sm">
+          <span className="mb-1 block font-medium">Connection</span>
+          <select value={chosen} onChange={(e) => setConnectionId(e.target.value)}
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-brand">
+            {connections!.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+      )}
+
+      {isLoading && <p className="text-sm text-[var(--muted)]">Reading technicians from the PSA…</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{(error as Error).message}</p>}
+      {provision.isError && (
+        <p className="text-sm text-red-600 dark:text-red-400">{(provision.error as Error).message}</p>
+      )}
+
+      <ul className="space-y-2">
+        {techs?.map((t) => (
+          <li key={t.externalId}
+            className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{t.name || t.email || t.externalId}</p>
+              <p className="truncate text-xs text-[var(--muted)]">{t.email || 'No email in the PSA'}</p>
+              {t.blocker && <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-300">{t.blocker}</p>}
+            </div>
+            {!t.isActive && (
+              <span className="rounded bg-slate-200/70 px-1.5 py-0.5 text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                Inactive in PSA
+              </span>
+            )}
+            {t.link === 2 ? (
+              <span className="rounded-full bg-brand-tint px-2 py-0.5 text-[11px] font-medium text-brand dark:bg-brand/20">
+                In portal
+              </span>
+            ) : (
+              <button type="button"
+                disabled={!t.canProvision || provision.isPending}
+                title={t.blocker ?? undefined}
+                onClick={() => provision.mutate(t.externalId)}
+                className="rounded-lg bg-brand px-2.5 py-1 text-xs font-medium text-brand-fg hover:opacity-90 disabled:opacity-40">
+                {t.link === 1 ? 'Link' : 'Add'}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {techs?.length === 0 && <p className="text-sm text-[var(--muted)]">This PSA returned no technicians.</p>}
+    </DrawerShell>
+  );
+}
+
 function AddUserDrawer({ roles, departments, boards, templates, onClose, onCreated }: {
   roles: RoleOption[]; departments: DepartmentWithTeams[]; boards: BoardOption[];
   templates: PermissionTemplateOption[]; onClose: () => void; onCreated: () => void;
@@ -301,6 +389,7 @@ export default function UsersPage() {
   const [teamId, setTeamId] = useState(ALL);
   const [boardName, setBoardName] = useState(ALL);
   const [status, setStatus] = useState(ALL);
+  const [showImport, setShowImport] = useState(false);
   const [page, setPage] = useState(1);
   const pageSize = 25;
 
@@ -376,10 +465,16 @@ export default function UsersPage() {
             Your team&apos;s portal accounts, roles, and access. Sign-in itself stays with your identity provider.
           </p>
         </div>
-        <button onClick={() => setShowAdd(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-brand px-3.5 py-2 text-sm font-medium text-brand-fg hover:opacity-90">
-          <UserPlus size={16} /> Add user
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => setShowImport(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3.5 py-2 text-sm font-medium hover:bg-[var(--bg)]">
+            <Users size={16} /> Import from PSA
+          </button>
+          <button onClick={() => setShowAdd(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-brand px-3.5 py-2 text-sm font-medium text-brand-fg hover:opacity-90">
+            <UserPlus size={16} /> Add user
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -572,6 +667,12 @@ export default function UsersPage() {
           </div>
         </div>
       )}
+
+      <ImportFromPsaDrawer
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        onChanged={() => refresh()}
+      />
 
       {showAdd && (
         <AddUserDrawer

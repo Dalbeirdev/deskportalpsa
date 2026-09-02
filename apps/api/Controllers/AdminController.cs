@@ -218,7 +218,8 @@ public sealed class AdminReadController(
     IAuditQueryService auditQuery,
     ITicketResyncService resync,
     IUserAdminService users,
-    IConnectionAdminService connections) : ControllerBase
+    IConnectionAdminService connections,
+    ITechnicianProvisioningService provisioning) : ControllerBase
 {
     /// <summary>Tickets the portal holds that never reached the PSA — the count and which they are.</summary>
     [HttpGet("tickets/unsynced")]
@@ -388,6 +389,21 @@ public sealed class AdminReadController(
     [RequirePermission(Permissions.UsersManage)]
     public async Task<IActionResult> DeleteUser(Guid id, CancellationToken ct)
     { await users.DeleteAsync(id, ct); return NoContent(); }
+    /// <summary>
+    /// The PSA's technicians, with what the portal already knows about each. Read-only: nothing is
+    /// created until an administrator provisions someone explicitly.
+    /// </summary>
+    [HttpGet("psa-technicians/{psaConnectionId:guid}")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> PsaTechnicians(Guid psaConnectionId, CancellationToken ct)
+        => Ok(await provisioning.ListAsync(psaConnectionId, ct));
+
+    /// <summary>Creates (or links) the portal user for one PSA technician and maps them.</summary>
+    [HttpPost("psa-technicians/{psaConnectionId:guid}/{externalTechnicianId}")]
+    [RequirePermission(Permissions.UsersManage)]
+    public async Task<IActionResult> ProvisionTechnician(Guid psaConnectionId, string externalTechnicianId, CancellationToken ct)
+        => Ok(await provisioning.ProvisionAsync(psaConnectionId, externalTechnicianId, ct));
+
 
     /// <summary>
     /// Who this user is in each PSA — what their logged time is attributed to — with each
