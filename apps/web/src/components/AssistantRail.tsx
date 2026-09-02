@@ -97,11 +97,11 @@ export function AssistantRail({ ticketId, draft, onUseDraft, canConfigure = fals
   const answer = ask.data;
 
   return (
-    // A column that fills its rail rather than a card floating in empty space. The three regions
-    // divide the height deliberately: the actions keep their natural size, the answer takes what is
-    // left and scrolls inside itself, and the composer stays pinned to the bottom where a person
-    // looks for it. Without min-h-0 the answer region refuses to shrink and pushes the composer off.
-    <aside className="flex h-full min-h-[32rem] flex-col overflow-hidden rounded-xl border border-indigo-200 bg-[var(--surface)] dark:border-indigo-900/60">
+    // Sized by its CONTENT, capped at one screen. Forcing it to full height padded the middle with
+    // blank space that said nothing — height a panel has not earned reads as something failing to
+    // load. The answer region grows as an answer arrives and scrolls once the cap is reached, so
+    // the rail is exactly as tall as it has something to show.
+    <aside className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-xl border border-indigo-200 bg-[var(--surface)] dark:border-indigo-900/60">
       <div className="flex shrink-0 items-center gap-2 border-b border-indigo-200 bg-indigo-50 px-4 py-3 dark:border-indigo-900/60 dark:bg-indigo-950/40">
         <Sparkles size={15} className="text-indigo-600 dark:text-indigo-300" />
         <h2 className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">Assistant</h2>
@@ -133,9 +133,9 @@ export function AssistantRail({ ticketId, draft, onUseDraft, canConfigure = fals
         })}
       </div>
 
-      {/* The answer region owns the leftover height, so a long answer scrolls here instead of
-          stretching the rail past the fold. */}
-      <div className="min-h-0 flex-1 overflow-y-auto border-t border-[var(--border)] px-3 py-3">
+      {/* Takes only the room its content needs; a long answer scrolls here rather than stretching
+          the rail past the fold. */}
+      <div className="min-h-0 flex-1 overflow-y-auto border-t border-[var(--border)] px-3 py-2.5">
         {ask.isError && (
           <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
             {(ask.error as Error)?.message ?? 'The assistant could not answer.'}
