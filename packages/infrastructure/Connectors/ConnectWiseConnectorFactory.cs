@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Desk.Application.Abstractions;
 using Desk.Application.Common;
 using Desk.Connectors.ConnectWise;
@@ -16,7 +17,8 @@ public sealed class ConnectWiseConnectorFactory(
     DeskDbContext db,
     ISecretStore secrets,
     IHttpClientFactory httpFactory,
-    TimeProvider clock) : IConnectorFactory
+    TimeProvider clock,
+    Microsoft.Extensions.Logging.ILogger<ConnectWiseConnectorFactory> logger) : IConnectorFactory
 {
     public ProviderType Provider => ProviderType.ConnectWisePsa;
 
@@ -43,7 +45,11 @@ public sealed class ConnectWiseConnectorFactory(
         var http = httpFactory.CreateClient("connectwise");
         http.BaseAddress = new Uri(config.BaseUrl);
 
-        return new ConnectWiseConnector(http, config, clock);
+        return new ConnectWiseConnector(http, config, clock,
+            // Field names only — never values — so the log carries no customer data. Once per
+            // process, and the one place a silently-missing provider field becomes visible.
+            (fields, infoFields) => logger.LogInformation(
+                "ConnectWise ticket fields: {Fields} | _info: {InfoFields}", fields, infoFields));
     }
 
     private static string EnsureTrailingSlash(string url) => url.EndsWith('/') ? url : url + "/";
