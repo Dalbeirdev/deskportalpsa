@@ -38,12 +38,17 @@ public static class UpdateHasher
     public static string ForTicketState(
         string? status, string? priority, string? category, string? title, string? description,
         DateTimeOffset? resolvedAt, DateTimeOffset? closedAt, DateTimeOffset? slaDueAt,
-        DateTimeOffset? psaCreatedAt = null)
+        DateTimeOffset? psaCreatedAt = null, string? queueOrBoard = null)
         => Compute(new Dictionary<string, string?>
         {
             ["status"] = status,
             ["priority"] = priority,
             ["category"] = category,
+            // The queue belongs here for the same reason the raise date does. Moving a ticket to
+            // another queue changes nothing else about it, so without this the hash matches, the
+            // upsert reports "unchanged", and the portal keeps showing the queue the ticket left.
+            // It also means a change to a queue MAPPING never reaches the tickets already imported.
+            ["queueOrBoard"] = queueOrBoard,
             ["title"] = title,
             ["description"] = description,
             // Lifecycle dates belong here: a ticket can close in the PSA leaving every other field

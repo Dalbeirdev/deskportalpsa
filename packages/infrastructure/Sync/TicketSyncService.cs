@@ -48,7 +48,7 @@ public sealed class TicketSyncService(
 
         var hash = UpdateHasher.ForTicketState(
             portalStatus, portalPriority, portalCategory, incoming.Title, incoming.Description,
-            incoming.ResolvedAt, incoming.ClosedAt, incoming.SlaDueAt, incoming.CreatedAt);
+            incoming.ResolvedAt, incoming.ClosedAt, incoming.SlaDueAt, incoming.CreatedAt, portalQueue);
 
         var existing = await db.Tickets.FirstOrDefaultAsync(
             t => t.PsaConnectionId == psaConnectionId && t.ExternalTicketId == incoming.ExternalId, ct);
