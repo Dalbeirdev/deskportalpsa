@@ -12,3 +12,13 @@ public interface ITechnicianMetricsService
     Task<IReadOnlyList<TeamComparisonRow>> TeamAsync(MetricsFilter filter, ProductivityWeights weights, CancellationToken ct = default);
     Task<IReadOnlyList<TrendPoint>> TrendAsync(MetricsFilter filter, CancellationToken ct = default);
 }
+
+/// <summary>
+/// Client-level workload: where the desk's capacity is going. Separate from the technician service
+/// because it answers a different question for a different reader — an owner asking which customers
+/// consume the most, not a manager looking at one person.
+/// </summary>
+public interface IClientWorkloadService
+{
+    Task<ClientWorkloadReport> ForClientsAsync(MetricsFilter filter, CancellationToken ct = default);
+}

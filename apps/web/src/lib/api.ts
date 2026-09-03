@@ -350,6 +350,36 @@ export const api = {
     request(`/api/admin/users/${id}/teams/${teamId}`, z.void(), { method: 'DELETE' }),
   setUserBoardAccessMode: (id: string, mode: number) =>
     request(`/api/admin/users/${id}/board-access`, z.void(), { method: 'PUT', body: JSON.stringify({ mode }) }),
+  clientWorkload: (params?: { from?: string; to?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.from) qs.set('from', params.from);
+    if (params?.to) qs.set('to', params.to);
+    const suffix = qs.toString() ? `?${qs}` : '';
+    return request(`/api/dashboard/clients${suffix}`, z.object({
+      clients: z.array(z.object({
+        clientCompanyId: z.string(),
+        clientName: z.string(),
+        totalTickets: z.number(),
+        openTickets: z.number(),
+        closedTickets: z.number(),
+        hoursWorked: z.number(),
+        billableHours: z.number(),
+        techniciansInvolved: z.number(),
+        avgResolutionHours: z.number().nullable(),
+        resolutionSample: z.number(),
+        slaCompliancePct: z.number().nullable(),
+        slaEligible: z.number(),
+      })),
+      ticketsWithoutRaiseDate: z.number(),
+      ticketsWithoutClosure: z.number(),
+      importWindows: z.array(z.object({
+        connectionName: z.string(),
+        importsClosedTickets: z.boolean(),
+        activeWithinDays: z.number().nullable(),
+        ticketsHeld: z.number(),
+      })),
+    }));
+  },
   psaTechnicians: (psaConnectionId: string) =>
     request(`/api/admin/psa-technicians/${psaConnectionId}`, z.array(z.object({
       externalId: z.string(),
