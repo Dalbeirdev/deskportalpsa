@@ -29,6 +29,17 @@ public sealed class FakeConnectWiseServer(TimeProvider clock) : HttpMessageHandl
         _notes.Add(note);
     }
 
+    /// <summary>Seed a ticket as the provider would return one — references EXPANDED to {id,name},
+    /// which is how ConnectWise answers a read. Without this the fake only ever holds tickets the
+    /// connector itself created, so it cannot model reading what was already there: the entire sync
+    /// direction.</summary>
+    public void SeedTicket(Dictionary<string, object?> ticket)
+    {
+        ticket.TryAdd("id", ++_seq);
+        ticket.TryAdd("lastUpdated", clock.GetUtcNow().ToString("o"));
+        _tickets.Add(ticket);
+    }
+
     // Documents keyed by id, holding what the real API stores: the record it hangs off, plus bytes.
     private readonly Dictionary<long, (long RecordId, string FileName, byte[] Content)> _documents = [];
     private readonly List<Dictionary<string, object?>> _tickets = [];
@@ -56,8 +67,12 @@ public sealed class FakeConnectWiseServer(TimeProvider clock) : HttpMessageHandl
             return Arr("[{\"id\":50,\"name\":\"Christmas Day\",\"date\":\"2026-12-25T00:00:00Z\"},{\"id\":51,\"name\":\"Christmas Day\",\"date\":\"2026-12-25T00:00:00Z\"}]");
         if (path.EndsWith("finance/agreements"))
             return Arr("[{\"id\":40,\"name\":\"Managed Services\",\"type\":{\"id\":2,\"name\":\"Managed\"},\"agreementStatus\":\"Active\",\"startDate\":\"2026-01-01T00:00:00Z\",\"noEndingDateFlag\":true}]");
-        if (path.EndsWith("service/boards")) return Arr("[{\"id\":1,\"name\":\"Service Desk\"}]");
+        if (path.EndsWith("service/boards")) return Arr("[{\"id\":1,\"name\":\"Service Desk\"},{\"id\":2,\"name\":\"Dispatch\"}]");
         if (path.EndsWith("service/priorities")) return Arr("[{\"id\":3,\"name\":\"High\"}]");
+        // Board-scoped, and deliberately DIFFERENT per board: the second board carries a status the
+        // first does not, so reading only the first board is visible rather than plausible.
+        if (path.Contains("service/boards/2/") && path.EndsWith("/statuses"))
+            return Arr("[{\"id\":9,\"name\":\"Scheduled\"},{\"id\":1,\"name\":\"New\"}]");
         if (path.Contains("service/boards/") && path.EndsWith("/statuses"))
             return Arr("[{\"id\":1,\"name\":\"New\"},{\"id\":5,\"name\":\"Closed\"}]");
         if (path.Contains("service/boards/") && path.EndsWith("/types"))
