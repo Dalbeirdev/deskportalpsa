@@ -30,6 +30,70 @@ public sealed class ConnectWiseConnectorCertificationTests : ConnectorCertificat
 
     protected override IServiceManagementConnector CreateConnector() => Build(new FakeConnectWiseServer(Clock));
 
+    /// <summary>
+    /// The value discovery offers has to be the value tickets arrive carrying.
+    ///
+    /// This is the contract that quietly broke: the mapping UI saves whatever discovery gives it as
+    /// the rule's external value, and the sync compares that rule against the value on an incoming
+    /// ticket. Discovery offered status ids while tickets arrived carrying status names, so every
+    /// rule an administrator saved was compared against something it could never equal and not one
+    /// ConnectWise ticket was ever status-mapped. Nothing failed — the portal displayed the
+    /// provider's raw status, which looks like a mapping that simply passed the value through.
+    ///
+    /// Asserted as a round trip rather than as "options are names", because the requirement is that
+    /// the two sides agree, not what they agree on.
+    /// </summary>
+    /// <summary>A ticket sitting on the board already, as ConnectWise would return it.</summary>
+    private static FakeConnectWiseServer WithExistingTicket(TimeProvider clock)
+    {
+        var server = new FakeConnectWiseServer(clock);
+        server.SeedTicket(new Dictionary<string, object?>
+        {
+            ["summary"] = "Printer offline",
+            ["status"] = new Dictionary<string, object?> { ["id"] = 1L, ["name"] = "New" },
+            ["priority"] = new Dictionary<string, object?> { ["id"] = 3L, ["name"] = "High" },
+            ["board"] = new Dictionary<string, object?> { ["id"] = 1L, ["name"] = "Service Desk" },
+        });
+        return server;
+    }
+
+    [Fact]
+    public async Task A_rule_saved_from_discovery_can_match_an_incoming_ticket()
+    {
+        var connector = Build(WithExistingTicket(Clock));
+
+        var offered = (await connector.GetStatusesAsync()).Select(o => o.Value).ToList();
+        var ticket = (await connector.GetTicketsAsync(new TicketFilter())).Items.Single();
+
+        offered.Should().Contain(ticket.Status,
+            "a mapping rule is saved with the offered value and compared against the ticket's");
+    }
+
+    [Fact]
+    public async Task Statuses_from_every_board_are_offered_not_just_the_first()
+    {
+        // A status that only exists on a second board is still a status tickets arrive in, and an
+        // administrator cannot map what the page never shows them.
+        var connector = Build(new FakeConnectWiseServer(Clock));
+
+        var offered = (await connector.GetStatusesAsync()).Select(o => o.Value).ToList();
+
+        offered.Should().Contain("Scheduled", "it exists only on the second board");
+        offered.Should().Contain("Closed", "the first board's statuses are still there");
+        offered.Count(v => v == "New").Should().Be(1, "both boards define New; it is one option");
+    }
+
+    [Fact]
+    public async Task The_same_holds_for_priority()
+    {
+        var connector = Build(WithExistingTicket(Clock));
+
+        var offered = (await connector.GetPrioritiesAsync()).Select(o => o.Value).ToList();
+        var ticket = (await connector.GetTicketsAsync(new TicketFilter())).Items.Single();
+
+        offered.Should().Contain(ticket.Priority);
+    }
+
     protected override IServiceManagementConnector CreateFailingConnector(ConnectorFailureKind kind)
     {
         var status = kind switch
