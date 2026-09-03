@@ -13,7 +13,24 @@ public record ExternalTechnician(string ExternalId, string Email, string Display
 public record ExternalDevice(string ExternalId, string Name, string? Type, string? Identifier, bool IsActive);
 
 /// <summary>A selectable option for a picklist field (status/priority/queue/category).</summary>
-public record ExternalFieldOption(string Value, string Label, bool IsActive = true);
+/// <summary>
+/// One selectable value on a provider field, in the two forms callers actually need.
+///
+/// <see cref="Value"/> is what the PROVIDER is sent: queue ids in an import filter, a queue id when
+/// a ticket is reassigned. <see cref="SyncValue"/> is what a synced ticket ARRIVES carrying, and is
+/// therefore the only thing a mapping rule can usefully hold.
+///
+/// They are separate because for some fields they genuinely differ — a queue is filtered by id and
+/// reported by name — and collapsing them is not a simplification but a bug. One list served both
+/// jobs before this, so whichever caller lost the argument got the wrong string: rules saved with an
+/// id were compared against a name and silently never matched, on both providers, for every ticket.
+/// </summary>
+public record ExternalFieldOption(string Value, string Label, bool IsActive = true)
+{
+    /// <summary>What a synced ticket carries for this option. Defaults to <see cref="Value"/>, which
+    /// is right wherever the provider reports a field the same way it accepts it.</summary>
+    public string SyncValue { get; init; } = Value;
+}
 
 /// <summary>Definition of a provider custom field discovered at runtime.</summary>
 public record ExternalFieldDefinition(

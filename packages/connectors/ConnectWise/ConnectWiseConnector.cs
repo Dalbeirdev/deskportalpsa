@@ -467,18 +467,12 @@ public sealed class ConnectWiseConnector(
     }
 
     /// <summary>
-    /// Board statuses, offered to the mapping UI BY NAME.
+    /// Board statuses, keyed by NAME rather than by id.
     ///
-    /// The value here is what an administrator's mapping rule gets saved with, and it has to be the
-    /// same value a synced ticket arrives carrying — which is the status NAME (see ToUnified). Offered
-    /// as ids, every rule an administrator saved was compared against a name it could never equal, so
-    /// not one ConnectWise ticket was ever status-mapped: the portal showed the provider's own raw
-    /// status and looked, at a glance, like it was working.
-    ///
-    /// Names are also the more correct key for ConnectWise specifically. Statuses are BOARD-scoped,
-    /// so the same "New" carries a different id on every board and an id mapped from one board is
-    /// wrong on the next; the write path resolves a name against whichever board the ticket is
-    /// actually on. Writes accept either form, so rules still holding old ids keep pushing correctly.
+    /// Unusually, the name is BOTH representations here. Statuses are board-scoped, so the same "New"
+    /// carries a different id on every board and an id from one board is simply wrong on the next;
+    /// the write path resolves a name against whichever board the ticket is actually on. So the name
+    /// is what a ticket arrives carrying AND the safest thing to send back.
     /// </summary>
     public async Task<IReadOnlyList<ExternalFieldOption>> GetStatusesAsync(CancellationToken ct = default)
     {
@@ -499,29 +493,30 @@ public sealed class ConnectWiseConnector(
                     names.Add(s.Name);
         }
 
-        return names.Select(n => new ExternalFieldOption(n, n)).ToList();
+        return names.Select(n => new ExternalFieldOption(n, n) { SyncValue = n }).ToList();
     }
 
     public async Task<IReadOnlyList<ExternalFieldOption>> GetPrioritiesAsync(CancellationToken ct = default)
     {
         var items = await GetListAsync<CwRef>("service/priorities", new() { ["pageSize"] = "1000" }, ct);
-        // By name, for the same reason as statuses: tickets arrive carrying the priority name.
-        return items.Select(p => new ExternalFieldOption(p.Name ?? "", p.Name ?? "")).ToList();
+        // Sent as an id, reported as a name.
+        return items.Select(p => new ExternalFieldOption(p.Id.ToString(), p.Name ?? "") { SyncValue = p.Name ?? "" })
+            .ToList();
     }
 
     /// <summary>
-    /// Boards stay identified BY ID, unlike statuses and priorities.
+    /// Boards: filtered by id, reported by name.
     ///
-    /// This same list feeds the connection's import filter, which becomes a ConnectWise query
-    /// condition on board/id — a name there produces an invalid query rather than a visible error.
-    /// The cost is that a board/queue MAPPING rule saved from this list still cannot match an
-    /// incoming ticket, which carries the board name. Nothing maps queues on ConnectWise today; that
-    /// needs the filter and the mapping to stop sharing one list, not a change here.
+    /// The id is what the import filter needs — it becomes a query condition on board/id, where a
+    /// name produces an invalid query rather than a visible error — and the name is what a synced
+    /// ticket carries. Both travel on the option now, so the filter picker and the mapping picker
+    /// each get the one they need instead of sharing whichever won.
     /// </summary>
     public async Task<IReadOnlyList<ExternalFieldOption>> GetQueuesOrBoardsAsync(CancellationToken ct = default)
     {
         var items = await GetListAsync<CwRef>("service/boards", new() { ["pageSize"] = "1000" }, ct);
-        return items.Select(b => new ExternalFieldOption(b.Id.ToString(), b.Name ?? "")).ToList();
+        return items.Select(b => new ExternalFieldOption(b.Id.ToString(), b.Name ?? "") { SyncValue = b.Name ?? "" })
+            .ToList();
     }
 
     public async Task<IReadOnlyList<ExternalFieldOption>> GetCategoriesAsync(CancellationToken ct = default)
@@ -529,8 +524,9 @@ public sealed class ConnectWiseConnector(
         var board = (await GetListAsync<CwRef>("service/boards", new() { ["pageSize"] = "1" }, ct)).FirstOrDefault();
         if (board is null) return [];
         var types = await GetListAsync<CwRef>($"service/boards/{board.Id}/types", new() { ["pageSize"] = "1000" }, ct);
-        // By name, for the same reason as statuses: tickets arrive carrying the type name.
-        return types.Select(t => new ExternalFieldOption(t.Name ?? "", t.Name ?? "")).ToList();
+        // Sent as an id, reported as a name.
+        return types.Select(t => new ExternalFieldOption(t.Id.ToString(), t.Name ?? "") { SyncValue = t.Name ?? "" })
+            .ToList();
     }
 
     public async Task<IReadOnlyList<ExternalFieldOption>> GetWorkTypesAsync(CancellationToken ct = default)
