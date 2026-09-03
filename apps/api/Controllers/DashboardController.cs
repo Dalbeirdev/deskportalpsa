@@ -21,7 +21,8 @@ namespace Desk.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/dashboard")]
-public sealed class DashboardController(ITechnicianMetricsService metrics, ICurrentUser user) : ControllerBase
+public sealed class DashboardController(
+    ITechnicianMetricsService metrics, IClientWorkloadService clients, ICurrentUser user) : ControllerBase
 {
     [HttpGet("technician")]
     [RequirePermission(Permissions.ProductivityViewOwn)]
@@ -46,6 +47,15 @@ public sealed class DashboardController(ITechnicianMetricsService metrics, ICurr
         var m = await metrics.ForTechnicianAsync(filter, q.ToWeights(), ct);
         return Ok(new { metrics = m, disclaimer = ProductivityScore.Disclaimer });
     }
+
+    /// <summary>
+    /// Where the desk's capacity goes, by client. Gated on the TEAM permission: this is
+    /// organization-wide commercial information, not someone's own figures.
+    /// </summary>
+    [HttpGet("clients")]
+    [RequirePermission(Permissions.ProductivityViewTeam)]
+    public async Task<IActionResult> Clients([FromQuery] DashboardQuery q, CancellationToken ct)
+        => Ok(await clients.ForClientsAsync(q.ToFilter(), ct));
 
     [HttpGet("team")]
     [RequirePermission(Permissions.ProductivityViewTeam)]

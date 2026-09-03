@@ -82,3 +82,42 @@ public sealed record TechnicianMetrics
 public sealed record TeamComparisonRow(string TechnicianExternalId, int Resolved, double SlaCompliancePct, double? Score);
 
 public sealed record TrendPoint(DateOnly Date, int Created, int Resolved);
+
+/// <summary>
+/// One client's consumption of the desk, for the question management actually asks: where is our
+/// capacity going? Every figure is derived from what the PSA reported — the portal adds no estimate.
+///
+/// <paramref name="ResolutionSample"/> and <paramref name="SlaEligible"/> are carried beside their
+/// averages on purpose. An average over three of forty tickets is not wrong, but presented alone it
+/// invites being read as the whole picture, so the surface states what it was computed from.
+/// </summary>
+public sealed record ClientWorkloadRow(
+    Guid ClientCompanyId,
+    string ClientName,
+    int TotalTickets,
+    int OpenTickets,
+    int ClosedTickets,
+    decimal HoursWorked,
+    decimal BillableHours,
+    int TechniciansInvolved,
+    double? AvgResolutionHours,
+    int ResolutionSample,
+    double? SlaCompliancePct,
+    int SlaEligible);
+
+/// <summary>
+/// Client workload, plus what the numbers do NOT cover. A dashboard that shows only figures invites
+/// them being read as the whole truth; these fields let the surface say what it is measuring.
+/// </summary>
+public sealed record ClientWorkloadReport(
+    IReadOnlyList<ClientWorkloadRow> Clients,
+    int TicketsWithoutRaiseDate,
+    int TicketsWithoutClosure,
+    IReadOnlyList<ImportWindowNote> ImportWindows);
+
+/// <summary>
+/// What one connection actually imports. Shown next to the figures because a number computed over
+/// "open tickets active in the last 7 days" is not the number a reader assumes they are seeing.
+/// </summary>
+public sealed record ImportWindowNote(
+    string ConnectionName, bool ImportsClosedTickets, int? ActiveWithinDays, int TicketsHeld);

@@ -65,6 +65,7 @@ const NAV_GROUPS: { label: string | null; tone: Tone; items: NavItem[] }[] = [
       { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
       { href: '/dashboard/tickets', label: 'Tickets', icon: Ticket },
       { href: '/dashboard/analytics', label: 'Productivity', icon: BarChart3, permissions: ['productivity.own.view', 'productivity.team.view'] },
+      { href: '/dashboard/analytics/clients', label: 'Client workload', icon: Building2, permissions: ['productivity.team.view'] },
     ],
   },
   {

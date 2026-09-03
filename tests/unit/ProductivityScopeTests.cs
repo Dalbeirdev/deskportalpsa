@@ -43,7 +43,15 @@ public class ProductivityScopeTests
     }
 
     private static DashboardController Controller(CapturingMetrics metrics, ICurrentUserStub user)
-        => new(metrics, user);
+        => new(metrics, new UnusedClientWorkload(), user);
+
+    /// <summary>These tests are about technician scoping; the client surface is not exercised.</summary>
+    private sealed class UnusedClientWorkload : Desk.Application.Analytics.IClientWorkloadService
+    {
+        public Task<Desk.Application.Analytics.ClientWorkloadReport> ForClientsAsync(
+            Desk.Application.Analytics.MetricsFilter filter, CancellationToken ct = default)
+            => throw new NotSupportedException();
+    }
 
     /// <summary>Minimal ICurrentUser we can point at a specific permission set + technician id.</summary>
     private sealed class ICurrentUserStub(string? tech, params string[] perms) : Desk.Application.Abstractions.ICurrentUser
