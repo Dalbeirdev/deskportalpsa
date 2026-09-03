@@ -33,11 +33,12 @@ public class TicketSyncTests
         => new(db, new MappingEngine(), events ?? new SyncEventStore(db, clock), clock, new RecordingActivity());
 
     private static UnifiedTicket Incoming(
-        string extId, string title, string status, DateTimeOffset? createdAt = null) => new()
+        string extId, string title, string status, DateTimeOffset? createdAt = null,
+        string? queue = null) => new()
     {
         ExternalId = extId, Title = title, Status = status, Priority = "1",
         RequesterExternalId = "1", RequesterName = "Acme", RequesterEmail = "a@acme.test",
-        CreatedAt = createdAt,
+        CreatedAt = createdAt, QueueOrBoard = queue,
     };
 
     [Fact]
@@ -128,6 +129,25 @@ public class TicketSyncTests
         await svc.UpsertFromProviderAsync(Conn, Incoming("502", "B", "Scheduled"), []);
 
         log.Warnings.Count(w => w.Contains("Scheduled")).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Moving_a_ticket_to_another_queue_reaches_the_portal()
+    {
+        // A queue move changes nothing else about a ticket, so without the queue in the hash the
+        // upsert reports "unchanged" and the portal goes on showing the queue the ticket left. The
+        // same gap meant a change to a queue MAPPING never reached tickets already imported —
+        // re-pointing two rules on the live connection moved exactly zero of 124 tickets.
+        var clock = new TestClock();
+        await using var db = await SeedConnectionAsync(Guid.NewGuid().ToString());
+        var svc = Service(db, clock);
+
+        await svc.UpsertFromProviderAsync(Conn, Incoming("500", "Printer", "5", queue: "Level I Support"), []);
+        var outcome = await svc.UpsertFromProviderAsync(
+            Conn, Incoming("500", "Printer", "5", queue: "Level II Support"), []);
+
+        outcome.Should().Be(TicketSyncOutcome.Updated, "the queue is a change, not a no-op");
+        (await db.Tickets.SingleAsync()).QueueOrBoard.Should().Be("Level II Support");
     }
 
     [Fact]
