@@ -19,7 +19,11 @@ namespace Desk.Connectors.ConnectWise;
 /// return bare JSON arrays; updates are JSON-Patch; "Service Board" maps to the portal's Queue and
 /// "Member" to Technician. Public vs internal notes use the internalAnalysisFlag.
 /// </summary>
-public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorConfig config, TimeProvider clock)
+public sealed class ConnectWiseConnector(
+    HttpClient http, ConnectWiseConnectorConfig config, TimeProvider clock,
+    // A callback rather than an ILogger: this project is a provider-neutral library and has no
+    // logging dependency. The caller decides where the observation goes.
+    Action<string, string>? observeTicketShape = null)
     : IServiceManagementConnector
 {
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
@@ -184,14 +188,18 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
         if (conditions.Count > 0)
             query["conditions"] = string.Join(" and ", conditions);
 
-        var items = await GetListAsync<CwTicket>("service/tickets", query, ct);
+        // Read once as raw JSON, note which fields the provider actually sent, then deserialize the
+        // SAME element — one request, and the shape is observed rather than assumed. Ticket raise
+        // and closure dates arrived null however they were read, and a null is indistinguishable
+        // from a ticket that genuinely has no date, so the field names have to be established
+        // rather than guessed at.
+        var raw = await SendAsync<System.Text.Json.JsonElement>(
+            HttpMethod.Get, BuildPath("service/tickets", query), null, ct);
+        LogTicketShapeOnce(raw);
 
-        // TEMPORARY DIAGNOSTIC — remove once the date field names are known.
-        // Ticket raise/closure dates come back null however they are read, and a null is
-        // indistinguishable from a ticket that genuinely has no date, so the shape has to be
-        // observed rather than guessed at a third time. Logs FIELD NAMES ONLY, never values, so no
-        // customer data reaches the log. Once per process, so it cannot flood.
-        await LogTicketShapeOnceAsync(query, ct);
+        var items = raw.ValueKind == System.Text.Json.JsonValueKind.Array
+            ? raw.Deserialize<List<CwTicket>>(JsonOpts) ?? []
+            : [];
 
         return new PaginatedResult<UnifiedTicket>(items.Select(ToUnified).ToList(), null, false);
     }
@@ -569,41 +577,43 @@ public sealed class ConnectWiseConnector(HttpClient http, ConnectWiseConnectorCo
 
     private static bool _shapeLogged;
 
-    /// <summary>TEMPORARY. Serilog owns stdout here and the connector has no ILogger, so the probe
-    /// writes to a file instead. Names only — never values.</summary>
-    private static void Probe(string line)
+    /// <summary>
+    /// Names of the fields ConnectWise actually returns on a ticket, logged once per process at
+    /// Information. FIELD NAMES ONLY — never values, so no customer data reaches the log. Kept
+    /// permanently rather than as a throwaway: when a provider silently stops sending a field, the
+    /// symptom is a null that looks exactly like "this ticket has no date", and this is the only
+    /// place that difference is visible.
+    ///
+    /// Unioned across the whole page, not read off the first ticket. ConnectWise omits null fields
+    /// entirely, so an open ticket carries no closure date and one sampled row cannot tell "this
+    /// provider never sends the field" from "this particular ticket has no value" — the two
+    /// conclusions point at opposite fixes.
+    /// </summary>
+    private void LogTicketShapeOnce(System.Text.Json.JsonElement raw)
     {
-        try { File.AppendAllLines("/tmp/cw-shape.txt", [$"{DateTimeOffset.UtcNow:O} {line}"]); }
-        catch { /* a diagnostic must never break a sync */ }
-    }
-
-    /// <summary>TEMPORARY. Names of the fields ConnectWise actually returns on a ticket. Delete with
-    /// its call site once the date fields are mapped.</summary>
-    private async Task LogTicketShapeOnceAsync(Dictionary<string, string> query, CancellationToken ct)
-    {
-        if (_shapeLogged) return;
+        if (_shapeLogged || observeTicketShape is null) return;
+        if (raw.ValueKind != System.Text.Json.JsonValueKind.Array || raw.GetArrayLength() == 0) return;
         _shapeLogged = true;
         try
         {
-            var probe = new Dictionary<string, string>(query) { ["pageSize"] = "1" };
-            var raw = await SendAsync<System.Text.Json.JsonElement>(
-                HttpMethod.Get, BuildPath("service/tickets", probe), null, ct);
-            if (raw.ValueKind != System.Text.Json.JsonValueKind.Array || raw.GetArrayLength() == 0) return;
-
-            var t = raw[0];
-            var names = t.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal);
-            Probe($"ticket fields: {string.Join(", ", names)}");
-
-            if (t.TryGetProperty("_info", out var info) && info.ValueKind == System.Text.Json.JsonValueKind.Object)
+            var fields = new SortedSet<string>(StringComparer.Ordinal);
+            var infoFields = new SortedSet<string>(StringComparer.Ordinal);
+            foreach (var t in raw.EnumerateArray())
             {
-                var infoNames = info.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal);
-                Probe($"_info fields: {string.Join(", ", infoNames)}");
+                if (t.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                foreach (var p in t.EnumerateObject()) fields.Add(p.Name);
+                if (t.TryGetProperty("_info", out var info)
+                    && info.ValueKind == System.Text.Json.JsonValueKind.Object)
+                    foreach (var p in info.EnumerateObject()) infoFields.Add(p.Name);
             }
+
+            observeTicketShape(
+                $"[{raw.GetArrayLength()} tickets] {string.Join(", ", fields)}",
+                infoFields.Count > 0 ? string.Join(", ", infoFields) : "(none)");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            // A diagnostic must never break a sync.
-            Probe($"probe failed: {ex.GetType().Name}: {ex.Message}");
+            // Observing the shape must never break the sync that produced it.
         }
     }
 
