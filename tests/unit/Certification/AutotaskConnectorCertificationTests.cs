@@ -273,4 +273,32 @@ public sealed class AutotaskConnectorCertificationTests : ConnectorCertification
     }
 
     protected override string WebhookSecret => Secret;
+
+    /// <summary>
+    /// A next-page URL is provider-supplied input, and following it carries the credentials along.
+    /// If whatever answered the first request can redirect the second anywhere, pagination becomes a
+    /// way to make this service fetch an attacker's URL with Autotask headers attached.
+    /// </summary>
+    [Fact]
+    public async Task A_next_page_url_on_another_host_is_refused()
+    {
+        var server = new FakeAutotaskServer(Clock);
+        var connector = Build(server);
+
+        var act = async () => await connector.GetTicketsAsync(
+            new TicketFilter { Cursor = "https://attacker.example/steal" });
+
+        (await act.Should().ThrowAsync<ConnectorException>())
+            .Which.Message.Should().Contain("different host");
+    }
+
+    [Fact]
+    public async Task A_next_page_url_that_is_not_a_url_is_refused()
+    {
+        var connector = Build(new FakeAutotaskServer(Clock));
+
+        var act = async () => await connector.GetTicketsAsync(new TicketFilter { Cursor = "../../etc/passwd" });
+
+        await act.Should().ThrowAsync<ConnectorException>();
+    }
 }

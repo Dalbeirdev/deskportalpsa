@@ -84,8 +84,15 @@ public sealed class MockConnector : IServiceManagementConnector
         var query = _tickets.Values.AsEnumerable();
         if (filter.ModifiedSince is { } since)
             query = query.Where(t => (t.ModifiedAt ?? t.CreatedAt) >= since);
-        var page = query.OrderBy(t => t.ExternalId).Take(filter.PageSize).ToList();
-        return Task.FromResult(new PaginatedResult<UnifiedTicket>(page, null, false));
+        // Ordered and offset by the cursor, like the real connectors: the mock is one of the three
+        // implementations the certification suite runs against, so it has to be able to fail the
+        // same contract rather than pass by doing less.
+        var ordered = query.OrderBy(t => t.ExternalId).ToList();
+        var skip = filter.Cursor is { Length: > 0 } c && int.TryParse(c, out var n) && n > 0 ? n : 0;
+        var page = ordered.Skip(skip).Take(filter.PageSize).ToList();
+        var hasMore = skip + page.Count < ordered.Count;
+        return Task.FromResult(new PaginatedResult<UnifiedTicket>(
+            page, hasMore ? (skip + page.Count).ToString() : null, hasMore));
     }
 
     public Task<UnifiedTicket?> GetTicketAsync(string ticketId, CancellationToken ct = default)

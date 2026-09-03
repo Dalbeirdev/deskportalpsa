@@ -88,7 +88,18 @@ public sealed class FakeConnectWiseServer(TimeProvider clock) : HttpMessageHandl
 
         // Tickets
         if (path.EndsWith("service/tickets") && request.Method == HttpMethod.Get)
-            return Arr("[" + string.Join(",", FilterTickets(conditions).Select(Serialize)) + "]");
+        {
+            // page/pageSize, as the real API takes them. The fake used to ignore both and return
+            // everything, so a connector that never asked for page 2 looked complete here while
+            // truncating against a live instance.
+            var rows = FilterTickets(conditions)
+                .OrderBy(t => (long)t["id"]!)
+                .ToList();
+            var size = int.TryParse(QueryValue(request.RequestUri.Query, "pageSize"), out var ps) && ps > 0 ? ps : 25;
+            var page = int.TryParse(QueryValue(request.RequestUri.Query, "page"), out var pg) && pg > 0 ? pg : 1;
+            var slice = rows.Skip((page - 1) * size).Take(size);
+            return Arr("[" + string.Join(",", slice.Select(Serialize)) + "]");
+        }
         if (path.EndsWith("service/tickets") && request.Method == HttpMethod.Post)
             return CreateTicket(body);
         if (path.Contains("service/tickets/") && request.Method == HttpMethod.Get)
