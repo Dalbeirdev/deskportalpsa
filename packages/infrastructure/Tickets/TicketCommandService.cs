@@ -324,7 +324,7 @@ public sealed class TicketCommandService(
 
     private static string HashOf(Ticket t) => UpdateHasher.ForTicketState(
         t.PortalStatus, t.PortalPriority, t.PortalCategory, t.Title, t.Description,
-        t.ResolvedAt, t.ClosedAt, t.SlaDueAt);
+        t.ResolvedAt, t.ClosedAt, t.SlaDueAt, t.PsaCreatedAt);
 
     private Task RecordPortalEventAsync(Guid org, Guid connId, Ticket ticket, string idemKey, string eventType, CancellationToken ct)
         => syncEvents.TryRegisterAsync(new SyncEventRegistration

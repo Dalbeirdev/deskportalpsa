@@ -32,10 +32,12 @@ public class TicketSyncTests
     private static TicketSyncService Service(DeskDbContext db, TestClock clock, ISyncEventStore? events = null)
         => new(db, new MappingEngine(), events ?? new SyncEventStore(db, clock), clock, new RecordingActivity());
 
-    private static UnifiedTicket Incoming(string extId, string title, string status) => new()
+    private static UnifiedTicket Incoming(
+        string extId, string title, string status, DateTimeOffset? createdAt = null) => new()
     {
         ExternalId = extId, Title = title, Status = status, Priority = "1",
         RequesterExternalId = "1", RequesterName = "Acme", RequesterEmail = "a@acme.test",
+        CreatedAt = createdAt,
     };
 
     [Fact]
@@ -66,6 +68,35 @@ public class TicketSyncTests
         var second = await svc.UpsertFromProviderAsync(Conn, Incoming("500", "Printer", "5"), []);
 
         second.Should().Be(TicketSyncOutcome.SkippedUnchanged);
+    }
+
+    [Fact]
+    public async Task A_raise_date_arriving_later_reaches_a_ticket_that_is_otherwise_unchanged()
+    {
+        // How the ConnectWise date columns stayed empty across a full re-import. The connector was
+        // reading the raise date correctly by then, but every existing row hashed identically to its
+        // stored state and short-circuited as unchanged before the write. The import reported
+        // success, the tickets were all there, and the column was null on every one of them.
+        //
+        // The date is what changed, so the date has to be in the hash that decides whether anything
+        // changed. This also means the backfill needs no migration: the first sync after the field
+        // joins the hash rewrites the rows that were missing it.
+        var dbName = Guid.NewGuid().ToString();
+        var clock = new TestClock();
+        await using var db = await SeedConnectionAsync(dbName);
+        var svc = Service(db, clock);
+
+        // Imported before the raise date was captured.
+        await svc.UpsertFromProviderAsync(Conn, Incoming("500", "Printer", "5"), []);
+        (await db.Tickets.SingleAsync()).PsaCreatedAt.Should().BeNull();
+
+        // The same ticket, same everything, now carrying the date the provider had all along.
+        var raised = new DateTimeOffset(2026, 1, 9, 8, 30, 0, TimeSpan.Zero);
+        var outcome = await svc.UpsertFromProviderAsync(
+            Conn, Incoming("500", "Printer", "5", raised), []);
+
+        outcome.Should().Be(TicketSyncOutcome.Updated, "the raise date is a change, not a no-op");
+        (await db.Tickets.SingleAsync()).PsaCreatedAt.Should().Be(raised);
     }
 
     [Fact]

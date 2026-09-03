@@ -37,7 +37,8 @@ public static class UpdateHasher
     /// </summary>
     public static string ForTicketState(
         string? status, string? priority, string? category, string? title, string? description,
-        DateTimeOffset? resolvedAt, DateTimeOffset? closedAt, DateTimeOffset? slaDueAt)
+        DateTimeOffset? resolvedAt, DateTimeOffset? closedAt, DateTimeOffset? slaDueAt,
+        DateTimeOffset? psaCreatedAt = null)
         => Compute(new Dictionary<string, string?>
         {
             ["status"] = status,
@@ -50,5 +51,10 @@ public static class UpdateHasher
             ["resolvedAt"] = resolvedAt?.ToString("O"),
             ["closedAt"] = closedAt?.ToString("O"),
             ["slaDueAt"] = slaDueAt?.ToString("O"),
+            // The raise date is here for a reason that is easy to miss: a field the portal starts
+            // capturing arrives on tickets whose every other field is unchanged. Left out of the
+            // hash, those rows short-circuit as "unchanged" and the new field never reaches a single
+            // existing ticket — the import looks correct and the column stays empty forever.
+            ["psaCreatedAt"] = psaCreatedAt?.ToString("O"),
         });
 }

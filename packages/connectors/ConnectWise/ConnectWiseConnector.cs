@@ -583,6 +583,11 @@ public sealed class ConnectWiseConnector(
     /// permanently rather than as a throwaway: when a provider silently stops sending a field, the
     /// symptom is a null that looks exactly like "this ticket has no date", and this is the only
     /// place that difference is visible.
+    ///
+    /// Unioned across the whole page, not read off the first ticket. ConnectWise omits null fields
+    /// entirely, so an open ticket carries no closure date and one sampled row cannot tell "this
+    /// provider never sends the field" from "this particular ticket has no value" — the two
+    /// conclusions point at opposite fixes.
     /// </summary>
     private void LogTicketShapeOnce(System.Text.Json.JsonElement raw)
     {
@@ -591,13 +596,20 @@ public sealed class ConnectWiseConnector(
         _shapeLogged = true;
         try
         {
-            var t = raw[0];
-            var names = string.Join(", ", t.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal));
-            var infoNames = t.TryGetProperty("_info", out var info)
-                && info.ValueKind == System.Text.Json.JsonValueKind.Object
-                    ? string.Join(", ", info.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal))
-                    : "(none)";
-            observeTicketShape(names, infoNames);
+            var fields = new SortedSet<string>(StringComparer.Ordinal);
+            var infoFields = new SortedSet<string>(StringComparer.Ordinal);
+            foreach (var t in raw.EnumerateArray())
+            {
+                if (t.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                foreach (var p in t.EnumerateObject()) fields.Add(p.Name);
+                if (t.TryGetProperty("_info", out var info)
+                    && info.ValueKind == System.Text.Json.JsonValueKind.Object)
+                    foreach (var p in info.EnumerateObject()) infoFields.Add(p.Name);
+            }
+
+            observeTicketShape(
+                $"[{raw.GetArrayLength()} tickets] {string.Join(", ", fields)}",
+                infoFields.Count > 0 ? string.Join(", ", infoFields) : "(none)");
         }
         catch (Exception)
         {
