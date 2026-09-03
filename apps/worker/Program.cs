@@ -27,6 +27,7 @@ builder.Services.AddScoped<IJobHandler, InboundEventJobHandler>();
 builder.Services.AddHostedService<BackgroundJobPollingService>();
 builder.Services.AddHostedService<PollingSyncService>();
 builder.Services.AddHostedService<ScheduledReportService>();
+builder.Services.AddHostedService<ActivityRollupBackgroundService>();
 
 var host = builder.Build();
 

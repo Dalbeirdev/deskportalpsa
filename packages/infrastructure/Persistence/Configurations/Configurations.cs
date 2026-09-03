@@ -162,6 +162,23 @@ public sealed class ActivityEventConfig : IEntityTypeConfiguration<Desk.Domain.A
     }
 }
 
+public sealed class ActivityDailyFactConfig : IEntityTypeConfiguration<Desk.Domain.Analytics.ActivityDailyFact>
+{
+    public void Configure(EntityTypeBuilder<Desk.Domain.Analytics.ActivityDailyFact> b)
+    {
+        b.ToTable("activity_daily_facts");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.ActorExternalId).HasMaxLength(100);
+
+        // Not unique, deliberately. Three of the grain's columns are nullable and Postgres treats
+        // NULLs as distinct, so a unique index here would not prevent the duplicates it appears to.
+        // Uniqueness is enforced by the rollup deleting and rewriting each day it recomputes.
+        b.HasIndex(x => new { x.MspOrganizationId, x.Day });
+        b.HasIndex(x => new { x.MspOrganizationId, x.ActorExternalId, x.Day });
+        b.HasIndex(x => new { x.MspOrganizationId, x.ClientCompanyId, x.Day });
+    }
+}
+
 public sealed class TicketConfig : IEntityTypeConfiguration<Ticket>
 {
     public void Configure(EntityTypeBuilder<Ticket> b)
