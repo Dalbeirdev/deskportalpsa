@@ -18,7 +18,11 @@ namespace Desk.Connectors.Autotask;
 /// platform mapping engine, not this connector); notes use a numeric <c>publish</c> flag, so
 /// "public" is <see cref="AutotaskConnectorConfig.PublicPublishValue"/>.
 /// </summary>
-public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig config, TimeProvider clock)
+public sealed class AutotaskConnector(
+    HttpClient http, AutotaskConnectorConfig config, TimeProvider clock,
+    // A callback rather than an ILogger: this project is a provider-neutral library with no logging
+    // dependency, so the caller decides where the observation goes.
+    Action<string, string>? observePicklist = null)
     : IServiceManagementConnector
 {
     // Autotask expects PascalCase request wrappers (MaxRecords/Filter). JsonContent.Create defaults
@@ -690,13 +694,39 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
     private Task<AtFieldInfoResult?> TicketFieldsAsync(CancellationToken ct)
         => _ticketFields ??= SendAsync<AtFieldInfoResult>(HttpMethod.Get, "V1.0/Tickets/entityInformation/fields", null, ct);
 
+    private readonly HashSet<string> _observedPicklists = [];
+
+    /// <summary>
+    /// Reports a mapped field's picklist as id=label pairs, once per field per connector.
+    ///
+    /// These are configuration labels — status, priority, queue and category names — never anything
+    /// a customer wrote. Kept because a mapping rule holding a bare id is unreadable without them:
+    /// answering "which queue is 29682833?" otherwise needs someone to open the admin UI, and a rule
+    /// nobody can read is a rule nobody fixes.
+    /// </summary>
+    private void ObservePicklistOnce(string field, List<AtPicklistValue> values)
+    {
+        if (observePicklist is null || values.Count == 0) return;
+        if (!_observedPicklists.Add(field)) return;
+        try
+        {
+            observePicklist(field, string.Join(", ", values.Select(v => $"{v.Value}={v.Label}")));
+        }
+        catch (Exception)
+        {
+            // Observing the shape must never break the sync that produced it.
+        }
+    }
+
     private async Task<List<AtPicklistValue>> TicketPicklistAsync(string field, CancellationToken ct)
     {
         try
         {
             var info = await TicketFieldsAsync(ct);
-            return info?.Fields.FirstOrDefault(f => string.Equals(f.Name, field, StringComparison.OrdinalIgnoreCase))
+            var values = info?.Fields.FirstOrDefault(f => string.Equals(f.Name, field, StringComparison.OrdinalIgnoreCase))
                 ?.PicklistValues ?? [];
+            ObservePicklistOnce(field, values);
+            return values;
         }
         catch (ConnectorException)
         {

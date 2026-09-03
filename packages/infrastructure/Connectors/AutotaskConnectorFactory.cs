@@ -5,6 +5,7 @@ using Desk.Domain.Enums;
 using Desk.Infrastructure.Persistence;
 using Desk.PsaCore.Contracts;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Desk.Infrastructure.Connectors;
 
@@ -17,7 +18,8 @@ public sealed class AutotaskConnectorFactory(
     DeskDbContext db,
     ISecretStore secrets,
     IHttpClientFactory httpFactory,
-    TimeProvider clock) : IConnectorFactory
+    TimeProvider clock,
+    ILogger<AutotaskConnectorFactory> logger) : IConnectorFactory
 {
     public ProviderType Provider => ProviderType.AutotaskPsa;
 
@@ -47,7 +49,10 @@ public sealed class AutotaskConnectorFactory(
         var http = httpFactory.CreateClient("autotask");
         http.BaseAddress = new Uri(config.BaseUrl);
 
-        return new AutotaskConnector(http, config, clock);
+        return new AutotaskConnector(http, config, clock,
+            // Field names and their option labels only — configuration, never customer content.
+            (field, values) => logger.LogInformation(
+                "Autotask {Field} picklist: {Values}", field, values));
     }
 
     private static long? ParseId(string? raw) => long.TryParse(raw, out var id) && id > 0 ? id : null;
