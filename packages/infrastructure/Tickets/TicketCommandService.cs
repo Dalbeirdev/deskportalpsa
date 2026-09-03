@@ -25,7 +25,8 @@ public sealed class TicketCommandService(
     IMappingEngine mapping,
     ISyncEventStore syncEvents,
     ITicketScopeQuery scopeQuery,
-    TimeProvider clock) : ITicketCommandService
+    TimeProvider clock,
+    Desk.Application.Analytics.IActivityRecorder activity) : ITicketCommandService
 {
     /// <summary>Portal-neutral status a newly raised ticket starts in.</summary>
     private const string NewStatus = "NEW";
@@ -167,6 +168,16 @@ public sealed class TicketCommandService(
         }
 
         await RecordPortalEventAsync(access.MspOrganizationId, connection.Id, ticket, idempotencyKey, "ticket.created", ct);
+        await activity.RecordAsync(new Desk.Application.Analytics.ActivityRecord(
+            Desk.Domain.Analytics.ActivityKind.TicketCreated, Desk.Domain.Analytics.ActivitySource.Portal)
+        {
+            MspOrganizationId = access.MspOrganizationId,
+            ActorUserId = null,            // raised by a CLIENT user, who is not an AppUser
+            PsaConnectionId = connection.Id,
+            TicketId = ticket.Id,
+            ClientCompanyId = company.Id,
+            Detail = "Raised in the client portal",
+        }, ct);
         return new CreateTicketResultDto(ticket.Id, created.ExternalId);
     }
 
@@ -204,6 +215,16 @@ public sealed class TicketCommandService(
         await db.SaveChangesAsync(ct);
 
         await RecordPortalEventAsync(access.MspOrganizationId, ticket.PsaConnectionId, ticket, idempotencyKey, "note.created", ct);
+        await activity.RecordAsync(new Desk.Application.Analytics.ActivityRecord(
+            Desk.Domain.Analytics.ActivityKind.NoteAdded, Desk.Domain.Analytics.ActivitySource.Portal)
+        {
+            MspOrganizationId = access.MspOrganizationId,
+            OccurredAt = note.NoteCreatedAt,
+            PsaConnectionId = ticket.PsaConnectionId,
+            TicketId = ticket.Id,
+            ClientCompanyId = ticket.ClientCompanyId,
+            Detail = "Client reply",
+        }, ct);
         return new TicketNoteDto(note.Id, note.AuthorName, true, note.Body, note.NoteCreatedAt);
     }
 
@@ -275,6 +296,17 @@ public sealed class TicketCommandService(
         await db.SaveChangesAsync(ct);
 
         await RecordPortalEventAsync(ticket.MspOrganizationId, ticket.PsaConnectionId, ticket, idempotencyKey, "note.created", ct);
+        await activity.RecordAsync(new Desk.Application.Analytics.ActivityRecord(
+            Desk.Domain.Analytics.ActivityKind.NoteAdded, Desk.Domain.Analytics.ActivitySource.Portal)
+        {
+            MspOrganizationId = ticket.MspOrganizationId,
+            OccurredAt = note.NoteCreatedAt,
+            ActorUserId = appUserId,
+            PsaConnectionId = ticket.PsaConnectionId,
+            TicketId = ticket.Id,
+            ClientCompanyId = ticket.ClientCompanyId,
+            Detail = isPublic ? "Public reply" : "Internal note",
+        }, ct);
         return new TicketNoteDto(note.Id, note.AuthorName, false, note.Body, note.NoteCreatedAt);
     }
 

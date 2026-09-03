@@ -45,7 +45,7 @@ public class NoteImportTests
 
     private static ConnectionSyncRunner Runner(DeskDbContext db, StubConnector connector, TestClock clock)
         => new(db, new FakeResolver(connector),
-            new TicketSyncService(db, new MappingEngine(), new SyncEventStore(db, clock), clock),
+            new TicketSyncService(db, new MappingEngine(), new SyncEventStore(db, clock), clock, new RecordingActivity()),
             new InMemoryObjectStorage(new AttachmentStorageOptions(), clock), new HeuristicMalwareScanner(), clock);
 
     private static UnifiedTicket Incoming(string extId) => new()

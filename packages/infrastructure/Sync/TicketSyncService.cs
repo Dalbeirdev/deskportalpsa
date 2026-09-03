@@ -21,7 +21,8 @@ public sealed class TicketSyncService(
     DeskDbContext db,
     IMappingEngine mapping,
     ISyncEventStore syncEvents,
-    TimeProvider clock) : ITicketSyncService
+    TimeProvider clock,
+    Desk.Application.Analytics.IActivityRecorder activity) : ITicketSyncService
 {
     public async Task<TicketSyncOutcome> UpsertFromProviderAsync(
         Guid psaConnectionId, UnifiedTicket incoming, IReadOnlyList<FieldMapping> rules, CancellationToken ct = default)
@@ -73,6 +74,13 @@ public sealed class TicketSyncService(
             Title = incoming.Title,
         };
 
+        // What the portal believed BEFORE this write, so a transition can be told apart from a
+        // value that was simply always there. Re-importing an already-closed ticket must not emit
+        // a fresh closure every sync — the analytics would count one closure many times.
+        var wasAssignedTo = existing?.AssignedTechnicianExternalId;
+        var wasResolved = existing?.ResolvedAt is not null;
+        var wasClosed = existing?.ClosedAt is not null;
+
         ticket.Title = incoming.Title;
         ticket.Description = incoming.Description;
         ticket.PortalStatus = portalStatus;
@@ -98,6 +106,31 @@ public sealed class TicketSyncService(
             db.Tickets.Add(ticket);
 
         await db.SaveChangesAsync(ct);
+
+        // Observed, not witnessed: the PSA is telling us these happened, and it is the only party
+        // that knows. Source is Psa so the two halves of the activity picture stay distinguishable
+        // — which is the whole point of recording them together.
+        var observed = new List<Desk.Application.Analytics.ActivityRecord>();
+        Desk.Application.Analytics.ActivityRecord Seen(Desk.Domain.Analytics.ActivityKind kind, DateTimeOffset? at, string? detail)
+            => new(kind, Desk.Domain.Analytics.ActivitySource.Psa)
+            {
+                MspOrganizationId = ticket.MspOrganizationId,
+                OccurredAt = at,
+                ActorExternalId = ticket.AssignedTechnicianExternalId,
+                PsaConnectionId = ticket.PsaConnectionId,
+                TicketId = ticket.Id,
+                ClientCompanyId = ticket.ClientCompanyId,
+                Detail = detail,
+            };
+
+        if (incoming.AssignedTechnicianExternalId is { Length: > 0 } assignee && assignee != wasAssignedTo)
+            observed.Add(Seen(Desk.Domain.Analytics.ActivityKind.TicketAssigned, null, $"Assigned to {assignee}"));
+        if (!wasResolved && incoming.ResolvedAt is { } resolvedAt)
+            observed.Add(Seen(Desk.Domain.Analytics.ActivityKind.TicketResolved, resolvedAt, null));
+        if (!wasClosed && incoming.ClosedAt is { } closedAt)
+            observed.Add(Seen(Desk.Domain.Analytics.ActivityKind.TicketClosed, closedAt, null));
+
+        await activity.RecordManyAsync(observed, ct);
         return existing is null ? TicketSyncOutcome.Created : TicketSyncOutcome.Updated;
     }
 

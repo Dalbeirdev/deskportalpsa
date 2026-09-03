@@ -108,7 +108,7 @@ public class ClientPortalTests
         await using var db = await SeedAsync(dbName);
         var events = new SyncEventStore(db, clock);
         var svc = new TicketCommandService(db, new FakeResolver(new MockConnector(new MockConnectorOptions(), clock)),
-            new MappingEngine(), events, new NoopTicketScopeQuery(), clock);
+            new MappingEngine(), events, new NoopTicketScopeQuery(), clock, new RecordingActivity());
 
         var result = await svc.CreateAsync(Access(CompanyA, RegularUser, false),
             new CreateTicketInput("Printer down", "It smokes", "HIGH", null, "Service Desk"));
@@ -135,7 +135,7 @@ public class ClientPortalTests
         await using var db = await SeedAsync(dbName);
         var mock = new MockConnector(new MockConnectorOptions(), clock);
         var svc = new TicketCommandService(db, new FakeResolver(mock),
-            new MappingEngine(), new SyncEventStore(db, clock), new NoopTicketScopeQuery(), clock);
+            new MappingEngine(), new SyncEventStore(db, clock), new NoopTicketScopeQuery(), clock, new RecordingActivity());
 
         // Create through the service so the ticket exists in the mock PSA before commenting.
         var created = await svc.CreateAsync(Access(CompanyA, RegularUser, false),
@@ -160,7 +160,7 @@ public class ClientPortalTests
         await db.SaveChangesAsync();
 
         var svc = new TicketCommandService(db, new FakeResolver(new MockConnector(new MockConnectorOptions(), clock)),
-            new MappingEngine(), new SyncEventStore(db, clock), new NoopTicketScopeQuery(), clock);
+            new MappingEngine(), new SyncEventStore(db, clock), new NoopTicketScopeQuery(), clock, new RecordingActivity());
 
         // Create through the service so the ticket exists in the (shared) mock PSA before commenting.
         var created = await svc.CreateAsync(Access(CompanyA, RegularUser, false),
