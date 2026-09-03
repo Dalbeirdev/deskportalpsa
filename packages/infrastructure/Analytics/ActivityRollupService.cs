@@ -14,9 +14,15 @@ namespace Desk.Infrastructure.Analytics;
 public sealed class ActivityRollupService(DeskDbContext db, TimeProvider clock) : IActivityRollupService
 {
     /// <summary>
-    /// How far back each pass recomputes. PSA data arrives late — a closure observed today can carry
-    /// a timestamp from days ago — so recent history has to be rebuilt rather than appended to.
-    /// Seven days is comfortably longer than any sync lag seen here and still cheap.
+    /// How far back each pass rebuilds unconditionally. PSA data arrives late — a closure observed
+    /// today can carry a timestamp from days ago — so recent history is rebuilt rather than appended
+    /// to. Seven days is comfortably longer than any sync lag seen here and still cheap.
+    ///
+    /// It is NOT the limit of what a pass will build. A rolling window alone can only ever describe
+    /// the recent past: an event already older than the window the first time the rollup sees it
+    /// never becomes a fact at all. For PSA data that is the normal case rather than an edge one — a
+    /// widened import brings in months of closures at once, every one of them dated when it
+    /// happened. Days holding events but no facts are rebuilt too, however old.
     /// </summary>
     private const int RecomputeDays = 7;
 
@@ -34,8 +40,38 @@ public sealed class ActivityRollupService(DeskDbContext db, TimeProvider clock) 
     public async Task<ActivityRollupResult> RunAsync(CancellationToken ct = default)
     {
         var now = clock.GetUtcNow();
-        var firstDay = DateOnly.FromDateTime(now.UtcDateTime.Date.AddDays(-RecomputeDays));
-        var windowStart = firstDay.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var today = DateOnly.FromDateTime(now.UtcDateTime.Date);
+        var firstDay = today.AddDays(-RecomputeDays);
+        var retentionFloor = now.AddDays(-RawRetentionDays);
+
+        // Which days to rebuild: the rolling window, plus every day holding raw events that have no
+        // facts to show for them. That second half is what makes a backfill visible — without it an
+        // import recovering months of history leaves the dashboards exactly as they were.
+        //
+        // Both queries are deliberately dull. The tests run on the in-memory provider, which happily
+        // executes LINQ that Npgsql cannot translate, so anything clever here would pass every test
+        // and throw in production.
+        var eventTimes = await db.ActivityEvents.IgnoreQueryFilters().AsNoTracking()
+            .Where(e => e.OccurredAt >= retentionFloor)
+            .Select(e => e.OccurredAt)
+            .ToListAsync(ct);
+        var eventDays = eventTimes.Select(t => DateOnly.FromDateTime(t.UtcDateTime.Date)).ToHashSet();
+
+        var factDays = (await db.ActivityDailyFacts.IgnoreQueryFilters().AsNoTracking()
+            .Select(f => f.Day)
+            .Distinct()
+            .ToListAsync(ct)).ToHashSet();
+
+        var targetDays = new HashSet<DateOnly>(eventDays.Where(d => !factDays.Contains(d)));
+        for (var d = firstDay; d <= today; d = d.AddDays(1)) targetDays.Add(d);
+
+        // One bounded range for the reads, then the exact day set in memory. A day inside that range
+        // which is NOT being rebuilt has to keep its facts, so the filter is exact on the way out as
+        // well as the way in.
+        var rangeFirst = targetDays.Min();
+        var rangeLast = targetDays.Max();
+        var rangeStart = rangeFirst.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var rangeEndExclusive = rangeLast.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
 
         // Portal events name a portal user; the facts are keyed on the PSA identity so both halves
         // aggregate on the same axis. Someone unmapped resolves to null rather than a guess.
@@ -46,20 +82,26 @@ public sealed class ActivityRollupService(DeskDbContext db, TimeProvider clock) 
             .GroupBy(i => i.AppUserId)
             .ToDictionary(g => g.Key, g => g.First().ExternalTechnicianId);
 
-        var events = await db.ActivityEvents.IgnoreQueryFilters().AsNoTracking()
-            .Where(e => e.OccurredAt >= windowStart)
+        var events = (await db.ActivityEvents.IgnoreQueryFilters().AsNoTracking()
+            .Where(e => e.OccurredAt >= rangeStart && e.OccurredAt < rangeEndExclusive)
             .Select(e => new
             {
                 e.MspOrganizationId, e.OccurredAt, e.Source, e.ActorUserId, e.ActorExternalId,
                 e.ClientCompanyId, e.DurationSeconds,
             })
-            .ToListAsync(ct);
+            .ToListAsync(ct))
+            .Where(e => targetDays.Contains(DateOnly.FromDateTime(e.OccurredAt.UtcDateTime.Date)))
+            .ToList();
 
         // Delete-then-insert for the window. The alternative — a unique index and upserts — looks
         // tidier and is a trap here: three of the grain's columns are nullable, and Postgres treats
         // NULLs as distinct, so the index would not actually prevent the duplicates it appears to.
-        var stale = db.ActivityDailyFacts.IgnoreQueryFilters().Where(f => f.Day >= firstDay);
-        db.ActivityDailyFacts.RemoveRange(await stale.ToListAsync(ct));
+        var stale = (await db.ActivityDailyFacts.IgnoreQueryFilters()
+                .Where(f => f.Day >= rangeFirst && f.Day <= rangeLast)
+                .ToListAsync(ct))
+            .Where(f => targetDays.Contains(f.Day))
+            .ToList();
+        db.ActivityDailyFacts.RemoveRange(stale);
 
         var facts = events
             .GroupBy(e => new
@@ -86,13 +128,22 @@ public sealed class ActivityRollupService(DeskDbContext db, TimeProvider clock) 
         db.ActivityDailyFacts.AddRange(facts);
         await db.SaveChangesAsync(ct);
 
-        // Expire AFTER the rollup, never before: dropping events that had not been aggregated would
-        // lose exactly the history the facts exist to preserve.
-        //
-        // Deleted in batches rather than one set-based statement. A single ExecuteDelete would be
-        // faster, but it is unsupported by the in-memory provider the tests run on — and a path
-        // that DELETES DATA is the last one to leave unverified. Batching also bounds how long any
-        // single pass holds locks on a table the dashboards read.
+        return new ActivityRollupResult(targetDays.Count, facts.Count, await ExpireAsync(now, ct));
+    }
+
+    /// <summary>
+    /// Drops raw events past the retention horizon, in batches.
+    ///
+    /// Always AFTER the rollup, never before: dropping events that had not been aggregated would
+    /// lose exactly the history the facts exist to preserve.
+    ///
+    /// Batched rather than one set-based statement. A single ExecuteDelete would be faster but is
+    /// unsupported by the in-memory provider the tests run on — and a path that DELETES DATA is the
+    /// last one to leave unverified. Batching also bounds how long one pass holds locks on a table
+    /// the dashboards read.
+    /// </summary>
+    private async Task<int> ExpireAsync(DateTimeOffset now, CancellationToken ct)
+    {
         var horizon = now.AddDays(-RawRetentionDays);
         var expired = 0;
         for (var batch = 0; batch < MaxExpiryBatches; batch++)
@@ -108,6 +159,6 @@ public sealed class ActivityRollupService(DeskDbContext db, TimeProvider clock) 
             expired += doomed.Count;
         }
 
-        return new ActivityRollupResult(RecomputeDays + 1, facts.Count, expired);
+        return expired;
     }
 }

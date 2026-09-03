@@ -145,6 +145,76 @@ public class ActivityRollupTests
     }
 
     [Fact]
+    public async Task An_event_older_than_the_rolling_window_still_becomes_a_fact()
+    {
+        // How the facts table sat empty while the log held 68 events. The pass only ever rebuilt the
+        // last seven days, and PSA events are dated when they HAPPENED, not when they arrived — so a
+        // closure imported today carrying last month's timestamp landed outside the window on its
+        // very first pass and was never aggregated at all. Not an edge case: widening an import
+        // brings in months of history at once, and every day of it lands this way.
+        var clock = new TestClock();
+        var longAgo = clock.GetUtcNow().AddDays(-60);
+        await using var db = await SeedAsync();
+        AddEvent(db, longAgo, ActivitySource.Psa, actorExternal: "R1");
+        await db.SaveChangesAsync();
+
+        await new ActivityRollupService(db, clock).RunAsync();
+
+        var day = DateOnly.FromDateTime(longAgo.UtcDateTime.Date);
+        (await db.ActivityDailyFacts.IgnoreQueryFilters().SingleAsync(f => f.Day == day))
+            .EventCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task A_day_already_rolled_up_is_left_alone_rather_than_rebuilt_forever()
+    {
+        // The backfill has to settle. If an old day were rebuilt on every pass, each hourly run
+        // would rewrite the whole history — and the second pass would have nothing new to say.
+        var clock = new TestClock();
+        await using var db = await SeedAsync();
+        AddEvent(db, clock.GetUtcNow().AddDays(-60), ActivitySource.Psa, actorExternal: "R1");
+        await db.SaveChangesAsync();
+        var svc = new ActivityRollupService(db, clock);
+
+        var first = await svc.RunAsync();
+        var second = await svc.RunAsync();
+
+        first.FactsWritten.Should().Be(1);
+        second.DaysProcessed.Should().Be(RollingWindowDays,
+            "once the old day has facts, only the rolling window is rebuilt");
+        (await db.ActivityDailyFacts.IgnoreQueryFilters().CountAsync())
+            .Should().Be(1, "and the fact it already wrote is still there, exactly once");
+    }
+
+    /// <summary>Today plus the seven days behind it.</summary>
+    private const int RollingWindowDays = 8;
+
+    [Fact]
+    public async Task Backfilling_an_old_day_does_not_disturb_the_days_around_it()
+    {
+        // A rebuild is delete-then-insert, so the day set it deletes has to be exactly the day set
+        // it rebuilds. Getting that wrong would quietly drop history either side of the gap.
+        var clock = new TestClock();
+        await using var db = await SeedAsync();
+        // INSIDE the span being read (-60 to today) but not itself being rebuilt: it has no events
+        // and is not in the rolling window. Placed outside that span the database filter alone would
+        // protect it, and this would pass while the day set was ignored entirely.
+        var untouched = DateOnly.FromDateTime(clock.GetUtcNow().AddDays(-30).UtcDateTime.Date);
+        db.ActivityDailyFacts.Add(new ActivityDailyFact
+        {
+            MspOrganizationId = Org, Day = untouched, Source = ActivitySource.Psa,
+            ActorExternalId = "R1", EventCount = 42,
+        });
+        AddEvent(db, clock.GetUtcNow().AddDays(-60), ActivitySource.Psa, actorExternal: "R1");
+        await db.SaveChangesAsync();
+
+        await new ActivityRollupService(db, clock).RunAsync();
+
+        (await db.ActivityDailyFacts.IgnoreQueryFilters().SingleAsync(f => f.Day == untouched))
+            .EventCount.Should().Be(42, "that day was not being rebuilt and keeps what it had");
+    }
+
+    [Fact]
     public async Task Raw_events_past_the_retention_horizon_are_expired()
     {
         var clock = new TestClock();
