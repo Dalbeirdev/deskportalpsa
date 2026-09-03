@@ -622,10 +622,27 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
             "Give the technician a role in Autotask, or choose a different time-entry technician on this connection.");
     }
 
-    public Task<IReadOnlyList<ExternalFieldOption>> GetStatusesAsync(CancellationToken ct = default) => PicklistAsync("status", ct);
-    public Task<IReadOnlyList<ExternalFieldOption>> GetPrioritiesAsync(CancellationToken ct = default) => PicklistAsync("priority", ct);
-    public Task<IReadOnlyList<ExternalFieldOption>> GetQueuesOrBoardsAsync(CancellationToken ct = default) => PicklistAsync("queueID", ct);
-    public Task<IReadOnlyList<ExternalFieldOption>> GetCategoriesAsync(CancellationToken ct = default) => PicklistAsync("ticketCategory", ct);
+    // Offered BY LABEL, because a label is what a synced ticket arrives carrying: ToUnifiedAsync
+    // resolves every one of these picklists from id to label on the way in. Offered as ids, a rule
+    // an administrator saved was compared against a label it could never equal, so the value fell
+    // through unmapped and the portal displayed Autotask's own — which reads exactly like a mapping
+    // that passed it through on purpose. Priority was in that state on all 101 tickets.
+    //
+    // Writes resolve a label back to its id, so a rule still holding an id keeps pushing correctly.
+    public Task<IReadOnlyList<ExternalFieldOption>> GetStatusesAsync(CancellationToken ct = default) => PicklistAsync("status", byLabel: true, ct);
+    public Task<IReadOnlyList<ExternalFieldOption>> GetPrioritiesAsync(CancellationToken ct = default) => PicklistAsync("priority", byLabel: true, ct);
+    public Task<IReadOnlyList<ExternalFieldOption>> GetCategoriesAsync(CancellationToken ct = default) => PicklistAsync("ticketCategory", byLabel: true, ct);
+
+    /// <summary>
+    /// Queues stay identified BY ID, unlike the picklists above.
+    ///
+    /// This same list feeds the connection's import filter, which becomes an Autotask "in" clause
+    /// over queueID and parses each value as a long — a label there is an exception, not a filter.
+    /// The cost is that a queue MAPPING rule saved from this list cannot match an incoming ticket,
+    /// which carries the queue name. Fixing that means the filter and the mapping no longer sharing
+    /// one list, rather than a change here.
+    /// </summary>
+    public Task<IReadOnlyList<ExternalFieldOption>> GetQueuesOrBoardsAsync(CancellationToken ct = default) => PicklistAsync("queueID", byLabel: false, ct);
 
     /// <summary>
     /// Work types are billing codes, not a ticket picklist. UseType 1 is the general allocation
@@ -678,8 +695,8 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
 
     // ---- HTTP plumbing ----
 
-    private Task<IReadOnlyList<ExternalFieldOption>> PicklistAsync(string fieldName, CancellationToken ct)
-        => PicklistAsync("Tickets", fieldName, ct);
+    private Task<IReadOnlyList<ExternalFieldOption>> PicklistAsync(string fieldName, bool byLabel, CancellationToken ct)
+        => PicklistAsync("Tickets", fieldName, ct, byLabel);
 
     // Ticket field metadata, fetched at most once per connector instance: a sync run maps hundreds
     // of tickets and every one of them needs the same picklists.
@@ -746,12 +763,17 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
             $"{string.Join(", ", values.Where(v => v.IsActive).Select(v => v.Label))}.");
     }
 
-    private async Task<IReadOnlyList<ExternalFieldOption>> PicklistAsync(string entity, string fieldName, CancellationToken ct)
+    private async Task<IReadOnlyList<ExternalFieldOption>> PicklistAsync(
+        string entity, string fieldName, CancellationToken ct, bool byLabel = false)
     {
         var info = await SendAsync<AtFieldInfoResult>(HttpMethod.Get, $"V1.0/{entity}/entityInformation/fields", null, ct);
         var field = info?.Fields.FirstOrDefault(f => string.Equals(f.Name, fieldName, StringComparison.OrdinalIgnoreCase));
         return (field?.PicklistValues ?? [])
-            .Select(p => new ExternalFieldOption(p.Value ?? "", p.Label ?? p.Value ?? "", p.IsActive)).ToList();
+            .Select(p =>
+            {
+                var label = p.Label ?? p.Value ?? "";
+                return new ExternalFieldOption(byLabel ? label : p.Value ?? "", label, p.IsActive);
+            }).ToList();
     }
 
     /// <summary>

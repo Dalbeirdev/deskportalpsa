@@ -301,4 +301,47 @@ public sealed class AutotaskConnectorCertificationTests : ConnectorCertification
 
         await act.Should().ThrowAsync<ConnectorException>();
     }
+
+    /// <summary>
+    /// The value discovery offers has to be the value tickets arrive carrying.
+    ///
+    /// The mapping UI saves whatever discovery gives it as a rule's external value, and the sync
+    /// compares that against the value on an incoming ticket. Autotask offered picklist IDS while
+    /// ToUnifiedAsync resolves every one of those picklists to its LABEL on the way in, so a saved
+    /// rule was compared against something it could never equal. Priority sat that way on all 101
+    /// tickets in production: unmapped, showing Autotask's own value, indistinguishable from a
+    /// mapping that passed it through deliberately.
+    /// </summary>
+    [Fact]
+    public async Task A_status_rule_saved_from_discovery_can_match_an_incoming_ticket()
+    {
+        var connector = Build(new FakeAutotaskServer(Clock));
+        var offered = (await connector.GetStatusesAsync()).Select(o => o.Value).ToList();
+
+        await connector.CreateTicketAsync(new UnifiedTicketCreateRequest
+        {
+            Title = "Printer", ExternalCompanyId = SeededOrganizationId,
+            IdempotencyKey = "discovery-status", Status = offered.First(),
+        });
+        var ticket = (await connector.GetTicketsAsync(new TicketFilter())).Items.Single();
+
+        offered.Should().Contain(ticket.Status,
+            "a rule is saved with the offered value and compared against the ticket's");
+    }
+
+    [Fact]
+    public async Task A_priority_rule_saved_from_discovery_can_match_an_incoming_ticket()
+    {
+        var connector = Build(new FakeAutotaskServer(Clock));
+        var offered = (await connector.GetPrioritiesAsync()).Select(o => o.Value).ToList();
+
+        await connector.CreateTicketAsync(new UnifiedTicketCreateRequest
+        {
+            Title = "Printer", ExternalCompanyId = SeededOrganizationId,
+            IdempotencyKey = "discovery-priority", Priority = offered.First(),
+        });
+        var ticket = (await connector.GetTicketsAsync(new TicketFilter())).Items.Single();
+
+        offered.Should().Contain(ticket.Priority);
+    }
 }
