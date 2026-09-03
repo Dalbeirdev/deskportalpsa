@@ -70,6 +70,66 @@ public class TicketSyncTests
         second.Should().Be(TicketSyncOutcome.SkippedUnchanged);
     }
 
+    /// <summary>Captures what was logged, so "it says so out loud" can actually be asserted.</summary>
+    private sealed class CapturingLogger : Microsoft.Extensions.Logging.ILogger<TicketSyncService>
+    {
+        public List<string> Warnings { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel level) => true;
+        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel level,
+            Microsoft.Extensions.Logging.EventId id, TState state, Exception? ex,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (level == Microsoft.Extensions.Logging.LogLevel.Warning) Warnings.Add(formatter(state, ex));
+        }
+    }
+
+    [Fact]
+    public async Task A_provider_value_that_nothing_maps_is_reported_rather_than_passed_through_silently()
+    {
+        // The failure this makes visible: an unmapped value falls through to the provider's own
+        // value, which looks exactly like a mapping that passed it through on purpose. ConnectWise
+        // ran that way on every status and priority of every ticket, with no error anywhere, and it
+        // took reading the database to notice.
+        var clock = new TestClock();
+        await using var db = await SeedConnectionAsync(Guid.NewGuid().ToString());
+        // Priority IS mapped, status is not — so the assertion also shows a mapped value stays quiet.
+        db.FieldMappings.Add(new FieldMapping
+        {
+            MspOrganizationId = Org, PsaConnectionId = Conn, Provider = ProviderType.AutotaskPsa,
+            Scope = MappingScope.ConnectionOverride, Direction = MappingDirection.Bidirectional,
+            PortalField = "priority", ExternalField = "priority", PortalValue = "NORMAL", ExternalValue = "1",
+        });
+        await db.SaveChangesAsync();
+        var log = new CapturingLogger();
+        var rules = await db.FieldMappings.ToListAsync();
+        var svc = new TicketSyncService(db, new MappingEngine(), new SyncEventStore(db, clock), clock,
+            new RecordingActivity(), log);
+
+        await svc.UpsertFromProviderAsync(Conn, Incoming("500", "Printer", "Scheduled"), rules);
+
+        log.Warnings.Should().ContainSingle()
+            .Which.Should().Contain("Scheduled").And.Contain("status");
+        (await db.Tickets.SingleAsync()).PortalStatus
+            .Should().Be("Scheduled", "the raw value is still used — this reports, it does not change behaviour");
+    }
+
+    [Fact]
+    public async Task The_same_unmapped_value_is_reported_once_not_on_every_ticket()
+    {
+        var clock = new TestClock();
+        await using var db = await SeedConnectionAsync(Guid.NewGuid().ToString());
+        var log = new CapturingLogger();
+        var svc = new TicketSyncService(db, new MappingEngine(), new SyncEventStore(db, clock), clock,
+            new RecordingActivity(), log);
+
+        // A desk with a thousand tickets in one unmapped state must not write a thousand lines.
+        await svc.UpsertFromProviderAsync(Conn, Incoming("501", "A", "Scheduled"), []);
+        await svc.UpsertFromProviderAsync(Conn, Incoming("502", "B", "Scheduled"), []);
+
+        log.Warnings.Count(w => w.Contains("Scheduled")).Should().Be(1);
+    }
+
     [Fact]
     public async Task A_raise_date_arriving_later_reaches_a_ticket_that_is_otherwise_unchanged()
     {
