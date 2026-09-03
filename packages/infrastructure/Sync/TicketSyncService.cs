@@ -22,7 +22,8 @@ public sealed class TicketSyncService(
     IMappingEngine mapping,
     ISyncEventStore syncEvents,
     TimeProvider clock,
-    Desk.Application.Analytics.IActivityRecorder activity) : ITicketSyncService
+    Desk.Application.Analytics.IActivityRecorder activity,
+    Microsoft.Extensions.Logging.ILogger<TicketSyncService>? logger = null) : ITicketSyncService
 {
     public async Task<TicketSyncOutcome> UpsertFromProviderAsync(
         Guid psaConnectionId, UnifiedTicket incoming, IReadOnlyList<FieldMapping> rules, CancellationToken ct = default)
@@ -138,7 +139,35 @@ public sealed class TicketSyncService(
     {
         if (value is null) return null;
         var r = mapping.MapToPortal(rules, ctx, field, value);
+        if (!r.Resolved) ReportUnmapped(ctx, field, value);
         return r.Resolved ? r.Value : null;
+    }
+
+    // Values already reported. Per INSTANCE, not process-wide: the service is scoped and a sync run
+    // holds one, so each unmapped value is named once per run rather than once per ticket. Repeating
+    // next run is correct — the value is still unmapped — and it keeps the rule explainable instead
+    // of hiding a condition forever behind state nobody can see.
+    private readonly HashSet<string> _reported = [];
+
+    /// <summary>
+    /// Says out loud that the provider sent a value nothing maps.
+    ///
+    /// An unmapped value falls through to the raw provider value, which is indistinguishable from a
+    /// mapping that passed it through deliberately — so the portal displays something plausible and
+    /// nobody finds out. ConnectWise ran that way on every status and priority of every ticket
+    /// without a single error, and it took reading the database to notice.
+    ///
+    /// Field and value only: these are configuration labels (status/priority/type/board names), not
+    /// anything a customer wrote.
+    /// </summary>
+    private void ReportUnmapped(MappingContext ctx, string field, string value)
+    {
+        if (logger is null) return;
+        if (!_reported.Add($"{ctx.PsaConnectionId}|{field}|{value}")) return;
+        Microsoft.Extensions.Logging.LoggerExtensions.LogWarning(logger,
+            "No mapping rule matches {Provider} {Field} '{Value}' on connection {ConnectionId}; "
+            + "the portal is showing the provider's own value",
+            ctx.Provider, field, value, ctx.PsaConnectionId);
     }
 
     /// <summary>Company sync: find the client company for this external id, creating a stub if new.</summary>
