@@ -51,7 +51,7 @@ public class ConnectionSyncRunnerFailureTests
         await using var db = await SeedAsync(Guid.NewGuid().ToString());
         var thrown = new ValidationFailedException("'CW' has no valid stored credentials — edit the connection and re-enter them.");
         var runner = new ConnectionSyncRunner(db, new ThrowingResolver(thrown),
-            new TicketSyncService(db, new MappingEngine(), new SyncEventStore(db, clock), clock),
+            new TicketSyncService(db, new MappingEngine(), new SyncEventStore(db, clock), clock, new RecordingActivity()),
             new InMemoryObjectStorage(new AttachmentStorageOptions(), clock), new HeuristicMalwareScanner(), clock);
 
         var act = () => runner.RunAsync(Conn);

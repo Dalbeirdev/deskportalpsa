@@ -141,6 +141,27 @@ public sealed class UserPsaIdentityConfig : IEntityTypeConfiguration<Desk.Domain
     }
 }
 
+public sealed class ActivityEventConfig : IEntityTypeConfiguration<Desk.Domain.Analytics.ActivityEvent>
+{
+    public void Configure(EntityTypeBuilder<Desk.Domain.Analytics.ActivityEvent> b)
+    {
+        b.ToTable("activity_events");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.ActorExternalId).HasMaxLength(100);
+        b.Property(x => x.Detail).HasMaxLength(500);
+
+        // Every dashboard query is "this tenant, this window", so that pair leads. The others cover
+        // the three groupings the analytics layer actually asks for: by person, by client, by ticket.
+        b.HasIndex(x => new { x.MspOrganizationId, x.OccurredAt });
+        b.HasIndex(x => new { x.MspOrganizationId, x.ActorUserId, x.OccurredAt });
+        b.HasIndex(x => new { x.MspOrganizationId, x.ClientCompanyId, x.OccurredAt });
+        b.HasIndex(x => x.TicketId);
+
+        // No navigation properties on purpose. An activity row outlives what it describes: a ticket
+        // reconciled away as deleted must not take the history of the work done on it with it.
+    }
+}
+
 public sealed class TicketConfig : IEntityTypeConfiguration<Ticket>
 {
     public void Configure(EntityTypeBuilder<Ticket> b)

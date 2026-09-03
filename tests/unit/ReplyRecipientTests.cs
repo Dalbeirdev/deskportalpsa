@@ -53,7 +53,7 @@ public class ReplyRecipientTests
     {
         var psa = new MockConnector(new MockConnectorOptions(), clock);
         return (new TicketCommandService(db, new FakeResolver(psa), new MappingEngine(),
-            new SyncEventStore(db, clock), new NoopTicketScopeQuery(), clock), psa);
+            new SyncEventStore(db, clock), new NoopTicketScopeQuery(), clock, new RecordingActivity()), psa);
     }
 
     private static ClientAccess Access() => new(Org, CompanyA, RegularUser, false);

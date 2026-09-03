@@ -36,7 +36,7 @@ public class LifecycleCaptureTests
     }
 
     private static TicketSyncService Service(DeskDbContext db, TestClock clock)
-        => new(db, new MappingEngine(), new SyncEventStore(db, clock), clock);
+        => new(db, new MappingEngine(), new SyncEventStore(db, clock), clock, new RecordingActivity());
 
     private static UnifiedTicket Incoming(
         DateTimeOffset? created = null, DateTimeOffset? resolved = null,

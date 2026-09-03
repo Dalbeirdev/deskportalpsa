@@ -55,7 +55,7 @@ public class AttachmentDeletionTests
 
     private static ConnectionSyncRunner Runner(Fixture f) =>
         new(f.Db, new FakeResolver(f.Connector),
-            new TicketSyncService(f.Db, new MappingEngine(), new SyncEventStore(f.Db, f.Clock), f.Clock),
+            new TicketSyncService(f.Db, new MappingEngine(), new SyncEventStore(f.Db, f.Clock), f.Clock, new RecordingActivity()),
             f.Storage, new HeuristicMalwareScanner(), f.Clock);
 
     private static (UnifiedAttachment, byte[]) File(string id, string name, DateTimeOffset at) =>

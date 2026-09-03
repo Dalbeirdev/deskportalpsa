@@ -30,7 +30,7 @@ public class TicketSyncTests
     }
 
     private static TicketSyncService Service(DeskDbContext db, TestClock clock, ISyncEventStore? events = null)
-        => new(db, new MappingEngine(), events ?? new SyncEventStore(db, clock), clock);
+        => new(db, new MappingEngine(), events ?? new SyncEventStore(db, clock), clock, new RecordingActivity());
 
     private static UnifiedTicket Incoming(string extId, string title, string status) => new()
     {
