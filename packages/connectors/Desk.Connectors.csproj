@@ -7,4 +7,11 @@
     <ProjectReference Include="..\psa-core\Desk.PsaCore.csproj" />
     <ProjectReference Include="..\domain\Desk.Domain.csproj" />
   </ItemGroup>
+
+  <!-- The provider payload models are internal, and every date bug this session came from an
+       unverified assumption about their shape. Tests need to see them. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Desk.Tests.Unit" />
+  </ItemGroup>
+
 </Project>

@@ -800,7 +800,7 @@ public sealed class ConnectWiseConnector(
         CreatedAt = t.RaisedAt,
         ResolvedAt = t.DateResolved,
         ClosedAt = t.ClosedAtAny,
-        SlaDueAt = t.RequiredDate,
+        SlaDueAt = t.SlaTargetAt,
     };
 
     private static string Hmac(string body, string secret)
