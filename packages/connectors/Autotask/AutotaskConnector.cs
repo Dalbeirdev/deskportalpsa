@@ -115,10 +115,21 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
         if (filter.ActiveWithinDays is > 0 and { } days)
             filters.Add(Filter("lastActivityDate", "gte", clock.GetUtcNow().AddDays(-days).ToString("o")));
 
-        var items = await QueryAsync<AtTicket>("Tickets", filters, filter.PageSize, ct);
+        // Autotask answers a query with the first page and a URL for the next. Following it is the
+        // whole of pagination here: without it the import stopped at MaxRecords and reported success,
+        // so a desk with more tickets than one page silently never saw the rest — and the shortfall
+        // grew as the desk did.
+        var result = filter.Cursor is { Length: > 0 } cursor
+            ? await SendAsync<AtQueryResult<AtTicket>>(HttpMethod.Get, NextPageUrl(cursor), null, ct)
+            : await QueryPageAsync<AtTicket>("Tickets", filters, filter.PageSize, ct);
+
+        var items = result?.Items ?? [];
         var mapped = new List<UnifiedTicket>(items.Count);
         foreach (var item in items) mapped.Add(await ToUnifiedAsync(item, ct));
-        return new PaginatedResult<UnifiedTicket>(mapped, null, false);
+
+        var next = result?.PageDetails?.NextPageUrl;
+        var hasMore = !string.IsNullOrWhiteSpace(next);
+        return new PaginatedResult<UnifiedTicket>(mapped, hasMore ? next : null, hasMore);
     }
 
     public async Task<UnifiedTicket?> GetTicketAsync(string ticketId, CancellationToken ct = default)
@@ -770,10 +781,35 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
     private static object Filter(string field, string op, object value) => new { op, field, value };
 
     private async Task<List<T>> QueryAsync<T>(string entity, List<object> filters, int maxRecords, CancellationToken ct)
+        => (await QueryPageAsync<T>(entity, filters, maxRecords, ct))?.Items ?? [];
+
+    /// <summary>The whole page, page details included, for reads that continue past the first one.</summary>
+    private Task<AtQueryResult<T>?> QueryPageAsync<T>(string entity, List<object> filters, int maxRecords, CancellationToken ct)
+        => SendAsync<AtQueryResult<T>>(HttpMethod.Post, $"V1.0/{entity}/query",
+            new { MaxRecords = maxRecords, Filter = filters }, ct);
+
+    /// <summary>
+    /// A next-page URL, checked to be on the same host we were configured to talk to.
+    ///
+    /// The value arrives in a response body, so it is provider-supplied input rather than something
+    /// this code chose. Following it unchecked would let whatever answered the first request point
+    /// the next one anywhere — the credentials go along with it. Refusing loudly rather than
+    /// stopping quietly, because a silent stop is the exact failure pagination was added to end.
+    /// </summary>
+    private string NextPageUrl(string cursor)
     {
-        var body = new { MaxRecords = maxRecords, Filter = filters };
-        var result = await SendAsync<AtQueryResult<T>>(HttpMethod.Post, $"V1.0/{entity}/query", body, ct);
-        return result?.Items ?? [];
+        if (!Uri.TryCreate(cursor, UriKind.Absolute, out var next))
+            throw new ConnectorException(ConnectorFailureKind.ProviderError,
+                $"Autotask returned a next-page URL that is not a valid absolute URL: '{cursor}'.");
+
+        var configured = new Uri(config.BaseUrl, UriKind.Absolute);
+        if (!string.Equals(next.Host, configured.Host, StringComparison.OrdinalIgnoreCase)
+            || next.Scheme != configured.Scheme)
+            throw new ConnectorException(ConnectorFailureKind.ProviderError,
+                $"Autotask returned a next-page URL on a different host ({next.Host}) than the configured "
+                + $"endpoint ({configured.Host}); refusing to follow it.");
+
+        return next.ToString();
     }
 
     private async Task<T?> GetByIdAsync<T>(string entity, string id, CancellationToken ct) where T : class

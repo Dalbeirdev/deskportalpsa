@@ -166,7 +166,17 @@ public sealed class ConnectWiseConnector(
 
     public async Task<PaginatedResult<UnifiedTicket>> GetTicketsAsync(TicketFilter filter, CancellationToken ct = default)
     {
-        var query = new Dictionary<string, string> { ["pageSize"] = filter.PageSize.ToString() };
+        // ConnectWise pages by number rather than by cursor, so the cursor carries the next page.
+        // Ordered by id: without an explicit order the provider is free to return rows in a
+        // different arrangement between requests, and page 2 of a shifting order silently skips
+        // tickets while repeating others.
+        var page = filter.Cursor is { Length: > 0 } c && int.TryParse(c, out var parsed) && parsed > 1 ? parsed : 1;
+        var query = new Dictionary<string, string>
+        {
+            ["pageSize"] = filter.PageSize.ToString(),
+            ["page"] = page.ToString(),
+            ["orderBy"] = "id asc",
+        };
         var conditions = new List<string>();
         if (filter.ModifiedSince is { } since)
             conditions.Add($"lastUpdated>[{since.ToUniversalTime():yyyy-MM-ddTHH:mm:ssZ}]");
@@ -201,7 +211,11 @@ public sealed class ConnectWiseConnector(
             ? raw.Deserialize<List<CwTicket>>(JsonOpts) ?? []
             : [];
 
-        return new PaginatedResult<UnifiedTicket>(items.Select(ToUnified).ToList(), null, false);
+        // A full page means there is probably another; ConnectWise does not report a total, so the
+        // last page costs one extra request that comes back empty. Cheaper than missing tickets.
+        var hasMore = items.Count >= filter.PageSize;
+        return new PaginatedResult<UnifiedTicket>(
+            items.Select(ToUnified).ToList(), hasMore ? (page + 1).ToString() : null, hasMore);
     }
 
     public async Task<UnifiedTicket?> GetTicketAsync(string ticketId, CancellationToken ct = default)

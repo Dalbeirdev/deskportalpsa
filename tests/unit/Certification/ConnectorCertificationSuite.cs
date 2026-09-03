@@ -222,6 +222,52 @@ public abstract class ConnectorCertificationSuite
     // ---- incremental read ----
 
     [Fact]
+    public async Task Reading_continues_past_the_first_page_until_every_ticket_is_seen()
+    {
+        // The contract every connector has to honour, and none of them did: a read returns ONE page
+        // plus a way to ask for the next. All three reported "no more pages" unconditionally, so the
+        // sync stopped at its page size and reported success — no error, no warning, and the
+        // shortfall grew as the desk did. It surfaced as a single ticket, the 101st, whose stale
+        // values survived two forced full re-syncs.
+        var c = CreateConnector();
+        for (var i = 0; i < 5; i++)
+            await c.CreateTicketAsync(new UnifiedTicketCreateRequest
+            {
+                Title = $"t{i}", ExternalCompanyId = SeededOrganizationId, IdempotencyKey = $"page-{i}",
+            });
+
+        var seen = new List<string>();
+        string? cursor = null;
+        var pages = 0;
+        do
+        {
+            var page = await c.GetTicketsAsync(new TicketFilter { PageSize = 2, Cursor = cursor });
+            seen.AddRange(page.Items.Select(t => t.ExternalId));
+            cursor = page.NextCursor;
+            if (!page.HasMore) break;
+        } while (cursor is not null && ++pages < 20);
+
+        seen.Should().HaveCountGreaterThanOrEqualTo(5, "every created ticket is reachable by paging")
+            .And.OnlyHaveUniqueItems("a page boundary must not repeat a ticket");
+        pages.Should().BeGreaterThan(0, "5 tickets at 2 per page cannot arrive in one page");
+    }
+
+    [Fact]
+    public async Task A_first_page_that_is_not_full_reports_no_more_pages()
+    {
+        // The other half: paging must also STOP. A connector that always claims another page turns
+        // every sync into a walk to the safety cap.
+        var c = CreateConnector();
+        await c.CreateTicketAsync(new UnifiedTicketCreateRequest
+        { Title = "only", ExternalCompanyId = SeededOrganizationId, IdempotencyKey = "single" });
+
+        var page = await c.GetTicketsAsync(new TicketFilter { PageSize = 50 });
+
+        page.HasMore.Should().BeFalse();
+        page.NextCursor.Should().BeNull();
+    }
+
+    [Fact]
     public async Task Incremental_read_filters_by_modified_since()
     {
         var c = CreateConnector();

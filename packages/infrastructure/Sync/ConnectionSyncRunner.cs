@@ -24,9 +24,13 @@ public sealed class ConnectionSyncRunner(
     ITicketSyncService sync,
     IObjectStorage storage,
     IMalwareScanner scanner,
-    TimeProvider clock) : IConnectionSyncRunner
+    TimeProvider clock,
+    Microsoft.Extensions.Logging.ILogger<ConnectionSyncRunner>? logger = null) : IConnectionSyncRunner
 {
-    private const int MaxPages = 50; // safety cap so a runaway cursor can't loop forever
+    // Safety cap so a runaway cursor cannot loop forever. It is also, at PageSize 100, a ceiling of
+    // 5,000 tickets a run — so reaching it is reported rather than treated as a normal finish. An
+    // unreported cap is the same silent truncation that let the import stop at 100 for months.
+    private const int MaxPages = 50;
 
     public async Task<SyncRunResult> RunAsync(Guid psaConnectionId, bool full = false, CancellationToken ct = default)
     {
@@ -108,8 +112,16 @@ public sealed class ConnectionSyncRunner(
                         await RefreshTimeTotalsAsync(psaConnectionId, connector, ticket.ExternalId, ct);
                 }
                 cursor = page.NextCursor;
-                if (!page.HasMore) break;
+                if (!page.HasMore) { cursor = null; break; }
             } while (cursor is not null && pages < MaxPages);
+
+            // Still more to read, but out of pages. The import is incomplete, and saying so is the
+            // difference between a known limit and data quietly missing.
+            if (cursor is not null && logger is not null)
+                Microsoft.Extensions.Logging.LoggerExtensions.LogWarning(logger,
+                    "Sync of connection {ConnectionId} stopped at the {MaxPages}-page safety cap with more "
+                    + "tickets still to read; this run is incomplete",
+                    psaConnectionId, MaxPages);
 
             // Attachments are swept separately, and deliberately outside the ticket loop: providers
             // do not reliably touch a ticket's modified timestamp when a file is attached, so an

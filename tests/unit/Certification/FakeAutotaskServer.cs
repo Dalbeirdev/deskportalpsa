@@ -95,6 +95,10 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
             return Json($"{{\"itemId\":{++_seq}}}");
         }
         if (path.EndsWith("Holidays/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_holidays, body));
+        // A continuation of an earlier query. The real API hands back a URL and expects a GET on it;
+        // modelling that is what makes an unpaginated connector fail here instead of passing.
+        if (request.RequestUri!.Query.Contains("nextPage="))
+            return Json(NextPageJson(QueryValue(request.RequestUri.Query, "nextPage")!));
         if (path.EndsWith("Tickets/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_tickets, body));
         if (path.EndsWith("TicketNotes/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_notes, body));
         if (path.EndsWith("TicketAttachments/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(StripData(_attachments), body));
@@ -250,7 +254,7 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
 
     // Minimal filter application: supports eq/gte on the fields the connector queries. Filter values
     // are extracted eagerly so no JsonElement is read after the JsonDocument is disposed.
-    private static string QueryJson(List<Dictionary<string, object?>> rows, string body)
+    private string QueryJson(List<Dictionary<string, object?>> rows, string body)
     {
         var clauses = new List<FilterClause>();
         if (!string.IsNullOrEmpty(body))
@@ -279,8 +283,51 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
         }
 
         var result = rows.Where(r => clauses.All(c => Matches(r, c))).ToList();
-        var items = string.Join(",", result.Select(Serialize));
-        return $"{{\"items\":[{items}],\"pageDetails\":{{\"count\":{result.Count}}}}}";
+
+        // MaxRecords is a LIMIT, and the rows past it are offered through a next-page URL rather
+        // than thrown away. The fake used to return every row and no URL, so a connector that never
+        // paginated looked complete here while silently truncating against the real API.
+        var max = MaxRecords(body);
+        return Page(result, max);
+    }
+
+    private static string? QueryValue(string query, string key)
+        => System.Web.HttpUtility.ParseQueryString(query).Get(key);
+
+    private static int MaxRecords(string body)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            return doc.RootElement.TryGetProperty("MaxRecords", out var m) ? m.GetInt32() : 500;
+        }
+        catch { return 500; }
+    }
+
+    // Rows still owed to a caller, keyed by the token embedded in the next-page URL.
+    private readonly Dictionary<string, (List<Dictionary<string, object?>> Rows, int PageSize)> _pages = [];
+
+    private string Page(List<Dictionary<string, object?>> result, int pageSize)
+    {
+        var take = result.Take(pageSize).ToList();
+        var rest = result.Skip(take.Count).ToList();
+        var items = string.Join(",", take.Select(Serialize));
+
+        string next = "null";
+        if (rest.Count > 0)
+        {
+            var token = $"p{++_seq}";
+            _pages[token] = (rest, pageSize);
+            next = $"\"https://webservices.local/atservicesrest/V1.0/Tickets/query?nextPage={token}\"";
+        }
+
+        return $"{{\"items\":[{items}],\"pageDetails\":{{\"count\":{take.Count},\"nextPageUrl\":{next}}}}}";
+    }
+
+    private string NextPageJson(string token)
+    {
+        if (!_pages.Remove(token, out var pending)) return "{\"items\":[],\"pageDetails\":{\"count\":0}}";
+        return Page(pending.Rows, pending.PageSize);
     }
 
     private static bool Matches(Dictionary<string, object?> row, FilterClause c) => c.Op switch
