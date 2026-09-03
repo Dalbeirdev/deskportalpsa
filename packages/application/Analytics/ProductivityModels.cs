@@ -121,3 +121,38 @@ public sealed record ClientWorkloadReport(
 /// </summary>
 public sealed record ImportWindowNote(
     string ConnectionName, bool ImportsClosedTickets, int? ActiveWithinDays, int TicketsHeld);
+
+/// <summary>
+/// One technician's PSA-recorded work, and how much of it is corroborated by activity in the portal.
+///
+/// Deliberately NOT "PSA hours versus portal hours". Two numbers of the same unit side by side, one
+/// smaller, get subtracted by every reader, and the difference then gets read as time wasted — which
+/// the data cannot support and which no disclaimer survives. Coverage is a percentage of work that
+/// is VISIBLE here, not a deficit.
+///
+/// Corroboration means: some portal activity happened on the same ticket on the same day. Not
+/// necessarily by the same person — the claim is "this work is visible in the portal", which is the
+/// operational question, and a stronger claim would need matching that the data does not support.
+/// </summary>
+public sealed record PortalCoverageRow(
+    string TechnicianExternalId,
+    string? TechnicianName,
+    decimal PsaHours,
+    int PsaEntries,
+    int CorroboratedEntries,
+    double? CoveragePct,
+    int PortalEvents);
+
+/// <summary>
+/// Portal coverage, and the one caveat that decides whether it means anything: the activity log only
+/// knows what happened after it started. A range beginning before that is not low coverage, it is no
+/// evidence, and the surface must be able to tell the difference.
+/// </summary>
+public sealed record PortalCoverageReport(
+    IReadOnlyList<PortalCoverageRow> Technicians,
+    decimal TotalPsaHours,
+    int TotalPsaEntries,
+    int TotalCorroborated,
+    double? OverallCoveragePct,
+    DateTimeOffset? ActivityRecordedSince,
+    bool RangeStartsBeforeRecording);

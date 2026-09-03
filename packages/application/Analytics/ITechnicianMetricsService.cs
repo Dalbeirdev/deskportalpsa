@@ -22,3 +22,12 @@ public interface IClientWorkloadService
 {
     Task<ClientWorkloadReport> ForClientsAsync(MetricsFilter filter, CancellationToken ct = default);
 }
+
+/// <summary>
+/// How much of the work the PSA recorded is visible in this portal. The comparative layer — and the
+/// one surface where a careless design would invite reading a gap as wasted time.
+/// </summary>
+public interface IPortalCoverageService
+{
+    Task<PortalCoverageReport> CoverageAsync(MetricsFilter filter, CancellationToken ct = default);
+}

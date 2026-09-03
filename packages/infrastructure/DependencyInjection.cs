@@ -154,6 +154,7 @@ public static class DependencyInjection
         services.AddScoped<ITechnicianProvisioningService, TechnicianProvisioningService>();
         services.AddScoped<Desk.Application.Analytics.IActivityRecorder, Desk.Infrastructure.Analytics.ActivityRecorder>();
         services.AddScoped<Desk.Application.Analytics.IClientWorkloadService, Desk.Infrastructure.Analytics.ClientWorkloadService>();
+        services.AddScoped<Desk.Application.Analytics.IPortalCoverageService, Desk.Infrastructure.Analytics.PortalCoverageService>();
         services.AddScoped<IRoleAdminService, RoleAdminService>();
         services.AddScoped<Application.Marketing.IEnquiryService, Marketing.EnquiryService>();
 

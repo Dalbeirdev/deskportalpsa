@@ -46,6 +46,9 @@ Thumbs.db
 
 # Test output
 coverage/
+# ...but that pattern is unanchored, so it also swallowed a page ROUTE named "coverage".
+# The rule is meant for test-coverage output, not for source. Re-include the app directory.
+!apps/web/src/app/**/coverage/
 TestResults/
 *.trx
 desk-local-files/
