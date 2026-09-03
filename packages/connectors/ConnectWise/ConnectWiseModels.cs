@@ -67,6 +67,14 @@ internal sealed class CwTicket
     // ConnectWise keeps SLA targets on the SLA entity, not the ticket; requiredDate is the dated
     // commitment the ticket itself carries, so it is what "was this late" can be judged against.
     [JsonPropertyName("requiredDate")] public DateTimeOffset? RequiredDate { get; set; }
+
+    /// <summary>
+    /// The SLA's resolution target. Distinct from requiredDate, which is a due date somebody typed
+    /// in: ConnectWise omits null fields entirely, and across a full board none of the tickets
+    /// carried a requiredDate while every one of them carried this. A due date nobody sets is not
+    /// the SLA — this is.
+    /// </summary>
+    [JsonPropertyName("resolutionGoalUTC")] public DateTimeOffset? ResolutionGoalUtc { get; set; }
     // ConnectWise returns housekeeping timestamps in an "_info" sub-object on several entities, and
     // inconsistently also at the top level. Read both and take whichever is present rather than
     // betting on one: a null here is indistinguishable from a ticket with no date, so guessing wrong
@@ -75,6 +83,9 @@ internal sealed class CwTicket
 
     public DateTimeOffset? RaisedAt => DateEntered ?? Info?.DateEntered;
     public DateTimeOffset? ClosedAtAny => ClosedDate ?? Info?.ClosedDate;
+
+    /// <summary>Whichever target the ticket actually has, preferring the one a human set.</summary>
+    public DateTimeOffset? SlaTargetAt => RequiredDate ?? ResolutionGoalUtc;
 }
 
 internal sealed class CwTicketInfo
