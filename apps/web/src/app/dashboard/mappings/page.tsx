@@ -127,13 +127,18 @@ export default function MappingsPage() {
   }, [mappings, tab, conn]);
 
   const mapped = rows.filter((r) => r.externalValue).length;
-  // Options carry the provider's id AND label. We SAVE the id — Autotask rejects names on write
-  // ("Could not convert string to integer") — while showing the human label.
+  // A rule is compared against the value a synced ticket CARRIES, so that — syncValue — is what we
+  // save, showing the human label. Saving the provider id instead is what left every ConnectWise
+  // ticket and every Autotask priority unmapped: the id was compared against a name it could never
+  // equal, the raw provider value fell through, and it looked exactly like a working mapping.
+  //
+  // The id is still the right thing for the import filter and for reassigning a ticket's queue, and
+  // those pickers still send it. One list, two representations, each caller taking the one it needs.
   const options = useMemo<{ value: string; label: string }[]>(() => {
     const discovered = ({
       status: fields?.statuses, priority: fields?.priorities, queue: fields?.queuesOrBoards,
       category: fields?.categories, workType: fields?.workTypes,
-    }[tab] ?? []).map((o) => ({ value: o.value, label: o.label }));
+    }[tab] ?? []).map((o) => ({ value: o.syncValue ?? o.value, label: o.label }));
     const base = discovered.length ? discovered : CURATED[tab].map((c) => ({ value: c, label: c }));
 
     // Keep any value already stored by a rule selectable, even if discovery no longer returns it
@@ -154,7 +159,9 @@ export default function MappingsPage() {
       status: fields?.statuses, priority: fields?.priorities, queue: fields?.queuesOrBoards,
       category: fields?.categories, workType: fields?.workTypes,
     }[tab] ?? []);
-    return new Set(discovered.flatMap((o) => [o.value, o.label]));
+    // Every form a rule might legitimately hold: the sync value it should have, the label, and the
+    // provider id a rule saved before this counted as live too — those still push correctly.
+    return new Set(discovered.flatMap((o) => [o.syncValue ?? o.value, o.value, o.label]));
   }, [fields, tab]);
 
   /// A rule may store the provider id (current) or a label (legacy) — match either so the select

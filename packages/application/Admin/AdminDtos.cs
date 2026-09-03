@@ -255,7 +255,12 @@ public sealed record ConnectionLogoUpload(string FileName, string ContentType, b
 
 public sealed record StoredLogo(byte[] Content, string ContentType);
 
-public sealed record FieldOptionDto(string Value, string Label);
+/// <summary>
+/// A discovered option as the admin UI sees it. <see cref="Value"/> is sent TO the provider (import
+/// filters, queue reassignment); <see cref="SyncValue"/> is what tickets arrive carrying and is what
+/// a mapping rule must store. See <see cref="Desk.PsaCore.Models.ExternalFieldOption"/>.
+/// </summary>
+public sealed record FieldOptionDto(string Value, string Label, string SyncValue);
 
 /// <summary>Live field discovery for a connection: service boards/queues, statuses, priorities, categories.</summary>
 /// <summary>Whether time logging will work, and what to change when it will not.</summary>

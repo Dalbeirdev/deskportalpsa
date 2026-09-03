@@ -445,7 +445,9 @@ public sealed class ConnectionAdminService(
         {
             var techs = await connector.GetTechniciansAsync(ct);
             return techs.Where(t => t.IsActive && !string.IsNullOrWhiteSpace(t.DisplayName))
-                .Select(t => new FieldOptionDto(t.ExternalId, t.DisplayName))
+                // Technicians are referenced by id on both sides — nothing maps them, so the two
+                // representations are the same value.
+                .Select(t => new FieldOptionDto(t.ExternalId, t.DisplayName, t.ExternalId))
                 .ToList();
         }
         catch (ConnectorException) { return []; }
@@ -475,7 +477,7 @@ public sealed class ConnectionAdminService(
     /// status ends up mapped to something the PSA no longer accepts.
     /// </summary>
     private static IReadOnlyList<FieldOptionDto> Map(IReadOnlyList<Desk.PsaCore.Models.ExternalFieldOption> options)
-        => options.Where(o => o.IsActive).Select(o => new FieldOptionDto(o.Value, o.Label)).ToList();
+        => options.Where(o => o.IsActive).Select(o => new FieldOptionDto(o.Value, o.Label, o.SyncValue)).ToList();
 
     private static async Task<IReadOnlyList<Desk.PsaCore.Models.ExternalFieldOption>> SafeAsync(
         Func<Task<IReadOnlyList<Desk.PsaCore.Models.ExternalFieldOption>>> fetch)

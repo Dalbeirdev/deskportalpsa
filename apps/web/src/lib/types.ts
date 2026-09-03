@@ -167,7 +167,15 @@ export const MappingRuleSchema = z.object({
 });
 export type MappingRule = z.infer<typeof MappingRuleSchema>;
 
-export const FieldOptionSchema = z.object({ value: z.string(), label: z.string() });
+// value = what the PROVIDER is sent (import filters, queue reassignment).
+// syncValue = what a synced ticket arrives CARRYING, and so the only thing a mapping rule can match.
+// They differ wherever a field is filtered by id and reported by name; older payloads without
+// syncValue fall back to value, which is what they always meant.
+export const FieldOptionSchema = z.object({
+  value: z.string(),
+  label: z.string(),
+  syncValue: z.string().optional(),
+});
 export const ConnectionFieldsSchema = z.object({
   queuesOrBoards: z.array(FieldOptionSchema),
   statuses: z.array(FieldOptionSchema),

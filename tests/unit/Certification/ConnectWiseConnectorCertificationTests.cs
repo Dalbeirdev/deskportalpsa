@@ -62,11 +62,26 @@ public sealed class ConnectWiseConnectorCertificationTests : ConnectorCertificat
     {
         var connector = Build(WithExistingTicket(Clock));
 
-        var offered = (await connector.GetStatusesAsync()).Select(o => o.Value).ToList();
+        var offered = (await connector.GetStatusesAsync()).Select(o => o.SyncValue).ToList();
         var ticket = (await connector.GetTicketsAsync(new TicketFilter())).Items.Single();
 
         offered.Should().Contain(ticket.Status,
-            "a mapping rule is saved with the offered value and compared against the ticket's");
+            "a mapping rule is saved with the sync value and compared against the ticket's");
+    }
+
+    [Fact]
+    public async Task A_board_is_filtered_by_id_and_reported_by_name()
+    {
+        // The case the two representations exist for. Boards feed the import filter, which becomes a
+        // query condition on board/id — a name there is an invalid query, not a visible error — while
+        // a synced ticket carries the board NAME. One list served both jobs before this, so whichever
+        // caller lost got the wrong string.
+        var connector = Build(new FakeConnectWiseServer(Clock));
+
+        var boards = await connector.GetQueuesOrBoardsAsync();
+
+        boards.Should().OnlyContain(o => o.Value.All(char.IsDigit), "the filter sends board/id");
+        boards.Should().OnlyContain(o => !o.SyncValue.All(char.IsDigit), "a ticket carries the name");
     }
 
     [Fact]
@@ -88,10 +103,14 @@ public sealed class ConnectWiseConnectorCertificationTests : ConnectorCertificat
     {
         var connector = Build(WithExistingTicket(Clock));
 
-        var offered = (await connector.GetPrioritiesAsync()).Select(o => o.Value).ToList();
+        var offered = (await connector.GetPrioritiesAsync()).Select(o => o.SyncValue).ToList();
         var ticket = (await connector.GetTicketsAsync(new TicketFilter())).Items.Single();
 
         offered.Should().Contain(ticket.Priority);
+
+        // The other half of the same option: what the provider is SENT stays an id, because the
+        // import filter builds a query condition on it.
+        (await connector.GetPrioritiesAsync()).Should().OnlyContain(o => o.Value.All(char.IsDigit));
     }
 
     protected override IServiceManagementConnector CreateFailingConnector(ConnectorFailureKind kind)

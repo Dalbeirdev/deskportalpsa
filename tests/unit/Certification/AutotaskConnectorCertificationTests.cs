@@ -316,32 +316,37 @@ public sealed class AutotaskConnectorCertificationTests : ConnectorCertification
     public async Task A_status_rule_saved_from_discovery_can_match_an_incoming_ticket()
     {
         var connector = Build(new FakeAutotaskServer(Clock));
-        var offered = (await connector.GetStatusesAsync()).Select(o => o.Value).ToList();
+        var options = await connector.GetStatusesAsync();
 
+        // Written with the value the provider is SENT — every one of these fields is a numeric
+        // picklist and Autotask rejects a name outright.
         await connector.CreateTicketAsync(new UnifiedTicketCreateRequest
         {
             Title = "Printer", ExternalCompanyId = SeededOrganizationId,
-            IdempotencyKey = "discovery-status", Status = offered.First(),
+            IdempotencyKey = "discovery-status", Status = options.First().Value,
         });
         var ticket = (await connector.GetTicketsAsync(new TicketFilter())).Items.Single();
 
-        offered.Should().Contain(ticket.Status,
-            "a rule is saved with the offered value and compared against the ticket's");
+        // Read back as the value a rule has to match. Both representations, one round trip.
+        options.Select(o => o.SyncValue).Should().Contain(ticket.Status,
+            "a rule is saved with the sync value and compared against the ticket's");
+        options.Should().OnlyContain(o => o.Value.All(char.IsDigit),
+            "writes and filters send the picklist id");
     }
 
     [Fact]
     public async Task A_priority_rule_saved_from_discovery_can_match_an_incoming_ticket()
     {
         var connector = Build(new FakeAutotaskServer(Clock));
-        var offered = (await connector.GetPrioritiesAsync()).Select(o => o.Value).ToList();
+        var options = await connector.GetPrioritiesAsync();
 
         await connector.CreateTicketAsync(new UnifiedTicketCreateRequest
         {
             Title = "Printer", ExternalCompanyId = SeededOrganizationId,
-            IdempotencyKey = "discovery-priority", Priority = offered.First(),
+            IdempotencyKey = "discovery-priority", Priority = options.First().Value,
         });
         var ticket = (await connector.GetTicketsAsync(new TicketFilter())).Items.Single();
 
-        offered.Should().Contain(ticket.Priority);
+        options.Select(o => o.SyncValue).Should().Contain(ticket.Priority);
     }
 }
