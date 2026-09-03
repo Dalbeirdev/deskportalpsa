@@ -22,7 +22,8 @@ namespace Desk.Api.Controllers;
 [ApiController]
 [Route("api/dashboard")]
 public sealed class DashboardController(
-    ITechnicianMetricsService metrics, IClientWorkloadService clients, ICurrentUser user) : ControllerBase
+    ITechnicianMetricsService metrics, IClientWorkloadService clients,
+    IPortalCoverageService coverage, ICurrentUser user) : ControllerBase
 {
     [HttpGet("technician")]
     [RequirePermission(Permissions.ProductivityViewOwn)]
@@ -56,6 +57,15 @@ public sealed class DashboardController(
     [RequirePermission(Permissions.ProductivityViewTeam)]
     public async Task<IActionResult> Clients([FromQuery] DashboardQuery q, CancellationToken ct)
         => Ok(await clients.ForClientsAsync(q.ToFilter(), ct));
+
+    /// <summary>
+    /// How much of the work the PSA recorded is visible in this portal. Team-gated: it names
+    /// individuals, and it is an operational measure of rollout rather than of people.
+    /// </summary>
+    [HttpGet("coverage")]
+    [RequirePermission(Permissions.ProductivityViewTeam)]
+    public async Task<IActionResult> Coverage([FromQuery] DashboardQuery q, CancellationToken ct)
+        => Ok(await coverage.CoverageAsync(q.ToFilter(), ct));
 
     [HttpGet("team")]
     [RequirePermission(Permissions.ProductivityViewTeam)]

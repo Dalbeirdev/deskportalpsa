@@ -43,7 +43,15 @@ public class ProductivityScopeTests
     }
 
     private static DashboardController Controller(CapturingMetrics metrics, ICurrentUserStub user)
-        => new(metrics, new UnusedClientWorkload(), user);
+        => new(metrics, new UnusedClientWorkload(), new UnusedCoverage(), user);
+
+    /// <summary>These tests are about technician scoping; the coverage surface is not exercised.</summary>
+    private sealed class UnusedCoverage : Desk.Application.Analytics.IPortalCoverageService
+    {
+        public Task<Desk.Application.Analytics.PortalCoverageReport> CoverageAsync(
+            Desk.Application.Analytics.MetricsFilter filter, CancellationToken ct = default)
+            => throw new NotSupportedException();
+    }
 
     /// <summary>These tests are about technician scoping; the client surface is not exercised.</summary>
     private sealed class UnusedClientWorkload : Desk.Application.Analytics.IClientWorkloadService

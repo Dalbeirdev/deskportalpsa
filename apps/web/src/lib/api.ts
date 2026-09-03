@@ -380,6 +380,28 @@ export const api = {
       })),
     }));
   },
+  portalCoverage: (params?: { from?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.from) qs.set('from', params.from);
+    const suffix = qs.toString() ? `?${qs}` : '';
+    return request(`/api/dashboard/coverage${suffix}`, z.object({
+      technicians: z.array(z.object({
+        technicianExternalId: z.string(),
+        technicianName: z.string().nullable(),
+        psaHours: z.number(),
+        psaEntries: z.number(),
+        corroboratedEntries: z.number(),
+        coveragePct: z.number().nullable(),
+        portalEvents: z.number(),
+      })),
+      totalPsaHours: z.number(),
+      totalPsaEntries: z.number(),
+      totalCorroborated: z.number(),
+      overallCoveragePct: z.number().nullable(),
+      activityRecordedSince: z.string().nullable(),
+      rangeStartsBeforeRecording: z.boolean(),
+    }));
+  },
   psaTechnicians: (psaConnectionId: string) =>
     request(`/api/admin/psa-technicians/${psaConnectionId}`, z.array(z.object({
       externalId: z.string(),
