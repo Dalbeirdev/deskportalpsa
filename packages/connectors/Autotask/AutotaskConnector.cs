@@ -119,8 +119,12 @@ public sealed class AutotaskConnector(HttpClient http, AutotaskConnectorConfig c
         // whole of pagination here: without it the import stopped at MaxRecords and reported success,
         // so a desk with more tickets than one page silently never saw the rest — and the shortfall
         // grew as the desk did.
+        // POST, not GET. The next-page URL continues a POSTed query and Autotask answers a GET on it
+        // with 405 "The requested resource does not support http method 'GET'" — which is how this
+        // shipped broken once. The filter goes along again so the continuation asks for the same set.
         var result = filter.Cursor is { Length: > 0 } cursor
-            ? await SendAsync<AtQueryResult<AtTicket>>(HttpMethod.Get, NextPageUrl(cursor), null, ct)
+            ? await SendAsync<AtQueryResult<AtTicket>>(HttpMethod.Post, NextPageUrl(cursor),
+                new { MaxRecords = filter.PageSize, Filter = filters }, ct)
             : await QueryPageAsync<AtTicket>("Tickets", filters, filter.PageSize, ct);
 
         var items = result?.Items ?? [];

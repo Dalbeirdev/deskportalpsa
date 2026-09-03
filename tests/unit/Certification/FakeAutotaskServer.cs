@@ -98,7 +98,15 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
         // A continuation of an earlier query. The real API hands back a URL and expects a GET on it;
         // modelling that is what makes an unpaginated connector fail here instead of passing.
         if (request.RequestUri!.Query.Contains("nextPage="))
+        {
+            // The live API refuses a GET here: the URL continues a POSTed query, and asking for it
+            // with GET earns a 405. The fake accepted either, so a connector that used GET passed
+            // every test and then failed on the first real second page.
+            if (request.Method != HttpMethod.Post)
+                return Resp(HttpStatusCode.MethodNotAllowed,
+                    "{\"Message\":\"The requested resource does not support http method 'GET'.\"}");
             return Json(NextPageJson(QueryValue(request.RequestUri.Query, "nextPage")!));
+        }
         if (path.EndsWith("Tickets/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_tickets, body));
         if (path.EndsWith("TicketNotes/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_notes, body));
         if (path.EndsWith("TicketAttachments/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(StripData(_attachments), body));
