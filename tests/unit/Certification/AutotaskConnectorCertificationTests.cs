@@ -349,4 +349,70 @@ public sealed class AutotaskConnectorCertificationTests : ConnectorCertification
 
         options.Select(o => o.SyncValue).Should().Contain(ticket.Priority);
     }
+
+    /// <summary>
+    /// A synced ticket has to carry the client's NAME, not just their id.
+    ///
+    /// An Autotask ticket reports its company as a bare numeric companyID, and the connector passed
+    /// that through without ever resolving it. The portal then named every client company after the
+    /// id it could not translate — "Company 176" — and that stub reached the client list, the ticket
+    /// lists, client workload analytics and the client-facing reports. It reads as data rather than
+    /// as an error, which is why it survived: nothing anywhere said the name was missing.
+    /// </summary>
+    [Fact]
+    public async Task A_synced_ticket_carries_the_client_company_name()
+    {
+        var connector = Build(new FakeAutotaskServer(Clock));
+        await connector.CreateTicketAsync(new UnifiedTicketCreateRequest
+        {
+            Title = "Printer", ExternalCompanyId = SeededOrganizationId, IdempotencyKey = "company-name",
+        });
+
+        var ticket = (await connector.GetTicketsAsync(new TicketFilter())).Items.Single();
+
+        ticket.CompanyName.Should().Be("Acme Corp",
+            "the portal falls back to naming the company after its id when this is null");
+        ticket.RequesterExternalId.Should().Be(SeededOrganizationId, "the id is still carried too");
+    }
+
+    [Fact]
+    public async Task An_unknown_company_leaves_the_name_null_rather_than_guessing()
+    {
+        // Resolution is best-effort: a company the lookup cannot find must leave the name empty so
+        // the caller applies its own fallback, rather than being handed a wrong name.
+        var server = new FakeAutotaskServer(Clock);
+        var connector = Build(server);
+        await connector.CreateTicketAsync(new UnifiedTicketCreateRequest
+        {
+            Title = "Orphan", ExternalCompanyId = "9999", IdempotencyKey = "unknown-company",
+        });
+
+        var ticket = (await connector.GetTicketsAsync(new TicketFilter())).Items
+            .Single(t => t.Title == "Orphan");
+
+        ticket.CompanyName.Should().BeNull();
+    }
+
+    /// <summary>
+    /// An import filter must actually filter, provider-side.
+    ///
+    /// Company, queue and resource filters are pushed down as Autotask "in" clauses. The fake
+    /// understood only eq and gte and let everything else through, so every one of those clauses
+    /// matched every row and a filter test could not fail. A connection restricted to one company
+    /// would have imported the lot, and the test suite would have agreed it was fine.
+    /// </summary>
+    [Fact]
+    public async Task An_import_filter_restricted_to_one_company_excludes_the_others()
+    {
+        var connector = Build(new FakeAutotaskServer(Clock));
+        await connector.CreateTicketAsync(new UnifiedTicketCreateRequest
+        { Title = "wanted", ExternalCompanyId = SeededOrganizationId, IdempotencyKey = "f-in" });
+        await connector.CreateTicketAsync(new UnifiedTicketCreateRequest
+        { Title = "other", ExternalCompanyId = "9999", IdempotencyKey = "f-out" });
+
+        var page = await connector.GetTicketsAsync(
+            new TicketFilter { CompanyIds = [SeededOrganizationId] });
+
+        page.Items.Select(t => t.Title).Should().BeEquivalentTo(["wanted"]);
+    }
 }

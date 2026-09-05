@@ -132,6 +132,7 @@ public sealed class AutotaskConnector(
             : await QueryPageAsync<AtTicket>("Tickets", filters, filter.PageSize, ct);
 
         var items = result?.Items ?? [];
+        await PrimeCompanyNamesAsync(items.Select(i => i.CompanyId), ct);
         var mapped = new List<UnifiedTicket>(items.Count);
         foreach (var item in items) mapped.Add(await ToUnifiedAsync(item, ct));
 
@@ -742,6 +743,40 @@ public sealed class AutotaskConnector(
     /// Picklist id → the tenant's own label, for values coming FROM Autotask. Without this the
     /// portal stored raw ids and showed users a status of "1".
     /// </summary>
+    // Company id -> name, for the lifetime of this connector. Autotask reports companies only by
+    // id on a ticket, and a sync run sees the same handful of companies across hundreds of tickets.
+    private readonly Dictionary<long, string> _companyNames = [];
+
+    /// <summary>
+    /// Resolves the names for a page's companies in ONE request, before the page is projected.
+    ///
+    /// Batched rather than per ticket: a page of 100 tickets spans a few companies, so this is one
+    /// extra call per page instead of one per ticket. Ids already known are not asked for again, so
+    /// later pages usually cost nothing.
+    ///
+    /// A failure here leaves names unresolved rather than failing the sync. Names are an
+    /// enhancement to a ticket the portal can already store; losing the import to lose a label
+    /// would be the worse trade.
+    /// </summary>
+    private async Task PrimeCompanyNamesAsync(IEnumerable<long> companyIds, CancellationToken ct)
+    {
+        var wanted = companyIds.Where(id => id > 0 && !_companyNames.ContainsKey(id)).Distinct().ToArray();
+        if (wanted.Length == 0) return;
+
+        try
+        {
+            var companies = await QueryAsync<AtCompany>(
+                "Companies", [Filter("id", "in", wanted)], wanted.Length, ct);
+            foreach (var c in companies)
+                if (!string.IsNullOrWhiteSpace(c.CompanyName))
+                    _companyNames[c.Id] = c.CompanyName!;
+        }
+        catch (ConnectorException)
+        {
+            // Left unresolved on purpose — see the summary above.
+        }
+    }
+
     private async Task<string?> LabelForAsync(string field, string? id, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(id)) return id;
@@ -955,6 +990,12 @@ public sealed class AutotaskConnector(
         QueueOrBoard = await LabelForAsync("queueID", t.QueueId, ct),
         AssignedTechnicianExternalId = t.AssignedResourceId,
         RequesterExternalId = t.CompanyId.ToString(),
+        // An Autotask ticket carries only a numeric companyID, so without this every client company
+        // in the portal was named "Company 176" — the id, dressed up as a name. It reached the client
+        // list, the ticket lists, client workload analytics and the client reports, and it looked
+        // like data rather than an error. Null when unknown, so the caller keeps its own fallback
+        // instead of being handed a guess.
+        CompanyName = _companyNames.GetValueOrDefault(t.CompanyId),
         CreatedAt = t.CreateDate,
         ModifiedAt = t.LastActivityDate,
         ResolvedAt = t.ResolvedDateTime,
