@@ -55,12 +55,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      # The gitleaks BINARY, not gitleaks-action. The action began demanding a paid licence key
+      # and now fails closed on every run, which took the secret gate offline entirely: the scan
+      # stopped happening and the red cross said "missing licence", not "no secrets found". The
+      # scanner itself is open source and unchanged, so run it directly and keep the gate.
       - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
         env:
-          # gitleaks-action v2 requires a token to enumerate PR commits (push events don't need it).
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'false'
+          GITLEAKS_VERSION: 8.28.0
+        run: |
+          set -euo pipefail
+          curl -sSfL -o /tmp/gitleaks.tar.gz             "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          # Scans the full history, since fetch-depth 0 is checked out above. Exit code 1 means a
+          # finding and MUST fail the build; anything else is the scanner itself breaking, which
+          # must also fail rather than pass silently.
+          /tmp/gitleaks detect --source . --redact --no-banner --exit-code 1
 
   dependency-scan:
     name: Dependency vulnerability scan
