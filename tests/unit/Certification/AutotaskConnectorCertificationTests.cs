@@ -415,4 +415,38 @@ public sealed class AutotaskConnectorCertificationTests : ConnectorCertification
 
         page.Items.Select(t => t.Title).Should().BeEquivalentTo(["wanted"]);
     }
+
+    /// <summary>
+    /// Reference lists are fetched once per connector, not once per ticket.
+    ///
+    /// GetTimeEntriesAsync runs per ticket and resolves technician and work-type NAMES from whole
+    /// lists. Unmemoized, a sync run re-fetched all 500 resources and all 500 billing codes for
+    /// every ticket carrying time — hundreds of identical requests whose answers cannot change
+    /// between two tickets of the same run. It was invisible in every result, because the names
+    /// were right either way; only the request count showed it.
+    /// </summary>
+    [Fact]
+    public async Task Reference_lists_are_fetched_once_per_run_not_once_per_ticket()
+    {
+        var server = new FakeAutotaskServer(Clock);
+        var connector = Build(server);
+        for (var i = 0; i < 3; i++)
+            await connector.CreateTicketAsync(new UnifiedTicketCreateRequest
+            { Title = $"t{i}", ExternalCompanyId = SeededOrganizationId, IdempotencyKey = $"memo-{i}" });
+
+        var tickets = (await connector.GetTicketsAsync(new TicketFilter())).Items;
+        // Every ticket carries time, so every ticket triggers technician and work-type resolution.
+        foreach (var t in tickets) server.SeedTimeEntry(long.Parse(t.ExternalId));
+        foreach (var t in tickets)
+            (await connector.GetTimeEntriesAsync(t.ExternalId)).Should().NotBeEmpty();
+
+        tickets.Should().HaveCountGreaterThanOrEqualTo(3);
+        Count(server, "Resources").Should().BeLessThanOrEqualTo(1, "the resource list cannot change mid-run");
+        Count(server, "BillingCodes").Should().BeLessThanOrEqualTo(1, "nor can the billing codes");
+        Count(server, "Companies").Should().BeLessThanOrEqualTo(1, "company names are batched per page");
+    }
+
+    private static int Count(FakeAutotaskServer server, string entity) =>
+        server.RequestCounts.Where(kv => kv.Key.Contains(entity, StringComparison.OrdinalIgnoreCase))
+            .Sum(kv => kv.Value);
 }

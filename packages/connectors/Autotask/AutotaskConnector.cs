@@ -71,7 +71,17 @@ public sealed class AutotaskConnector(
             c.Id.ToString(), c.EmailAddress ?? "", $"{c.FirstName} {c.LastName}".Trim(), c.IsActive)).ToList();
     }
 
-    public async Task<IReadOnlyList<ExternalTechnician>> GetTechniciansAsync(CancellationToken ct = default)
+    // Memoized for this connector's lifetime, like the ticket field metadata. GetTimeEntriesAsync
+    // runs PER TICKET and asks for this whole list every time it meets an entry with a resource, so
+    // a sync run was re-fetching the same 500 resources once per ticket — the list does not change
+    // between two tickets of the same run. A connector instance is built per operation, so an admin
+    // refreshing fields still gets current data.
+    private Task<IReadOnlyList<ExternalTechnician>>? _technicians;
+
+    public Task<IReadOnlyList<ExternalTechnician>> GetTechniciansAsync(CancellationToken ct = default)
+        => _technicians ??= FetchTechniciansAsync(ct);
+
+    private async Task<IReadOnlyList<ExternalTechnician>> FetchTechniciansAsync(CancellationToken ct)
     {
         var items = await QueryAsync<AtResource>("Resources", [Filter("id", "gte", 0)], 500, ct);
         return items.Select(r => new ExternalTechnician(
@@ -639,7 +649,14 @@ public sealed class AutotaskConnector(
     /// Work types are billing codes, not a ticket picklist. UseType 1 is the general allocation
     /// code set — the labour codes ("Remote Support", "Onsite Support") technicians bill against.
     /// </summary>
-    public async Task<IReadOnlyList<ExternalFieldOption>> GetWorkTypesAsync(CancellationToken ct = default)
+    // Memoized for the same reason as the resource list: GetTimeEntriesAsync asks for every billing
+    // code once per ticket that has a work type on an entry.
+    private Task<IReadOnlyList<ExternalFieldOption>>? _workTypes;
+
+    public Task<IReadOnlyList<ExternalFieldOption>> GetWorkTypesAsync(CancellationToken ct = default)
+        => _workTypes ??= FetchWorkTypesAsync(ct);
+
+    private async Task<IReadOnlyList<ExternalFieldOption>> FetchWorkTypesAsync(CancellationToken ct)
     {
         var items = await QueryAsync<AtBillingCode>("BillingCodes",
             [Filter("useType", "eq", 1), Filter("isActive", "eq", true)], 500, ct);
