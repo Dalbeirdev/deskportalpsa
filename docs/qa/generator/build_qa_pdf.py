@@ -21,6 +21,7 @@ import qa_plan_part2  # noqa: F401
 import qa_plan_part3  # noqa: F401
 import qa_plan_part4  # noqa: F401
 from qa_plan_part1 import MODULES, E
+from qa_plan_sql import LOG_LINES, SQL_COOKBOOK
 
 INK = colors.HexColor("#14532D")
 ACCENT = colors.HexColor("#EA580C")
@@ -206,42 +207,7 @@ story.append(Paragraph(
     "Paste-ready checks. Run inside: docker exec desk-portal-prod-postgres-1 psql -U desk "
     "-d desk_portal -c \"...\"", INTRO))
 
-sql = [
-    ("Is anything actually mapping?",
-     "select c.\"Name\", count(*) tickets, count(*) filter (where t.\"PsaStatus\"=t.\"PortalStatus\") "
-     "status_raw, count(*) filter (where t.\"PsaPriority\"=t.\"PortalPriority\") priority_raw "
-     "from tickets t join psa_connections c on c.\"Id\"=t.\"PsaConnectionId\" group by 1;"),
-    ("Date coverage",
-     "select c.\"Name\", count(*) total, count(t.\"PsaCreatedAt\") raised, count(t.\"SlaDueAt\") "
-     "sla, count(t.\"ClosedAt\") closed from tickets t join psa_connections c "
-     "on c.\"Id\"=t.\"PsaConnectionId\" group by 1;"),
-    ("Inbound mapping ambiguity (must return 0 rows)",
-     "select \"PsaConnectionId\",\"PortalField\",\"ExternalValue\",count(*) from field_mappings "
-     "where \"IsActive\" and \"Direction\" in (2,3) group by 1,2,3 having count(*)>1;"),
-    ("Outbound mapping ambiguity (must return 0 rows)",
-     "select \"PsaConnectionId\",\"PortalField\",\"PortalValue\",count(*) from field_mappings "
-     "where \"IsActive\" and \"Direction\" in (1,3) group by 1,2,3 having count(*)>1;"),
-    ("Duplicate tickets after a paginated import (must return 0 rows)",
-     "select \"PsaConnectionId\",\"ExternalTicketId\",count(*) from tickets group by 1,2 "
-     "having count(*)>1;"),
-    ("Connection health",
-     "select \"Name\",\"Status\",\"IsEnabled\",\"LastSuccessfulSyncAt\",\"LastError\" "
-     "from psa_connections;"),
-    ("Force a full re-sync of everything",
-     "update psa_connections set \"LastSuccessfulSyncAt\"=NULL;"),
-    ("Activity rollup state",
-     "select (select count(*) from activity_events) events, (select count(*) from "
-     "activity_daily_facts) facts, (select sum(\"EventCount\") from activity_daily_facts) "
-     "rolled_up;"),
-    ("Events by the day they happened",
-     "select \"OccurredAt\"::date d, count(*) from activity_events group by 1 order by 1;"),
-    ("Open-ticket count as the client report computes it",
-     "select count(*) from tickets where \"PortalStatus\" in "
-     "('NEW','IN_PROGRESS','WAITING_CUSTOMER','ON_HOLD');"),
-    ("All mapping rules for one connection",
-     "select \"PortalField\",\"PortalValue\",\"ExternalValue\",\"Direction\",\"IsActive\" "
-     "from field_mappings where \"PsaConnectionId\"='<id>' order by 1,2;"),
-]
+sql = SQL_COOKBOOK
 for label, q in sql:
     story.append(Paragraph("<b>%s</b>" % E(label), VAL))
     story.append(Paragraph('<font face="Courier" size="7.8">%s</font>' % E(q), BODY))
@@ -249,15 +215,7 @@ for label, q in sql:
 
 story.append(Spacer(1, 8))
 story.append(Paragraph("Appendix B - Log lines worth grepping", H1))
-logs = [
-    ("No mapping rule matches", "A provider value nothing maps. Once per sync run."),
-    ("Scheduled sync failed", "A connection's sync threw. The exception follows in @x."),
-    ("safety cap", "The run stopped at 50 pages with more to read - the import is incomplete."),
-    ("Activity rollup:", "Days recomputed, facts written, raw events expired."),
-    ("picklist", "Autotask option ids and labels - use it to read a rule that holds a bare id."),
-    ("ConnectWise ticket fields", "Which fields the provider actually sent, unioned across the "
-                                  "page. Field names only."),
-]
+logs = LOG_LINES
 rows = [[Paragraph('<font face="Courier" size="8">%s</font>' % E(k), VAL),
          Paragraph(E(v), VAL)] for k, v in logs]
 t = Table(rows, colWidths=[52 * mm, 122 * mm])
