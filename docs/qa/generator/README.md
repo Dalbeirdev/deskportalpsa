@@ -1,20 +1,44 @@
 # Master test plan generator
 
-Builds `../desk-portal-master-test-plan.pdf` — 238 test cases across 23 modules covering
-authentication, tenant isolation, roles and permissions, technician registration, PSA
-connections, field mapping, the sync engine, ticket lifecycle, time tracking, analytics, the
-client control panel and operations.
+Builds two deliverables from one set of cases — 238 across 23 modules covering authentication,
+tenant isolation, roles and permissions, technician registration, PSA connections, field
+mapping, the sync engine, ticket lifecycle, time tracking, analytics, the client control panel
+and operations:
+
+| Output | For | Built by |
+| --- | --- | --- |
+| `../desk-portal-master-test-plan.pdf` | reading, review, sign-off | `build_qa_pdf.py` |
+| `../desk-portal-test-cases.xlsx` | testers recording results | `build_qa_xlsx.py` |
 
 ## Regenerate
 
 ```bash
-pip install reportlab
+pip install reportlab openpyxl
 python build_qa_pdf.py
+python build_qa_xlsx.py
 ```
 
-That writes the PDF one directory up, over the committed copy. The build is deterministic
-(`invariant=1`), so rebuilding without changing a case produces a byte-identical file and no
-git diff — a diff on that PDF means the plan actually changed.
+Both write one directory up, over the committed copies.
+
+The PDF build is deterministic (`invariant=1`), so rebuilding without changing a case produces
+a byte-identical file and no git diff — a diff on that PDF means the plan actually changed.
+The workbook is **not** byte-reproducible (openpyxl stamps a zip timestamp per entry), so
+expect it to show as modified on every rebuild; only regenerate it when a case really changed.
+
+### The workbook
+
+Four sheets. Testers fill in only the four shaded columns on **Test Cases** — Result (a
+dropdown that colours itself), Tester, Date, Notes. **Summary** is entirely `COUNTIFS` over
+that sheet, so it keeps itself current; nothing on it should be typed into. **How to use**
+carries the legend and a worked example row, **Reference** the SQL cookbook and log lines.
+
+If you add or rename a module, the Summary labels must match the `Module` column text
+*exactly* — they are the `COUNTIF` criteria. A mismatch does not error, it silently counts
+zero, so re-run the check in the commit message for this file if you change module names.
+
+Formulas are limited to `COUNTIF`, `COUNTIFS`, `SUM` and `IFERROR` on purpose: all pre-2007,
+so they parse in Excel and LibreOffice alike. Avoid `XLOOKUP`, `FILTER`, `UNIQUE` and friends —
+openpyxl writes no spill metadata, so they produce a file that looks fine and is wrong.
 
 ## Editing the plan
 
