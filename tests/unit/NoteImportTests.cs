@@ -487,6 +487,29 @@ public class NoteImportTests
     }
 
     [Fact]
+    public async Task A_tickets_time_is_read_once_per_run_not_once_per_consumer()
+    {
+        // Two things in the same loop iteration want a ticket's time entries: the time-entry notes
+        // and the worked/billable totals. Each used to fetch them separately, so a full sync issued
+        // exactly two identical reads per ticket — 270 requests for 135 tickets, the single largest
+        // call volume in the run, and invisible because both answers were correct.
+        var clock = new TestClock();
+        await using var db = await SeedAsync(Guid.NewGuid().ToString());
+        var connector = new StubConnector { SupportsTimeEntries = true };
+        connector.Tickets.Add(Incoming("7810"));
+        connector.TimeEntries["7810"] =
+            [new UnifiedTimeEntry("1", "20", 1.25m, true, clock.GetUtcNow(), "tech work")
+                { TechnicianName = "Tech One" }];
+
+        await Runner(db, connector, clock).RunAsync(Conn, full: true);
+
+        connector.TimeReads.Should().Be(1, "both consumers share one snapshot of the same moment");
+        // And the shared read still feeds both: the note arrived AND the totals were rewritten.
+        (await db.TicketNotes.CountAsync(n => n.ExternalNoteId == "te-1")).Should().Be(1);
+        (await db.Tickets.SingleAsync()).TimeWorkedHours.Should().Be(1.25m);
+    }
+
+    [Fact]
     public async Task Time_totals_are_left_alone_when_the_provider_has_no_time_support()
     {
         var clock = new TestClock();

@@ -181,11 +181,12 @@ public sealed class ConnectionSyncRunner(
         // and a time note can carry candid detail no client should see. The te- id prefix keeps them
         // from ever colliding with real note ids.
         var timeNotesFetched = false;
-        if ((await connector.GetCapabilitiesAsync(ct)).SupportsTimeEntries)
+        // A failed read leaves this false, so previously imported time notes are shielded from
+        // reconciliation below rather than mistaken for deletions.
+        if ((await connector.GetCapabilitiesAsync(ct)).SupportsTimeEntries
+            && await TimeEntriesAsync(connector, externalTicketId, ct) is { } entries)
         {
-            try
             {
-                var entries = await connector.GetTimeEntriesAsync(externalTicketId, ct);
                 // A time entry logged FROM the portal carries the reply that logged it — that text is
                 // already in the thread as the reply itself, so importing it back would double every
                 // portal reply that logged time.
@@ -210,11 +211,6 @@ public sealed class ConnectionSyncRunner(
                 }
                 incoming = merged;
                 timeNotesFetched = true;
-            }
-            catch (ConnectorException)
-            {
-                // Unknown list again — previously imported time notes are shielded from
-                // reconciliation below rather than mistaken for deletions.
             }
         }
 
@@ -389,6 +385,32 @@ public sealed class ConnectionSyncRunner(
         await db.SaveChangesAsync(ct);
     }
 
+    // One ticket's time entries, read once for this run. Two things want them - the time-entry
+    // notes and the worked/billable totals - and asking twice made the read the single largest
+    // call volume in a full sync: 270 requests for 135 tickets, each one identical to the one
+    // beside it.
+    //
+    // Null means the read FAILED, which is not the same as a ticket having no time. The callers
+    // depend on that difference: notes shield previously imported time notes from reconciliation
+    // rather than deleting them, and the totals are left alone rather than rewritten to zero.
+    //
+    // Cached per runner instance, and a runner is built per run inside its own scope, so this is
+    // one run's snapshot - never a stale one carried into the next.
+    private readonly Dictionary<string, IReadOnlyList<UnifiedTimeEntry>?> _timeEntriesThisRun = [];
+
+    private async Task<IReadOnlyList<UnifiedTimeEntry>?> TimeEntriesAsync(
+        IServiceManagementConnector connector, string externalTicketId, CancellationToken ct)
+    {
+        if (_timeEntriesThisRun.TryGetValue(externalTicketId, out var cached)) return cached;
+
+        IReadOnlyList<UnifiedTimeEntry>? entries;
+        try { entries = await connector.GetTimeEntriesAsync(externalTicketId, ct); }
+        catch (ConnectorException) { entries = null; }
+
+        _timeEntriesThisRun[externalTicketId] = entries;
+        return entries;
+    }
+
     /// <summary>Rewrites one ticket's worked/billable totals from the PSA, which owns the truth.</summary>
     private async Task RefreshTimeTotalsAsync(Guid connectionId, IServiceManagementConnector connector, string externalTicketId, CancellationToken ct)
     {
@@ -396,9 +418,9 @@ public sealed class ConnectionSyncRunner(
             t => t.PsaConnectionId == connectionId && t.ExternalTicketId == externalTicketId, ct);
         if (ticket is null) return;
 
-        IReadOnlyList<UnifiedTimeEntry> entries;
-        try { entries = await connector.GetTimeEntriesAsync(externalTicketId, ct); }
-        catch (ConnectorException) { return; } // one ticket's time must not fail the whole run
+        // Null is a failed read, not an empty ticket: returning here leaves the stored totals
+        // alone, where rewriting them would zero a ticket's hours because one request failed.
+        if (await TimeEntriesAsync(connector, externalTicketId, ct) is not { } entries) return;
 
         ticket.TimeWorkedHours = entries.Sum(e => e.Hours);
         ticket.BillableHours = entries.Where(e => e.Billable).Sum(e => e.Hours);
