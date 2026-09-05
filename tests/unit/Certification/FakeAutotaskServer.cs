@@ -258,9 +258,10 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
         return Json($"{{\"itemId\":{note["id"]}}}");
     }
 
-    private sealed record FilterClause(string Field, string Op, long? Number, string? Text);
+    private sealed record FilterClause(string Field, string Op, long? Number, string? Text,
+        long[]? Numbers = null);
 
-    // Minimal filter application: supports eq/gte on the fields the connector queries. Filter values
+    // Minimal filter application: supports eq/gte/in on the fields the connector queries. Values
     // are extracted eagerly so no JsonElement is read after the JsonDocument is disposed.
     private string QueryJson(List<Dictionary<string, object?>> rows, string body)
     {
@@ -285,7 +286,13 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
                             JsonValueKind.String => val.GetString(),
                             JsonValueKind.True or JsonValueKind.False => val.GetBoolean().ToString(),
                             _ => null,
-                        }));
+                        },
+                        // "in" carries an ARRAY of ids. Read eagerly like everything else here, so
+                        // nothing touches the JsonElement after the document is disposed.
+                        val.ValueKind == JsonValueKind.Array
+                            ? val.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.Number)
+                                .Select(e => e.GetInt64()).ToArray()
+                            : null));
                 }
             }
         }
@@ -342,8 +349,20 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
     {
         "eq" => FieldEquals(row, c),
         "gte" => FieldGte(row, c),
+        // The connector sends "in" for company, queue and resource import filters as well as for
+        // company-name resolution. Falling through to true meant every one of those matched EVERY
+        // row, so a filter test could not fail — the fake was more permissive than Autotask, which
+        // is how several defects reached production already.
+        "in" => FieldIn(row, c),
         _ => true,
     };
+
+    private static bool FieldIn(Dictionary<string, object?> row, FilterClause c)
+    {
+        if (c.Numbers is null || c.Numbers.Length == 0) return false;
+        if (!row.TryGetValue(c.Field, out var actual) || actual is null) return false;
+        return Array.IndexOf(c.Numbers, Convert.ToInt64(actual)) >= 0;
+    }
 
     private static bool FieldEquals(Dictionary<string, object?> row, FilterClause c)
     {
