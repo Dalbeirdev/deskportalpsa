@@ -52,3 +52,7 @@ coverage/
 TestResults/
 *.trx
 desk-local-files/
+
+# Python bytecode (docs/qa generator)
+__pycache__/
+*.pyc
