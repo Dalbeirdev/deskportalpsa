@@ -13,6 +13,23 @@ namespace Desk.Tests.Unit.Certification;
 /// </summary>
 public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
 {
+    /// <summary>Requests seen per entity path, so a test can assert how MANY calls were made and
+    /// not merely that the answer looked right. Memoization is invisible in a result.</summary>
+    public Dictionary<string, int> RequestCounts { get; } = [];
+
+    /// <summary>Seed a time entry as the provider would return one, referencing a resource and a
+    /// billing code so that reading it exercises technician and work-type name resolution.</summary>
+    public void SeedTimeEntry(long ticketId, long resourceId = 20, long billingCodeId = 30)
+        => TimeEntries.Add(new Dictionary<string, object?>
+        {
+            ["id"] = ++_seq,
+            ["ticketID"] = ticketId,
+            ["resourceID"] = resourceId,
+            ["billingCodeID"] = billingCodeId,
+            ["hoursWorked"] = 0.5m,
+            ["dateWorked"] = clock.GetUtcNow().ToString("o"),
+        });
+
     public HttpStatusCode? ForceStatus { get; set; }
 
     private long _seq = 100;
@@ -54,6 +71,7 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
             return Resp(HttpStatusCode.Unauthorized, "{}");
 
         var path = request.RequestUri!.AbsolutePath.TrimStart('/');
+        RequestCounts[path] = RequestCounts.GetValueOrDefault(path) + 1;
         var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(ct);
 
         // Picklist field info
@@ -94,6 +112,11 @@ public sealed class FakeAutotaskServer(TimeProvider clock) : HttpMessageHandler
             TimeEntries.Add(input);
             return Json($"{{\"itemId\":{++_seq}}}");
         }
+        // The real API serves time entries back; this fake only ever accepted them. Without this a
+        // ticket's time could be written and never read, so nothing exercised the per-ticket name
+        // resolution that turned out to re-fetch whole reference lists.
+        if (path.EndsWith("TimeEntries/query", StringComparison.OrdinalIgnoreCase))
+            return Json(QueryJson(TimeEntries, body));
         if (path.EndsWith("Holidays/query", StringComparison.OrdinalIgnoreCase)) return Json(QueryJson(_holidays, body));
         // A continuation of an earlier query. The real API hands back a URL and expects a GET on it;
         // modelling that is what makes an unpaginated connector fail here instead of passing.
